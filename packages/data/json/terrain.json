@@ -1,0 +1,68 @@
+[
+  {
+    "id": "plains",
+    "name": "Plains",
+    "movementCost": 1,
+    "defenceBonus": 0,
+    "blocksSight": false,
+    "passable": true,
+    "resourceYield": 0,
+    "color": "#a8d5a2",
+    "icon": "🌾"
+  },
+  {
+    "id": "forest",
+    "name": "Forest",
+    "movementCost": 2,
+    "defenceBonus": 0.2,
+    "blocksSight": true,
+    "passable": true,
+    "resourceYield": 0,
+    "color": "#2d6a4f",
+    "icon": "🌲"
+  },
+  {
+    "id": "mountain",
+    "name": "Mountain",
+    "movementCost": 99,
+    "defenceBonus": 0,
+    "blocksSight": true,
+    "passable": false,
+    "resourceYield": 0,
+    "color": "#8d99ae",
+    "icon": "⛰️"
+  },
+  {
+    "id": "water",
+    "name": "Water",
+    "movementCost": 99,
+    "defenceBonus": 0,
+    "blocksSight": false,
+    "passable": false,
+    "resourceYield": 0,
+    "color": "#457b9d",
+    "icon": "🌊"
+  },
+  {
+    "id": "river",
+    "name": "River",
+    "movementCost": 2,
+    "defenceBonus": -0.1,
+    "blocksSight": false,
+    "passable": true,
+    "resourceYield": 0,
+    "color": "#7ec8e3",
+    "icon": "〰️"
+  },
+  {
+    "id": "resource",
+    "name": "Resource",
+    "movementCost": 1,
+    "defenceBonus": 0,
+    "blocksSight": false,
+    "passable": true,
+    "resourceYield": 2,
+    "color": "#f4a261",
+    "icon": "💎"
+  }
+]

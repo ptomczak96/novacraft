@@ -1,0 +1,155 @@
+[
+  {
+    "id": "scout",
+    "name": "Scout",
+    "faction": "shared",
+    "cost": 3,
+    "maxHP": 8,
+    "attack": 3,
+    "defence": 1,
+    "movement": 4,
+    "attackRange": 1,
+    "sightRange": 4,
+    "abilities": [],
+    "traits": []
+  },
+  {
+    "id": "warrior",
+    "name": "Warrior",
+    "faction": "shared",
+    "cost": 5,
+    "maxHP": 15,
+    "attack": 6,
+    "defence": 3,
+    "movement": 2,
+    "attackRange": 1,
+    "sightRange": 2,
+    "abilities": [],
+    "traits": []
+  },
+  {
+    "id": "archer",
+    "name": "Archer",
+    "faction": "shared",
+    "cost": 5,
+    "maxHP": 10,
+    "attack": 5,
+    "defence": 1,
+    "movement": 2,
+    "attackRange": 2,
+    "sightRange": 3,
+    "abilities": [],
+    "traits": []
+  },
+  {
+    "id": "defender",
+    "name": "Defender",
+    "faction": "shared",
+    "cost": 6,
+    "maxHP": 20,
+    "attack": 3,
+    "defence": 6,
+    "movement": 1,
+    "attackRange": 1,
+    "sightRange": 2,
+    "abilities": [],
+    "traits": []
+  },
+  {
+    "id": "catapult",
+    "name": "Catapult",
+    "faction": "shared",
+    "cost": 8,
+    "maxHP": 8,
+    "attack": 10,
+    "defence": 1,
+    "movement": 1,
+    "attackRange": 3,
+    "sightRange": 2,
+    "abilities": [],
+    "traits": ["noMoveAndAttack"]
+  },
+  {
+    "id": "ironclad_berserker",
+    "name": "Berserker",
+    "faction": "ironclad",
+    "cost": 7,
+    "maxHP": 18,
+    "attack": 8,
+    "defence": 2,
+    "movement": 3,
+    "attackRange": 1,
+    "sightRange": 2,
+    "abilities": [
+      {
+        "id": "rage",
+        "name": "Rage",
+        "effects": [
+          { "type": "modifyStat", "params": { "stat": "attack", "amount": 3, "duration": 1 } }
+        ],
+        "cooldown": 3
+      }
+    ],
+    "traits": []
+  },
+  {
+    "id": "ironclad_siege_tower",
+    "name": "Siege Tower",
+    "faction": "ironclad",
+    "cost": 10,
+    "maxHP": 25,
+    "attack": 7,
+    "defence": 5,
+    "movement": 1,
+    "attackRange": 2,
+    "sightRange": 2,
+    "abilities": [],
+    "traits": ["noMoveAndAttack"]
+  },
+  {
+    "id": "sylvan_ranger",
+    "name": "Ranger",
+    "faction": "sylvan",
+    "cost": 6,
+    "maxHP": 12,
+    "attack": 5,
+    "defence": 2,
+    "movement": 3,
+    "attackRange": 2,
+    "sightRange": 4,
+    "abilities": [
+      {
+        "id": "camouflage",
+        "name": "Camouflage",
+        "effects": [
+          { "type": "applyStatus", "params": { "status": "hidden", "duration": 2 } }
+        ],
+        "cooldown": 3
+      }
+    ],
+    "traits": ["ignoresTerrainCost"]
+  },
+  {
+    "id": "sylvan_treant",
+    "name": "Treant",
+    "faction": "sylvan",
+    "cost": 9,
+    "maxHP": 22,
+    "attack": 6,
+    "defence": 4,
+    "movement": 1,
+    "attackRange": 1,
+    "sightRange": 3,
+    "abilities": [
+      {
+        "id": "entangle",
+        "name": "Entangle",
+        "effects": [
+          { "type": "applyStatus", "params": { "status": "rooted", "duration": 1 } }
+        ],
+        "cooldown": 2
+      }
+    ],
+    "traits": []
+  }
+]

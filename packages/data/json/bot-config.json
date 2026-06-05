@@ -1,0 +1,11 @@
+{
+  "greedy": {
+    "damageWeight": 10,
+    "killWeight": 25,
+    "captureWeight": 30,
+    "incomeWeight": 8,
+    "safetyWeight": 5,
+    "exploreWeight": 2,
+    "healWeight": 3
+  }
+}

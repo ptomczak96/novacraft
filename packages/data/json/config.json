@@ -1,0 +1,26 @@
+{
+  "mapWidth": 12,
+  "mapHeight": 12,
+  "fogOfWar": true,
+  "turnLimit": 50,
+  "winConditions": {
+    "captureAllCities": true,
+    "eliminateAllUnits": true,
+    "highestScoreAtLimit": true
+  },
+  "cityIncome": 3,
+  "resourceIncome": 2,
+  "startingGold": 10,
+  "combatConfig": {
+    "hpScaling": true,
+    "retaliationMultiplier": 0.5,
+    "minimumDamage": 1,
+    "damageVariance": 0
+  },
+  "scoreWeights": {
+    "cityValue": 10,
+    "unitCostValue": 1,
+    "incomeValue": 2
+  },
+  "comebackThreshold": 0.25
+}

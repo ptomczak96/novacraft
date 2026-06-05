@@ -1,0 +1,14 @@
+[
+  {
+    "id": "ironclad",
+    "name": "Ironclad Dominion",
+    "color": "#c44536",
+    "unitTypes": ["scout", "warrior", "archer", "defender", "catapult", "ironclad_berserker", "ironclad_siege_tower"]
+  },
+  {
+    "id": "sylvan",
+    "name": "Sylvan Accord",
+    "color": "#3a7d44",
+    "unitTypes": ["scout", "warrior", "archer", "defender", "catapult", "sylvan_ranger", "sylvan_treant"]
+  }
+]

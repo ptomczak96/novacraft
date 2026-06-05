@@ -1,0 +1,19 @@
+{
+  "name": "tactica",
+  "private": true,
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace=apps/web",
+    "sim": "npx tsx packages/sim/src/index.ts",
+    "test": "vitest run",
+    "validate-data": "npx tsx packages/data/src/validate.ts"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0",
+    "vitest": "^1.6.0",
+    "tsx": "^4.10.0"
+  }
+}

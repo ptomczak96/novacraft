@@ -1,0 +1,40 @@
+# Tactica — Project Conventions
+
+## Architecture Rules
+
+1. **The engine is a pure, deterministic state machine.** Its entire public API is approximately:
+   - `createGame(config: GameConfig, seed: number): GameState`
+   - `getLegalActions(state: GameState, playerId: PlayerId): Action[]`
+   - `applyAction(state: GameState, action: Action): GameState` (returns NEW state; never mutates)
+   - `getVisibleState(state: GameState, playerId: PlayerId): VisibleState` (fog-of-war filtered view)
+   - `getResult(state: GameState): GameResult | null`
+2. **All randomness flows through a seeded PRNG stored in GameState.** Same seed + same action sequence = identical game, always.
+3. **GameState is fully JSON-serializable.** No classes with methods as state, no Maps/Sets in state.
+4. **All game content is data, not code.** Unit stats, terrain, tech tree, factions — everything in `/packages/data/json/*.json`.
+5. **Abilities are composed from primitives.** Effect primitives: `damage`, `push`, `heal`, `applyStatus`, `revealArea`, `spawnUnit`, `modifyStat`.
+
+## Workspace Layout
+
+```
+/packages
+  /engine   — pure game logic (ZERO browser/dom imports)
+  /data     — JSON game data + zod schemas
+  /bots     — AI players (imports engine only)
+  /sim      — headless simulation CLI
+/apps
+  /web      — Vite + React app
+```
+
+## Key Rules
+
+- All balance numbers live in `/packages/data/json/`
+- Engine must stay pure and deterministic
+- Game state lives in the engine, NOT in React state
+- No backend, no database, no auth
+
+## Commands
+
+- `npm run dev` — launch web app
+- `npm run sim -- --games 1000 --bot-a greedy --bot-b greedy --seed 42` — headless sim
+- `npm test` — run all tests
+- `npm run validate-data` — validate JSON data against schemas

@@ -1,0 +1,74 @@
+[
+  {
+    "id": "forestry",
+    "name": "Forestry",
+    "cost": 5,
+    "prerequisites": [],
+    "effects": [
+      { "type": "globalModifier", "params": { "modifier": "forestMovementCost", "value": 1 } }
+    ]
+  },
+  {
+    "id": "roads",
+    "name": "Roads",
+    "cost": 6,
+    "prerequisites": [],
+    "effects": [
+      { "type": "globalModifier", "params": { "modifier": "plainsMovementBonus", "value": 1 } }
+    ]
+  },
+  {
+    "id": "archery",
+    "name": "Advanced Archery",
+    "cost": 8,
+    "prerequisites": [],
+    "effects": [
+      { "type": "globalModifier", "params": { "modifier": "rangedAttackBonus", "value": 1 } }
+    ]
+  },
+  {
+    "id": "fortification",
+    "name": "Fortification",
+    "cost": 7,
+    "prerequisites": [],
+    "effects": [
+      { "type": "globalModifier", "params": { "modifier": "cityDefenceBonus", "value": 0.2 } }
+    ]
+  },
+  {
+    "id": "taxation",
+    "name": "Taxation",
+    "cost": 6,
+    "prerequisites": [],
+    "effects": [
+      { "type": "globalModifier", "params": { "modifier": "cityIncomeBonus", "value": 1 } }
+    ]
+  },
+  {
+    "id": "siege_engineering",
+    "name": "Siege Engineering",
+    "cost": 10,
+    "prerequisites": ["archery"],
+    "effects": [
+      { "type": "globalModifier", "params": { "modifier": "siegeAttackBonus", "value": 2 } }
+    ]
+  },
+  {
+    "id": "logistics",
+    "name": "Logistics",
+    "cost": 8,
+    "prerequisites": ["roads"],
+    "effects": [
+      { "type": "globalModifier", "params": { "modifier": "allMovementBonus", "value": 1 } }
+    ]
+  },
+  {
+    "id": "diplomacy",
+    "name": "Diplomacy",
+    "cost": 12,
+    "prerequisites": ["taxation", "fortification"],
+    "effects": [
+      { "type": "globalModifier", "params": { "modifier": "resourceIncomeBonus", "value": 1 } }
+    ]
+  }
+]
