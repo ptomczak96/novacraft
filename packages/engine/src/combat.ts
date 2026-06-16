@@ -1,52 +1,77 @@
-import type { Unit, UnitType, GameMap, CombatConfig, DataRegistry } from './types.js';
+import type { Unit, UnitType, GameMap, CombatConfig, DataRegistry, Tile } from './types.js';
 import type { PRNGState } from './prng.js';
-import { nextRandom } from './prng.js';
+
+export interface CombatBreakdown {
+  attackForce: number;
+  defenseForce: number;
+  totalForce: number;
+  terrainBonus: number;     // the defenseBonus multiplier (1.0 or 1.5)
+  terrainName: string;      // e.g. "Forest", "Plains (City)"
+  rawDamage: number;        // before rounding/min
+  finalDamage: number;      // after rounding/min
+}
 
 export interface CombatResult {
-  attackerDamage: number; // damage dealt TO defender
-  defenderRetaliation: number; // damage dealt TO attacker
+  attackerDamage: number;        // damage dealt TO defender
+  defenderRetaliation: number;   // damage dealt TO attacker
   defenderKilled: boolean;
   attackerKilled: boolean;
   prng: PRNGState;
+  attackBreakdown: CombatBreakdown;
+  retaliationBreakdown: CombatBreakdown | null;
 }
 
+/**
+ * Polytopia force-ratio combat formula.
+ *
+ *   attackForce  = attackStat  * (attackerHP / attackerMaxHP)
+ *   defenseForce = defenceStat * (defenderHP / defenderMaxHP) * defenseBonus
+ *   totalForce   = attackForce + defenseForce
+ *   damage       = round((attackForce / totalForce) * attackStat * 4.5)
+ *   minimum      = config.minimumDamage (1)
+ */
 export function calculateDamage(
-  attackerAttack: number,
+  attackStat: number,
   attackerHP: number,
   attackerMaxHP: number,
-  defenderDefence: number,
-  terrainDefenceBonus: number,
-  config: CombatConfig,
-  prng: PRNGState,
-  isRetaliation: boolean = false,
-): [number, PRNGState] {
-  let attack = attackerAttack;
-  if (isRetaliation) {
-    attack = attack * config.retaliationMultiplier;
-  }
+  defenceStat: number,
+  defenderHP: number,
+  defenderMaxHP: number,
+  defenseBonus: number,
+  minimumDamage: number,
+): { damage: number; breakdown: CombatBreakdown } {
+  const attackForce = attackStat * (attackerHP / attackerMaxHP);
+  const defenseForce = defenceStat * (defenderHP / defenderMaxHP) * defenseBonus;
+  const totalForce = attackForce + defenseForce;
 
-  let damage = attack;
-  if (config.hpScaling) {
-    damage = damage * (attackerHP / attackerMaxHP);
-  }
+  const rawDamage = (attackForce / totalForce) * attackStat * 4.5;
+  const finalDamage = Math.max(minimumDamage, Math.round(rawDamage));
 
-  // Apply terrain defence modifier
-  damage = damage * (1 - terrainDefenceBonus);
+  return {
+    damage: finalDamage,
+    breakdown: {
+      attackForce,
+      defenseForce,
+      totalForce,
+      terrainBonus: defenseBonus,
+      terrainName: '', // filled by caller
+      rawDamage,
+      finalDamage,
+    },
+  };
+}
 
-  // Subtract defender's defence
-  damage = damage - defenderDefence;
+/** Determine the Polytopia defense multiplier for a tile. */
+function getDefenseMultiplier(tile: Tile, terrain: { defenceBonus: number } | undefined): number {
+  if (tile.isCity) return 1.5;
+  if (terrain && terrain.defenceBonus > 0) return 1.5;
+  return 1.0;
+}
 
-  // Apply variance if configured
-  let currentPrng = prng;
-  if (config.damageVariance > 0) {
-    const [roll, next] = nextRandom(prng);
-    currentPrng = next;
-    const varianceFactor = 1 + (roll * 2 - 1) * config.damageVariance;
-    damage = damage * varianceFactor;
-  }
-
-  damage = Math.max(config.minimumDamage, Math.floor(damage));
-  return [damage, currentPrng];
+/** Build a terrain label for the combat breakdown. */
+function getTerrainLabel(tile: Tile, terrain: { name: string } | undefined): string {
+  const name = terrain?.name ?? 'Unknown';
+  return tile.isCity ? `${name} (City)` : name;
 }
 
 export function resolveCombat(
@@ -59,28 +84,30 @@ export function resolveCombat(
   config: CombatConfig,
   prng: PRNGState,
 ): CombatResult {
+  // Defender terrain
   const defenderTile = map.tiles[defender.position.y][defender.position.x];
   const defenderTerrain = registry.terrainTypes[defenderTile.terrain];
-  const defenderTerrainBonus = defenderTerrain ? defenderTerrain.defenceBonus : 0;
+  const defenderDefenseMultiplier = getDefenseMultiplier(defenderTile, defenderTerrain);
 
-  // Attacker deals damage
-  const [attackerDamage, prng2] = calculateDamage(
+  // Attacker deals damage to defender
+  const { damage: damageToDefender, breakdown: attackBreakdown } = calculateDamage(
     attackerType.attack,
     attacker.hp,
     attackerType.maxHP,
     defenderType.defence,
-    defenderTerrainBonus,
-    config,
-    prng,
-    false,
+    defender.hp,
+    defenderType.maxHP,
+    defenderDefenseMultiplier,
+    config.minimumDamage,
   );
+  attackBreakdown.terrainName = getTerrainLabel(defenderTile, defenderTerrain);
 
-  const defenderHPAfter = defender.hp - attackerDamage;
+  const defenderHPAfter = defender.hp - damageToDefender;
   const defenderKilled = defenderHPAfter <= 0;
 
-  // Retaliation: only if defender survives and attacker is within defender's range
-  let defenderRetaliation = 0;
-  let prng3 = prng2;
+  // Retaliation: only if defender survives AND attacker is within defender's attack range
+  let damageToAttacker = 0;
+  let retaliationBreakdown: CombatBreakdown | null = null;
 
   if (!defenderKilled) {
     const dist = Math.abs(attacker.position.x - defender.position.x) +
@@ -89,30 +116,36 @@ export function resolveCombat(
     if (dist <= defenderType.attackRange) {
       const attackerTile = map.tiles[attacker.position.y][attacker.position.x];
       const attackerTerrain = registry.terrainTypes[attackerTile.terrain];
-      const attackerTerrainBonus = attackerTerrain ? attackerTerrain.defenceBonus : 0;
+      const attackerDefenseMultiplier = getDefenseMultiplier(attackerTile, attackerTerrain);
 
-      [defenderRetaliation, prng3] = calculateDamage(
+      // Retaliation uses defender's POST-DAMAGE HP (natural Polytopia scaling)
+      const { damage, breakdown } = calculateDamage(
         defenderType.attack,
-        defenderHPAfter,
+        defenderHPAfter,       // reduced HP
         defenderType.maxHP,
         attackerType.defence,
-        attackerTerrainBonus,
-        config,
-        prng2,
-        true,
+        attacker.hp,
+        attackerType.maxHP,
+        attackerDefenseMultiplier,
+        config.minimumDamage,
       );
+      damageToAttacker = damage;
+      retaliationBreakdown = breakdown;
+      retaliationBreakdown.terrainName = getTerrainLabel(attackerTile, attackerTerrain);
     }
   }
 
-  const attackerHPAfter = attacker.hp - defenderRetaliation;
+  const attackerHPAfter = attacker.hp - damageToAttacker;
   const attackerKilled = attackerHPAfter <= 0;
 
   return {
-    attackerDamage,
-    defenderRetaliation,
+    attackerDamage: damageToDefender,
+    defenderRetaliation: damageToAttacker,
     defenderKilled,
     attackerKilled,
-    prng: prng3,
+    prng, // Polytopia formula is deterministic — PRNG passes through unchanged
+    attackBreakdown,
+    retaliationBreakdown,
   };
 }
 
@@ -125,13 +158,6 @@ export function previewCombat(
   map: GameMap,
   registry: DataRegistry,
   config: CombatConfig,
-): { damageToDefender: number; damageToAttacker: number; defenderKilled: boolean; attackerKilled: boolean } {
-  // For preview, use a throwaway PRNG state (only matters if damageVariance > 0)
-  const result = resolveCombat(attacker, attackerType, defender, defenderType, map, registry, config, { seed: 0, state: 0 });
-  return {
-    damageToDefender: result.attackerDamage,
-    damageToAttacker: result.defenderRetaliation,
-    defenderKilled: result.defenderKilled,
-    attackerKilled: result.attackerKilled,
-  };
+): CombatResult {
+  return resolveCombat(attacker, attackerType, defender, defenderType, map, registry, config, { seed: 0, state: 0 });
 }

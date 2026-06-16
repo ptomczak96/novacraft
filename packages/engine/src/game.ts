@@ -40,13 +40,12 @@ export function createGame(
   let nextUnitId = 1;
   for (let i = 0; i < playerCount; i++) {
     const pos = cityPositions[i];
-    // Place warrior adjacent to city
-    const spawnPos = findAdjacentSpawn(map, pos, []);
+    // Place warrior on the base tile itself
     units.push({
       id: nextUnitId++,
       typeId: 'warrior',
       owner: i,
-      position: spawnPos,
+      position: { x: pos.x, y: pos.y },
       hp: registry.unitTypes['warrior'].maxHP,
       hasMoved: false,
       hasAttacked: false,

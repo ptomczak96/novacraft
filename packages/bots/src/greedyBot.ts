@@ -55,12 +55,12 @@ export class GreedyBot implements Bot {
                 attacker, at, defender, dt,
                 visibleState.map, registry, visibleState.config.combatConfig,
               );
-              score += result.damageToDefender * this.weights.damageWeight;
+              score += result.attackerDamage * this.weights.damageWeight;
               if (result.defenderKilled) {
                 score += dt.cost * this.weights.killWeight;
               }
               // Penalty for taking damage
-              score -= result.damageToAttacker * this.weights.safetyWeight;
+              score -= result.defenderRetaliation * this.weights.safetyWeight;
               if (result.attackerKilled) {
                 score -= at.cost * this.weights.killWeight;
               }

@@ -99,7 +99,7 @@ describe('Combat', () => {
       registry,
       defaultConfig.combatConfig,
     );
-    expect(preview.damageToDefender).toBeGreaterThanOrEqual(1);
+    expect(preview.attackerDamage).toBeGreaterThanOrEqual(1);
   });
 
   it('calculates damage deterministically when variance is 0', () => {
@@ -122,8 +122,8 @@ describe('Combat', () => {
       map, registry, defaultConfig.combatConfig,
     );
 
-    expect(a.damageToDefender).toBe(b.damageToDefender);
-    expect(a.damageToAttacker).toBe(b.damageToAttacker);
+    expect(a.attackerDamage).toBe(b.attackerDamage);
+    expect(a.defenderRetaliation).toBe(b.defenderRetaliation);
   });
 });
 

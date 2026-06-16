@@ -1,14 +1,14 @@
 {
   "mapWidth": 12,
   "mapHeight": 12,
-  "fogOfWar": true,
+  "fogOfWar": false,
   "turnLimit": 50,
   "winConditions": {
     "captureAllCities": true,
     "eliminateAllUnits": true,
     "highestScoreAtLimit": true
   },
-  "cityIncome": 3,
+  "cityIncome": 10,
   "resourceIncome": 2,
   "startingGold": 10,
   "combatConfig": {

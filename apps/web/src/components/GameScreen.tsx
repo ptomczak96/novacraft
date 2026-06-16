@@ -3,6 +3,8 @@ import { useGameStore } from '../store/gameStore.js';
 import { MapView } from './MapView.js';
 import { EditorPanel } from './EditorPanel.js';
 import { Inspector } from './Inspector.js';
+import { UnitSheet } from './UnitSheet.js';
+import { CombatLog } from './CombatLog.js';
 import type { Action } from '@tactica/engine';
 import { getLegalActions } from '@tactica/engine';
 
@@ -92,6 +94,9 @@ export function GameScreen() {
 
   return (
     <div className="game-screen">
+      {/* Combat Log — left side */}
+      <CombatLog />
+
       <div className="game-main">
         {/* Top Bar */}
         <div className="top-bar">
@@ -160,6 +165,9 @@ export function GameScreen() {
           </div>
         )}
       </div>
+
+      {/* Unit Sheet — right side (before Inspector/Editor) */}
+      <UnitSheet />
 
       {/* Side panels */}
       {inspectorOpen && <Inspector />}

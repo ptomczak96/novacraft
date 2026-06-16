@@ -18,7 +18,6 @@
   --p0-color: #4fc3f7;
   --p1-color: #ef5350;
   --border: #2a3a5a;
-  --tile-size: 52px;
 }
 
 html, body, #root {
@@ -190,6 +189,7 @@ label {
   flex: 1;
   height: 100%;
   overflow: hidden;
+  position: relative;
 }
 
 .game-main {
@@ -247,115 +247,9 @@ label {
   padding: 16px;
 }
 
-.map-grid {
-  display: grid;
-  gap: 1px;
-  background: var(--bg);
-  border: 2px solid var(--border);
-  border-radius: 4px;
-}
-
-.tile {
-  width: var(--tile-size);
-  height: var(--tile-size);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  position: relative;
-  cursor: pointer;
-  font-size: 11px;
-  transition: filter 0.1s;
-  user-select: none;
-}
-
-.tile:hover {
-  filter: brightness(1.2);
-}
-
-.tile.move-target {
-  box-shadow: inset 0 0 0 3px rgba(79, 195, 247, 0.6);
-}
-
-.tile.attack-target {
-  box-shadow: inset 0 0 0 3px rgba(239, 83, 80, 0.6);
-}
-
-.tile.selected {
-  box-shadow: inset 0 0 0 3px rgba(255, 255, 255, 0.8);
-}
-
-.tile .city-marker {
-  position: absolute;
-  top: 2px;
-  right: 2px;
-  font-size: 10px;
-}
-
-.tile .resource-marker {
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  font-size: 9px;
-}
-
-/* Unit on tile */
-.unit-display {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 1px;
-}
-
-.unit-icon {
-  font-size: 18px;
-  font-weight: 800;
-  line-height: 1;
-  text-shadow: 0 1px 2px rgba(0,0,0,0.5);
-}
-
-.unit-icon.p0 { color: var(--p0-color); }
-.unit-icon.p1 { color: var(--p1-color); }
-
-.hp-bar {
-  width: 28px;
-  height: 3px;
-  background: rgba(0,0,0,0.4);
-  border-radius: 2px;
-  overflow: hidden;
-}
-
-.hp-bar-fill {
-  height: 100%;
-  border-radius: 2px;
-  transition: width 0.2s;
-}
-
-.hp-bar-fill.high { background: var(--success); }
-.hp-bar-fill.mid { background: var(--warning); }
-.hp-bar-fill.low { background: var(--danger); }
-
-/* Damage preview */
-.damage-preview {
-  position: absolute;
-  bottom: 2px;
-  right: 2px;
-  background: rgba(239, 83, 80, 0.9);
-  color: white;
-  font-size: 10px;
-  font-weight: 700;
-  padding: 1px 4px;
-  border-radius: 3px;
-  pointer-events: none;
-}
-
-/* Fog overlay */
-.tile.fog-hidden {
-  background: #0a0a1a !important;
-}
-
-.tile.fog-explored {
-  filter: brightness(0.5) saturate(0.3);
+/* Isometric canvas */
+.map-container canvas {
+  image-rendering: auto;
 }
 
 /* Interstitial */
@@ -573,4 +467,262 @@ label {
 
 .map-editor-toolbar label {
   margin-right: 4px;
+}
+
+/* ============================================
+   Combat Log Panel (left side)
+   ============================================ */
+
+.combat-log-panel {
+  width: 280px;
+  background: var(--bg-surface);
+  border-right: 1px solid var(--border);
+  overflow-y: auto;
+  padding: 16px;
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  z-index: 20;
+}
+
+.combat-log-panel h3 {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--text-muted);
+  margin-bottom: 12px;
+}
+
+.combat-log-matchup {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: var(--bg-card);
+  border-radius: 6px;
+  margin-bottom: 12px;
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.combat-log-unit {
+  color: var(--text);
+}
+
+.combat-log-arrow {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.combat-breakdown-section {
+  margin-bottom: 12px;
+}
+
+.combat-breakdown-header {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--accent);
+  margin-bottom: 6px;
+}
+
+.combat-breakdown {
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 11px;
+  background: var(--bg);
+  border-radius: 4px;
+  padding: 6px 8px;
+}
+
+.combat-breakdown-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 2px 0;
+}
+
+.combat-breakdown-row.cb-separator {
+  border-top: 1px solid var(--border);
+  margin-top: 2px;
+  padding-top: 4px;
+}
+
+.combat-breakdown-row.cb-result {
+  border-top: 1px solid var(--border);
+  margin-top: 2px;
+  padding-top: 4px;
+}
+
+.cb-label {
+  color: var(--text-muted);
+}
+
+.cb-formula {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.cb-note {
+  color: var(--text-muted);
+  font-size: 10px;
+  margin-left: 4px;
+}
+
+.cb-damage {
+  color: var(--danger);
+  font-weight: 700;
+}
+
+.combat-log-hp-result {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  padding: 6px 8px;
+  background: var(--bg);
+  border-radius: 4px;
+  margin-bottom: 12px;
+}
+
+.combat-log-killed {
+  color: var(--danger);
+  font-weight: 700;
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+.combat-log-no-retaliation {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-style: italic;
+  padding: 4px 0;
+}
+
+/* ============================================
+   Unit Sheet (right side, reuses .side-panel)
+   ============================================ */
+
+.unit-sheet {
+  font-size: 12px;
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 20;
+}
+
+.unit-sheet-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 12px;
+}
+
+.unit-sheet-name {
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--text);
+}
+
+.unit-sheet-owner {
+  font-size: 12px;
+  font-weight: 700;
+}
+
+/* HP bar */
+.unit-sheet-hp-section {
+  margin-bottom: 14px;
+}
+
+.hp-label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+  font-weight: 600;
+}
+
+.hp-bar-track {
+  width: 100%;
+  height: 8px;
+  background: var(--bg);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.hp-bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.3s ease, background 0.3s ease;
+}
+
+/* Stats grid */
+.stat-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1px;
+  margin-bottom: 14px;
+}
+
+.stat-grid-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 5px 0;
+  border-bottom: 1px solid rgba(42, 58, 90, 0.3);
+}
+
+.stat-grid-item .stat-label {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.stat-grid-item .stat-value {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+}
+
+/* Traits */
+.unit-sheet-traits {
+  margin-bottom: 10px;
+}
+
+.unit-sheet-trait-list {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+.unit-sheet-trait {
+  font-size: 10px;
+  padding: 2px 8px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* Terrain info */
+.unit-sheet-terrain {
+  display: flex;
+  justify-content: space-between;
+  padding: 4px 0;
+  border-bottom: 1px solid rgba(42, 58, 90, 0.3);
+  font-size: 12px;
+}
+
+.unit-sheet-terrain .stat-label {
+  font-size: 11px;
+}
+
+.unit-sheet-terrain .stat-value {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }

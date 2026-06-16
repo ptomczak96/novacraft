@@ -104,6 +104,7 @@ export interface Tile {
   owner: PlayerId | null; // who controls this tile
   isCity: boolean;
   isResourceTile: boolean;
+  isPerimeter?: boolean; // outer ring of base territory
 }
 
 export interface GameMap {

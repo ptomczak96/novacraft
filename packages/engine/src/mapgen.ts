@@ -23,8 +23,8 @@ export function generateMap(
       if (roll < 0.55) terrainId = 'plains';
       else if (roll < 0.72) terrainId = 'forest';
       else if (roll < 0.82) terrainId = 'mountain';
-      else if (roll < 0.90) terrainId = 'water';
-      else if (roll < 0.95) terrainId = 'river';
+      else if (roll < 0.90) terrainId = 'plains'; // was 'water' — disabled for cleaner maps
+      else if (roll < 0.95) terrainId = 'plains'; // was 'river' — disabled for cleaner maps
       else terrainId = 'resource';
 
       tiles[y][x] = {
@@ -40,9 +40,9 @@ export function generateMap(
   const cityPositions: Coord[] = [];
 
   if (playerCount === 2) {
-    // Player 0 in top-left quadrant, player 1 in bottom-right quadrant
-    const p0: Coord = { x: Math.floor(width * 0.25), y: Math.floor(height * 0.25) };
-    const p1: Coord = { x: Math.floor(width * 0.75), y: Math.floor(height * 0.75) };
+    // Player 0 top-left corner, player 1 bottom-right corner (1 tile in for 3x3 perimeter)
+    const p0: Coord = { x: 1, y: 1 };
+    const p1: Coord = { x: width - 2, y: height - 2 };
     cityPositions.push(p0, p1);
   } else {
     // Distribute evenly around the map
@@ -63,17 +63,21 @@ export function generateMap(
       isCity: true,
       isResourceTile: false,
     };
-    // Clear immediate neighbours to plains for playability
-    for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) {
-      const nx = pos.x + dx;
-      const ny = pos.y + dy;
-      if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
-        tiles[ny][nx] = {
-          terrain: 'plains',
-          owner: null,
-          isCity: false,
-          isResourceTile: false,
-        };
+    // Clear full 3x3 perimeter around base — all owned by the player
+    for (let dy = -1; dy <= 1; dy++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        const nx = pos.x + dx;
+        const ny = pos.y + dy;
+        if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+          if (dx === 0 && dy === 0) continue; // already set as city above
+          tiles[ny][nx] = {
+            terrain: 'plains',
+            owner: i,
+            isCity: false,
+            isResourceTile: false,
+            isPerimeter: true,
+          };
+        }
       }
     }
   }

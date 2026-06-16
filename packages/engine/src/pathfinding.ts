@@ -52,7 +52,7 @@ export function getReachableTiles(
       reachable.set(currentKey, current.cost);
     }
 
-    for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) {
+    for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [-1, 1], [1, -1], [1, 1]]) {
       const nx = current.x + dx;
       const ny = current.y + dy;
       if (nx < 0 || nx >= map.width || ny < 0 || ny >= map.height) continue;
@@ -72,7 +72,7 @@ export function getReachableTiles(
       const nKey = `${nx},${ny}`;
       if (occupiedByEnemy.has(nKey)) continue;
 
-      const moveCost = ignoresTerrain || isFlying ? 1 : terrain.movementCost;
+      const moveCost = 1; // All passable terrain costs 1 (terrain penalties ignored)
       const newCost = current.cost + moveCost;
 
       if (newCost > maxMove) continue;
@@ -93,7 +93,7 @@ export function distance(a: Coord, b: Coord): number {
   return Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
 }
 
-/** Chebyshev distance (for range calculations where diagonal counts) — but we use Manhattan for this game. */
+/** Chebyshev distance — diagonals count as 1, used for attack range checks. */
 export function inRange(a: Coord, b: Coord, range: number): boolean {
-  return distance(a, b) <= range;
+  return Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y)) <= range;
 }

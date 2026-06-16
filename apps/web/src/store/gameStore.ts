@@ -1,11 +1,20 @@
 import { create } from 'zustand';
-import type { GameState, GameConfig, Action, DataRegistry, VisibleState, Coord } from '@tactica/engine';
+import type { GameState, GameConfig, Action, DataRegistry, VisibleState, Coord, CombatBreakdown } from '@tactica/engine';
 import {
   createGame, getLegalActions, applyAction, getVisibleState,
   getResult, replayGame, previewCombat,
 } from '@tactica/engine';
 import { buildRegistry, defaultConfig, defaultTerrain, defaultUnits, defaultFactions, defaultTechs } from '@tactica/data';
 import type { TerrainType, UnitType, FactionDef, TechDef } from '@tactica/engine';
+
+export interface CombatLogEntry {
+  attacker: { name: string; attack: number; defence: number; hpBefore: number; hpAfter: number; maxHP: number };
+  defender: { name: string; attack: number; defence: number; hpBefore: number; hpAfter: number; maxHP: number };
+  attackBreakdown: CombatBreakdown;
+  retaliationBreakdown: CombatBreakdown | null;
+  defenderKilled: boolean;
+  attackerKilled: boolean;
+}
 
 export type AppScreen = 'setup' | 'game' | 'mapEditor';
 export type BotSetting = 'human' | 'random' | 'greedy';
@@ -56,6 +65,9 @@ interface GameStore {
   // Inspector
   inspectorOpen: boolean;
   setInspectorOpen: (v: boolean) => void;
+
+  // Combat log
+  lastCombatResult: CombatLogEntry | null;
 
   // Actions
   startGame: (factions: [string, string], seed: number) => void;
@@ -125,6 +137,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
   inspectorOpen: false,
   setInspectorOpen: (v) => set({ inspectorOpen: v }),
 
+  lastCombatResult: null,
+
   startGame: (factions, seed) => {
     const { config, registry } = get();
     const state = createGame(config, registry, factions, seed);
@@ -148,6 +162,45 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const { gameState, registry, config } = get();
     if (!gameState) return;
 
+    // Capture combat info before applying the action
+    let combatLogEntry: CombatLogEntry | null = null;
+    if (action.type === 'attack') {
+      const attacker = gameState.units.find(u => u.id === action.unitId);
+      const defender = gameState.units.find(u => u.id === action.targetId);
+      if (attacker && defender) {
+        const attackerType = registry.unitTypes[attacker.typeId];
+        const defenderType = registry.unitTypes[defender.typeId];
+        if (attackerType && defenderType) {
+          const result = previewCombat(
+            attacker, attackerType, defender, defenderType,
+            gameState.map, registry, gameState.config.combatConfig,
+          );
+          combatLogEntry = {
+            attacker: {
+              name: attackerType.name,
+              attack: attackerType.attack,
+              defence: attackerType.defence,
+              hpBefore: attacker.hp,
+              hpAfter: Math.max(0, attacker.hp - result.defenderRetaliation),
+              maxHP: attackerType.maxHP,
+            },
+            defender: {
+              name: defenderType.name,
+              attack: defenderType.attack,
+              defence: defenderType.defence,
+              hpBefore: defender.hp,
+              hpAfter: Math.max(0, defender.hp - result.attackerDamage),
+              maxHP: defenderType.maxHP,
+            },
+            attackBreakdown: result.attackBreakdown,
+            retaliationBreakdown: result.retaliationBreakdown,
+            defenderKilled: result.defenderKilled,
+            attackerKilled: result.attackerKilled,
+          };
+        }
+      }
+    }
+
     const prevPlayer = gameState.currentPlayer;
     const newState = applyAction(gameState, action, registry);
     const visible = getVisibleState(newState, newState.currentPlayer, registry);
@@ -163,6 +216,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       stateHistory: [...get().stateHistory, gameState],
       selectedUnitId: null,
       showInterstitial,
+      lastCombatResult: combatLogEntry ?? get().lastCombatResult,
     });
   },
 
