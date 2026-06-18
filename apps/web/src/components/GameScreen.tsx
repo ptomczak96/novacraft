@@ -107,7 +107,10 @@ export function GameScreen() {
               {botSettings[currentPlayer] !== 'human' && ` (${botSettings[currentPlayer]})`}
             </span>
             <span style={{ color: 'var(--warning)' }}>
-              {player.gold}g
+              {player.shard}◈
+            </span>
+            <span style={{ color: 'var(--p1-color, #5aa9e6)' }}>
+              {player.plasma}✦
             </span>
           </div>
           <div className="top-bar-actions">

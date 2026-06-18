@@ -88,6 +88,38 @@ export const GameConfigSchema = z.object({
   comebackThreshold: z.number(),
 });
 
+export const BuildingDefSchema = z.object({
+  on: z.enum(['shard', 'plasma', 'land']),
+  cost: z.number().min(0),
+  maxLevel: z.number().min(1),
+  perCity: z.number().min(1).nullable(),
+  popPerLevel: z.number().min(0).optional(),
+  upgradeCosts: z.array(z.number().min(0)).optional(),
+  popPerAdjacent: z.number().min(0).optional(),
+  adjacentTo: z.enum(['mine', 'extractor', 'processor', 'purifier']).optional(),
+  techRequired: z.string().nullable().optional(),
+});
+
+export const EconomyDataSchema = z.object({
+  upkeepMultiplier: z.number().min(0),
+  upkeepDefault: z.number().min(0),
+  upkeepByUnit: z.record(z.number().min(0)),
+  startingShard: z.number().min(0),
+  startingPlasma: z.number().min(0),
+  city: z.object({
+    maxLevel: z.number().min(1),
+    capitalBaseProduction: z.number().min(0),
+    cityBaseProduction: z.number().min(0),
+    productionPerLevel: z.number().min(0),
+    slotsBase: z.number().min(1),
+    popThresholds: z.array(z.number().min(0)),
+    territoryRadius: z.number().min(1),
+  }),
+  buildings: z.record(BuildingDefSchema),
+  foundCity: z.object({ cost: z.number().min(0), requiresUnitOnTile: z.boolean() }),
+  unitPlasmaCost: z.record(z.number().min(0)),
+});
+
 export const TerrainDataSchema = z.array(TerrainTypeSchema);
 export const UnitDataSchema = z.array(UnitTypeSchema);
 export const FactionDataSchema = z.array(FactionDefSchema);

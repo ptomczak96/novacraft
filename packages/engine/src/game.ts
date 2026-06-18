@@ -1,6 +1,7 @@
 import type {
   GameState, GameConfig, GameResult, Action, MoveAction, AttackAction,
-  RecruitAction, ResearchAction, EndTurnAction, Unit, PlayerId,
+  RecruitAction, ResearchAction, BuildAction, UpgradeBuildingAction, FoundCityAction,
+  EndTurnAction, Unit, PlayerId, CityState,
   VisibleState, DataRegistry, Coord, PlayerState, TileVisibility,
 } from './types.js';
 import { createPRNG } from './prng.js';
@@ -8,6 +9,11 @@ import { generateMap } from './mapgen.js';
 import { getReachableTiles, distance, inRange } from './pathfinding.js';
 import { resolveCombat, previewCombat } from './combat.js';
 import { computeVisibility } from './fog.js';
+import {
+  settleEconomy, calculateShardIncome, calculatePlasmaIncome, recomputeCities,
+  territoryCityAt, cityAt, cityHasFreeSlot, getUnitPlasmaCost,
+  canBuild, canUpgradeBuilding, upgradeCostFor, canFoundCity,
+} from './economy.js';
 
 // ── Deep clone helper (JSON round-trip, since state is JSON-serializable) ──
 function clone<T>(obj: T): T {
@@ -31,18 +37,40 @@ export function createGame(
   const players: PlayerState[] = factionIds.map((factionId, i) => ({
     id: i,
     factionId,
-    gold: config.startingGold,
+    shard: registry.economy.startingShard,
+    plasma: registry.economy.startingPlasma,
     researchedTechs: [],
   }));
 
-  // Place starting units — one warrior per player at their city
+  // Build city state from the map. Each player's starting city is a capital;
+  // any other city tiles begin as neutral level-1 cities.
+  const capitalKeys = new Set(cityPositions.map(p => `${p.x},${p.y}`));
+  const cities: CityState[] = [];
+  let nextCityId = 1;
+  for (let y = 0; y < map.height; y++) {
+    for (let x = 0; x < map.width; x++) {
+      const tile = map.tiles[y][x];
+      if (!tile.isCity) continue;
+      cities.push({
+        id: nextCityId++,
+        position: { x, y },
+        owner: tile.owner,
+        isCapital: capitalKeys.has(`${x},${y}`),
+        level: 1,
+        pop: 0,
+      });
+    }
+  }
+
+  // Place starting units — one warrior per player at their capital.
   const units: Unit[] = [];
+  const unitHomeCity: Record<number, number> = {};
   let nextUnitId = 1;
   for (let i = 0; i < playerCount; i++) {
     const pos = cityPositions[i];
-    // Place warrior on the base tile itself
+    const id = nextUnitId++;
     units.push({
-      id: nextUnitId++,
+      id,
       typeId: 'warrior',
       owner: i,
       position: { x: pos.x, y: pos.y },
@@ -51,6 +79,8 @@ export function createGame(
       hasAttacked: false,
       abilityCooldowns: {},
     });
+    const capital = cities.find(c => c.position.x === pos.x && c.position.y === pos.y);
+    if (capital) unitHomeCity[id] = capital.id;
   }
 
   return {
@@ -58,9 +88,14 @@ export function createGame(
     map,
     units,
     players,
+    cities,
+    buildings: [],
+    unitHomeCity,
     currentPlayer: 0,
     turn: 1,
     nextUnitId,
+    nextCityId,
+    nextBuildingId: 1,
     prng: prngAfterMap,
     actionLog: [],
     phase: 'playing',
@@ -125,25 +160,39 @@ export function getLegalActions(state: GameState, registry: DataRegistry, player
     }
   }
 
-  // Recruit actions — at owned cities
+  // Recruit actions — at owned cities with a free unit slot and enough resources
   if (faction) {
-    for (let y = 0; y < state.map.height; y++) {
-      for (let x = 0; x < state.map.width; x++) {
-        const tile = state.map.tiles[y][x];
-        if (tile.isCity && tile.owner === playerId) {
-          // Check no unit already on this tile
-          const occupied = state.units.some(u => u.position.x === x && u.position.y === y);
-          if (!occupied) {
-            for (const unitTypeId of faction.unitTypes) {
-              const ut = registry.unitTypes[unitTypeId];
-              if (!ut) continue;
-              // Check if unit is unlocked (no tech lock for base units, check tech for others)
-              if (ut.cost <= player.gold) {
-                actions.push({ type: 'recruit', unitTypeId, cityPosition: { x, y } });
-              }
-            }
-          }
+    for (const city of state.cities) {
+      if (city.owner !== playerId) continue;
+      const { x, y } = city.position;
+      // Need an empty city tile and a free slot in that city.
+      const occupied = state.units.some(u => u.position.x === x && u.position.y === y);
+      if (occupied) continue;
+      if (!cityHasFreeSlot(state, city, registry)) continue;
+      for (const unitTypeId of faction.unitTypes) {
+        const ut = registry.unitTypes[unitTypeId];
+        if (!ut) continue;
+        if (ut.cost > player.shard) continue;
+        if (getUnitPlasmaCost(unitTypeId, registry) > player.plasma) continue;
+        actions.push({ type: 'recruit', unitTypeId, cityPosition: { x, y } });
+      }
+    }
+  }
+
+  // Economy actions — build / upgrade structures, found cities
+  for (let y = 0; y < state.map.height; y++) {
+    for (let x = 0; x < state.map.width; x++) {
+      const pos = { x, y };
+      for (const kind of ['mine', 'extractor', 'processor', 'purifier'] as const) {
+        if (canBuild(state, registry, playerId, kind, pos)) {
+          actions.push({ type: 'build', kind, position: pos });
         }
+      }
+      if (canUpgradeBuilding(state, registry, playerId, pos)) {
+        actions.push({ type: 'upgradeBuilding', position: pos });
+      }
+      if (canFoundCity(state, registry, playerId, pos)) {
+        actions.push({ type: 'foundCity', position: pos });
       }
     }
   }
@@ -151,7 +200,7 @@ export function getLegalActions(state: GameState, registry: DataRegistry, player
   // Research actions
   for (const [techId, tech] of Object.entries(registry.techs)) {
     if (player.researchedTechs.includes(techId)) continue;
-    if (tech.cost > player.gold) continue;
+    if (tech.cost > player.shard) continue;
     const prereqsMet = tech.prerequisites.every(p => player.researchedTechs.includes(p));
     if (!prereqsMet) continue;
     actions.push({ type: 'research', techId });
@@ -177,6 +226,12 @@ export function applyAction(state: GameState, action: Action, registry: DataRegi
       return applyRecruit(newState, action, registry);
     case 'research':
       return applyResearch(newState, action, registry);
+    case 'build':
+      return applyBuild(newState, action, registry);
+    case 'upgradeBuilding':
+      return applyUpgradeBuilding(newState, action, registry);
+    case 'foundCity':
+      return applyFoundCity(newState, action, registry);
     case 'endTurn':
       return applyEndTurn(newState, registry);
     default:
@@ -190,13 +245,12 @@ function applyMove(state: GameState, action: MoveAction, _registry: DataRegistry
   unit.position = { ...action.to };
   unit.hasMoved = true;
 
-  // Check city capture — unit on enemy city starts capture (captured after full turn)
+  // Check city capture — unit on enemy/neutral city captures it (keeps level + buildings)
   const tile = state.map.tiles[action.to.y][action.to.x];
-  if (tile.isCity && tile.owner !== unit.owner && tile.owner !== null) {
-    // Capture instantly for simplicity in v1 (unit stands on it)
+  if (tile.isCity && tile.owner !== unit.owner) {
     tile.owner = unit.owner;
-  } else if (tile.isCity && tile.owner === null) {
-    tile.owner = unit.owner;
+    const city = cityAt(state, action.to);
+    if (city) city.owner = unit.owner;
   }
 
   // Capture resource tiles
@@ -251,10 +305,16 @@ function applyRecruit(state: GameState, action: RecruitAction, registry: DataReg
   const unitType = registry.unitTypes[action.unitTypeId];
   if (!unitType) return state;
 
-  player.gold -= unitType.cost;
+  const city = cityAt(state, action.cityPosition);
+  if (!city || city.owner !== state.currentPlayer) return state;
+  if (!cityHasFreeSlot(state, city, registry)) return state;
 
+  player.shard -= unitType.cost;
+  player.plasma -= getUnitPlasmaCost(action.unitTypeId, registry);
+
+  const id = state.nextUnitId++;
   state.units.push({
-    id: state.nextUnitId++,
+    id,
     typeId: action.unitTypeId,
     owner: state.currentPlayer,
     position: { ...action.cityPosition },
@@ -263,6 +323,7 @@ function applyRecruit(state: GameState, action: RecruitAction, registry: DataReg
     hasAttacked: true,
     abilityCooldowns: {},
   });
+  state.unitHomeCity[id] = city.id; // unit counts against this city's slots
 
   return state;
 }
@@ -272,10 +333,71 @@ function applyResearch(state: GameState, action: ResearchAction, registry: DataR
   const tech = registry.techs[action.techId];
   if (!tech) return state;
 
-  player.gold -= tech.cost;
+  player.shard -= tech.cost;
   player.researchedTechs.push(action.techId);
 
   return state;
+}
+
+function applyBuild(state: GameState, action: BuildAction, registry: DataRegistry): GameState {
+  const playerId = state.currentPlayer;
+  if (!canBuild(state, registry, playerId, action.kind, action.position)) return state;
+
+  const def = registry.economy.buildings[action.kind];
+  const city = territoryCityAt(state, registry, action.position);
+  state.players[playerId].shard -= def.cost;
+  state.buildings.push({
+    id: state.nextBuildingId++,
+    kind: action.kind,
+    position: { ...action.position },
+    level: 1,
+    cityId: city ? city.id : null,
+  });
+
+  recomputeCities(state, registry); // pop/level may have changed
+  return checkWinConditions(state, registry);
+}
+
+function applyUpgradeBuilding(state: GameState, action: UpgradeBuildingAction, registry: DataRegistry): GameState {
+  const playerId = state.currentPlayer;
+  if (!canUpgradeBuilding(state, registry, playerId, action.position)) return state;
+
+  const building = state.buildings.find(
+    b => b.position.x === action.position.x && b.position.y === action.position.y,
+  );
+  if (!building) return state;
+  const cost = upgradeCostFor(building, registry);
+  if (cost === null) return state;
+
+  state.players[playerId].shard -= cost;
+  building.level += 1;
+
+  recomputeCities(state, registry);
+  return checkWinConditions(state, registry);
+}
+
+function applyFoundCity(state: GameState, action: FoundCityAction, registry: DataRegistry): GameState {
+  const playerId = state.currentPlayer;
+  if (!canFoundCity(state, registry, playerId, action.position)) return state;
+
+  const { x, y } = action.position;
+  const tile = state.map.tiles[y][x];
+  tile.isCity = true;
+  tile.isRuin = false;
+  tile.owner = playerId;
+
+  state.cities.push({
+    id: state.nextCityId++,
+    position: { x, y },
+    owner: playerId,
+    isCapital: false,
+    level: 1,
+    pop: 0,
+  });
+  state.players[playerId].shard -= registry.economy.foundCity.cost;
+
+  recomputeCities(state, registry);
+  return checkWinConditions(state, registry);
 }
 
 function applyEndTurn(state: GameState, registry: DataRegistry): GameState {
@@ -295,10 +417,12 @@ function applyEndTurn(state: GameState, registry: DataRegistry): GameState {
   if (nextPlayer === 0) {
     state.turn++;
 
-    // Collect income for all players at start of their new turn cycle
+    // Collect shard income (city production), then settle upkeep (dormant),
+    // and collect plasma income. See economy.ts for the rules.
     for (const player of state.players) {
-      const income = calculateIncome(state, player.id, registry);
-      player.gold += income;
+      const shardIncome = calculateShardIncome(state, player.id, registry);
+      settleEconomy(state, player.id, shardIncome, registry);
+      player.plasma += calculatePlasmaIncome(state, player.id, registry);
     }
   }
 
@@ -442,7 +566,7 @@ export function computeScores(state: GameState, registry: DataRegistry): Record<
         const ut = registry.unitTypes[u.typeId];
         return sum + (ut ? ut.cost : 0);
       }, 0);
-    const income = calculateIncome(state, player.id, registry);
+    const income = calculateShardIncome(state, player.id, registry);
 
     scores[player.id] =
       cities.length * state.config.scoreWeights.cityValue +
@@ -468,6 +592,9 @@ export function getVisibleState(state: GameState, playerId: PlayerId, registry: 
       map: clone(state.map),
       units: clone(state.units),
       players: clone(state.players),
+      cities: clone(state.cities),
+      buildings: clone(state.buildings),
+      unitHomeCity: clone(state.unitHomeCity),
       currentPlayer: state.currentPlayer,
       turn: state.turn,
       visibility,
@@ -491,6 +618,9 @@ export function getVisibleState(state: GameState, playerId: PlayerId, registry: 
     map: clone(state.map),
     units: clone(visibleUnits),
     players: clone(state.players),
+    cities: clone(state.cities),
+    buildings: clone(state.buildings),
+    unitHomeCity: clone(state.unitHomeCity),
     currentPlayer: state.currentPlayer,
     turn: state.turn,
     visibility,

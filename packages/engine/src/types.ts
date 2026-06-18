@@ -105,6 +105,11 @@ export interface Tile {
   isCity: boolean;
   isResourceTile: boolean;
   isPerimeter?: boolean; // outer ring of base territory
+  // ── Economy markers (set by mapgen; read by the economy layer) ──
+  // Optional so existing maps keep working: a tile with isResourceTile but no
+  // resourceKind is treated as a shard outcrop by the economy layer.
+  resourceKind?: ResourceKind | null; // 'shard' | 'plasma' | null
+  isRuin?: boolean; // a site where a new city can be founded
 }
 
 export interface GameMap {
@@ -132,6 +137,9 @@ export type Action =
   | RecruitAction
   | ResearchAction
   | UseAbilityAction
+  | BuildAction
+  | UpgradeBuildingAction
+  | FoundCityAction
   | EndTurnAction;
 
 export interface MoveAction {
@@ -164,15 +172,54 @@ export interface UseAbilityAction {
   target: Coord;
 }
 
+export interface BuildAction {
+  type: 'build';
+  kind: BuildingKind;
+  position: Coord;
+}
+
+export interface UpgradeBuildingAction {
+  type: 'upgradeBuilding';
+  position: Coord;
+}
+
+export interface FoundCityAction {
+  type: 'foundCity';
+  position: Coord;
+}
+
 export interface EndTurnAction {
   type: 'endTurn';
+}
+
+// ── Economy: Cities & Buildings ──
+export type ResourceKind = 'shard' | 'plasma';
+export type BuildingKind = 'mine' | 'extractor' | 'processor' | 'purifier';
+export type CityId = number;
+
+export interface CityState {
+  id: CityId;
+  position: Coord; // the city/capital centre tile
+  owner: PlayerId | null;
+  isCapital: boolean;
+  level: number; // 1..maxLevel (derived from pop, stored for serialization)
+  pop: number; // total population from buildings in this city's territory
+}
+
+export interface BuildingState {
+  id: number;
+  kind: BuildingKind;
+  position: Coord;
+  level: number; // 1..def.maxLevel
+  cityId: CityId | null; // the city whose territory contains this building
 }
 
 // ── Game State ──
 export interface PlayerState {
   id: PlayerId;
   factionId: string;
-  gold: number;
+  shard: number; // primary resource (basic units + buildings)
+  plasma: number; // advanced resource (high-tech units + buildings)
   researchedTechs: string[];
 }
 
@@ -181,9 +228,14 @@ export interface GameState {
   map: GameMap;
   units: Unit[];
   players: PlayerState[];
+  cities: CityState[];
+  buildings: BuildingState[];
+  unitHomeCity: Record<UnitId, CityId>; // unit id -> home city (slot accounting)
   currentPlayer: PlayerId;
   turn: number;
   nextUnitId: UnitId;
+  nextCityId: CityId;
+  nextBuildingId: number;
   prng: PRNGState;
   actionLog: Action[];
   phase: 'playing' | 'finished';
@@ -199,6 +251,9 @@ export interface VisibleState {
   map: GameMap;
   units: Unit[]; // only visible enemy units + all own units
   players: PlayerState[]; // own player full, others limited
+  cities: CityState[];
+  buildings: BuildingState[];
+  unitHomeCity: Record<UnitId, CityId>;
   currentPlayer: PlayerId;
   turn: number;
   visibility: TileVisibility[][]; // [y][x]
@@ -216,10 +271,50 @@ export interface GameResult {
   turns: number;
 }
 
+// ── Economy ──
+// All economy tuning lives here (its own data file), keyed by ids, so this
+// feature does not touch units.json / terrain.json / mapgen.
+export interface BuildingDef {
+  on: ResourceKind | 'land'; // tile requirement
+  cost: number; // shard cost to build at level 1
+  maxLevel: number;
+  perCity: number | null; // max of this building per city (null = unlimited)
+  popPerLevel?: number; // mine/extractor: pop produced = popPerLevel * level
+  upgradeCosts?: number[]; // mine/extractor: cost to reach level 2, 3, ...
+  popPerAdjacent?: number; // processor/purifier: pop per adjacent building
+  adjacentTo?: BuildingKind; // processor/purifier: which building it counts
+  techRequired?: string | null; // tech id gating this building (null = none)
+}
+
+export interface EconomyData {
+  // Upkeep (currently dormant — multiplier 0; kept for future use).
+  upkeepMultiplier: number;
+  upkeepDefault: number;
+  upkeepByUnit: Record<string, number>;
+
+  startingShard: number;
+  startingPlasma: number;
+
+  city: {
+    maxLevel: number;
+    capitalBaseProduction: number; // shard/turn at level 1 for a capital
+    cityBaseProduction: number; // shard/turn at level 1 for a founded city
+    productionPerLevel: number; // extra shard/turn per level above 1
+    slotsBase: number; // unit slots at level 1 (slots = slotsBase + level - 1)
+    popThresholds: number[]; // total pop to reach level 2, 3, ... maxLevel
+    territoryRadius: number; // Chebyshev radius of a city's territory
+  };
+
+  buildings: Record<string, BuildingDef>; // keyed by BuildingKind
+  foundCity: { cost: number; requiresUnitOnTile: boolean };
+  unitPlasmaCost: Record<string, number>; // unitTypeId -> plasma cost (default 0)
+}
+
 // ── Data Registry ──
 export interface DataRegistry {
   terrainTypes: Record<string, TerrainType>;
   unitTypes: Record<string, UnitType>;
   factions: Record<string, FactionDef>;
   techs: Record<string, TechDef>;
+  economy: EconomyData;
 }

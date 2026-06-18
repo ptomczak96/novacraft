@@ -1,0 +1,71 @@
+{
+  "upkeepMultiplier": 0,
+  "upkeepDefault": 1,
+  "upkeepByUnit": {
+    "scout": 1,
+    "warrior": 1,
+    "archer": 1,
+    "defender": 1,
+    "catapult": 2,
+    "ironclad_berserker": 2,
+    "ironclad_siege_tower": 2,
+    "sylvan_ranger": 1,
+    "sylvan_treant": 2
+  },
+
+  "startingShard": 0,
+  "startingPlasma": 0,
+
+  "city": {
+    "maxLevel": 6,
+    "capitalBaseProduction": 20,
+    "cityBaseProduction": 10,
+    "productionPerLevel": 10,
+    "slotsBase": 2,
+    "popThresholds": [2, 5, 9, 14, 20],
+    "territoryRadius": 1
+  },
+
+  "buildings": {
+    "mine": {
+      "on": "shard",
+      "cost": 20,
+      "maxLevel": 3,
+      "perCity": null,
+      "popPerLevel": 1,
+      "upgradeCosts": [30, 50],
+      "techRequired": null
+    },
+    "extractor": {
+      "on": "plasma",
+      "cost": 40,
+      "maxLevel": 3,
+      "perCity": 1,
+      "popPerLevel": 2,
+      "upgradeCosts": [60, 100],
+      "techRequired": null
+    },
+    "processor": {
+      "on": "land",
+      "cost": 50,
+      "maxLevel": 1,
+      "perCity": null,
+      "popPerAdjacent": 2,
+      "adjacentTo": "mine",
+      "techRequired": null
+    },
+    "purifier": {
+      "on": "land",
+      "cost": 100,
+      "maxLevel": 1,
+      "perCity": 1,
+      "popPerAdjacent": 3,
+      "adjacentTo": "extractor",
+      "techRequired": null
+    }
+  },
+
+  "foundCity": { "cost": 0, "requiresUnitOnTile": true },
+
+  "unitPlasmaCost": {}
+}

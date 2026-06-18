@@ -1,6 +1,7 @@
 import React from 'react';
 import { useGameStore } from '../store/gameStore.js';
-import { calculateIncome, computeScores } from '@tactica/engine';
+import { calculateShardIncome, computeScores, cityProduction, citySlots, unitsHomedAt } from '@tactica/engine';
+import type { Action } from '@tactica/engine';
 
 export function Inspector() {
   const { gameState, registry } = useGameStore();
@@ -24,8 +25,9 @@ export function Inspector() {
       {gameState.players.map(p => {
         const faction = registry.factions[p.factionId];
         const unitCount = gameState.units.filter(u => u.owner === p.id).length;
-        const income = calculateIncome(gameState, p.id, registry);
-        const cityCount = getCityCount(gameState, p.id);
+        const income = calculateShardIncome(gameState, p.id, registry);
+        const playerCities = gameState.cities.filter(c => c.owner === p.id);
+        const cityCount = playerCities.length;
         return (
           <div key={p.id} style={{ marginTop: 12 }}>
             <div style={{
@@ -36,17 +38,31 @@ export function Inspector() {
               {faction?.name || `Player ${p.id + 1}`}
             </div>
             <div className="stat-row">
-              <span className="stat-label">Gold</span>
-              <span className="stat-value">{p.gold}</span>
+              <span className="stat-label">Shard ◈</span>
+              <span className="stat-value">{p.shard}</span>
             </div>
             <div className="stat-row">
-              <span className="stat-label">Income/turn</span>
+              <span className="stat-label">Plasma ✦</span>
+              <span className="stat-value">{p.plasma}</span>
+            </div>
+            <div className="stat-row">
+              <span className="stat-label">Shard/turn</span>
               <span className="stat-value">+{income}</span>
             </div>
             <div className="stat-row">
               <span className="stat-label">Cities</span>
               <span className="stat-value">{cityCount}</span>
             </div>
+            {playerCities.map(c => (
+              <div className="stat-row" key={c.id} style={{ paddingLeft: 10, fontSize: '0.85em', opacity: 0.85 }}>
+                <span className="stat-label">
+                  {c.isCapital ? '★ Capital' : 'City'} (L{c.level})
+                </span>
+                <span className="stat-value">
+                  {unitsHomedAt(gameState, c.id)}/{citySlots(c, registry)} slots · {cityProduction(c, registry)}◈ · pop {c.pop}
+                </span>
+              </div>
+            ))}
             <div className="stat-row">
               <span className="stat-label">Units</span>
               <span className="stat-value">{unitCount}</span>
@@ -75,22 +91,16 @@ export function Inspector() {
   );
 }
 
-function getCityCount(state: { map: { width: number; height: number; tiles: { isCity: boolean; owner: number | null }[][] } }, playerId: number): number {
-  let count = 0;
-  for (let y = 0; y < state.map.height; y++) {
-    for (let x = 0; x < state.map.width; x++) {
-      if (state.map.tiles[y][x].isCity && state.map.tiles[y][x].owner === playerId) count++;
-    }
-  }
-  return count;
-}
-
-function formatAction(a: { type: string; [key: string]: unknown }): string {
+function formatAction(a: Action): string {
   switch (a.type) {
-    case 'move': return `Move unit#${a.unitId} → (${(a.to as {x:number,y:number}).x},${(a.to as {x:number,y:number}).y})`;
+    case 'move': return `Move unit#${a.unitId} → (${a.to.x},${a.to.y})`;
     case 'attack': return `Attack unit#${a.unitId} → unit#${a.targetId}`;
     case 'recruit': return `Recruit ${a.unitTypeId}`;
     case 'research': return `Research ${a.techId}`;
+    case 'useAbility': return `Ability ${a.abilityId}`;
+    case 'build': return `Build ${a.kind} @ (${a.position.x},${a.position.y})`;
+    case 'upgradeBuilding': return `Upgrade building @ (${a.position.x},${a.position.y})`;
+    case 'foundCity': return `Found city @ (${a.position.x},${a.position.y})`;
     case 'endTurn': return '── End Turn ──';
     default: return JSON.stringify(a);
   }
