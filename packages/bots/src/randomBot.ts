@@ -98,13 +98,13 @@ export function getLegalActionsFromVisible(state: VisibleState, registry: DataRe
       const { x, y } = city.position;
       const occupied = state.units.some(u => u.position.x === x && u.position.y === y);
       if (occupied) continue;
-      const slots = econ.city.slotsBase + (city.level - 1);
+      const capacity = econ.city.popBase + (city.level - 1);
       const used = state.units.filter(u => state.unitHomeCity[u.id] === city.id).length;
-      if (used >= slots) continue;
+      if (used >= capacity) continue;
       for (const utId of faction.unitTypes) {
         const ut = registry.unitTypes[utId];
         if (!ut) continue;
-        if (ut.cost > player.shard) continue;
+        if (ut.cost > player.ore) continue;
         if ((econ.unitPlasmaCost[utId] ?? 0) > player.plasma) continue;
         actions.push({ type: 'recruit', unitTypeId: utId, cityPosition: { x, y } });
       }
@@ -114,7 +114,7 @@ export function getLegalActionsFromVisible(state: VisibleState, registry: DataRe
   // Research
   for (const [techId, tech] of Object.entries(registry.techs)) {
     if (player.researchedTechs.includes(techId)) continue;
-    if (tech.cost > player.shard) continue;
+    if (tech.cost > player.ore) continue;
     if (!tech.prerequisites.every(p => player.researchedTechs.includes(p))) continue;
     actions.push({ type: 'research', techId });
   }

@@ -8,9 +8,6 @@
     "eliminateAllUnits": true,
     "highestScoreAtLimit": true
   },
-  "cityIncome": 10,
-  "resourceIncome": 2,
-  "startingGold": 10,
   "combatConfig": {
     "hpScaling": true,
     "retaliationMultiplier": 0.5,

@@ -1,22 +1,28 @@
 import type {
   GameState, PlayerId, DataRegistry, Unit, Coord,
-  CityState, CityId, BuildingState, BuildingKind, ResourceKind,
+  CityState, CityId, BuildingState, BuildingKind, BuildingDef, ResourceKind,
 } from './types.js';
 
 // ════════════════════════════════════════════════════════════════════════
-//  Economy: cities, population, buildings, and resource income.
+//  Economy: cities, supply/level, resource-extraction buildings (REBs).
 //  All tuning comes from registry.economy (economy.json). This module owns
 //  the entire economy so it stays decoupled from units.json / mapgen.
+//
+//  Terminology:
+//    pop    = unit capacity (max units a city supports) = popBase + level - 1
+//    supply = leveling currency from buildings; thresholds raise the level
+//    REB1   = mine / extractor   (self output + supply by level)
+//    REB2   = processor / purifier (output + supply per adjacent same-city REB1)
 // ════════════════════════════════════════════════════════════════════════
 
 // ── Tile helpers (read mapgen markers with safe fallbacks) ──
-// A resource tile with no explicit kind is treated as a shard outcrop, so the
-// economy works on existing maps before mapgen learns about shard/plasma.
+// A resource tile with no explicit kind is treated as an ore tile, so the
+// economy works on existing maps before mapgen marks ore/plasma.
 export function resourceKindAt(state: GameState, pos: Coord): ResourceKind | null {
   const tile = state.map.tiles[pos.y]?.[pos.x];
   if (!tile) return null;
   if (tile.resourceKind) return tile.resourceKind;
-  return tile.isResourceTile ? 'shard' : null;
+  return tile.isResourceTile ? 'ore' : null;
 }
 
 function isRuin(state: GameState, pos: Coord): boolean {
@@ -47,63 +53,86 @@ function buildingAt(state: GameState, pos: Coord): BuildingState | undefined {
   return state.buildings.find(b => b.position.x === pos.x && b.position.y === pos.y);
 }
 
-// ── City production / slots / level ──
+// ── City production / pop (capacity) / level ──
 export function cityProduction(city: CityState, registry: DataRegistry): number {
   const c = registry.economy.city;
   const base = city.isCapital ? c.capitalBaseProduction : c.cityBaseProduction;
   return base + c.productionPerLevel * (city.level - 1);
 }
 
-export function citySlots(city: CityState, registry: DataRegistry): number {
-  return registry.economy.city.slotsBase + (city.level - 1);
+/** Unit capacity of a city (how many units it can support). */
+export function cityPop(city: CityState, registry: DataRegistry): number {
+  return registry.economy.city.popBase + (city.level - 1);
 }
 
-/** Highest level whose cumulative pop threshold is satisfied. */
-export function cityLevelForPop(pop: number, registry: DataRegistry): number {
-  const { popThresholds, maxLevel } = registry.economy.city;
+/** Highest level whose cumulative supply threshold is satisfied. */
+export function cityLevelForSupply(supply: number, registry: DataRegistry): number {
+  const { supplyThresholds, maxLevel } = registry.economy.city;
   let level = 1;
-  for (let i = 0; i < popThresholds.length && level < maxLevel; i++) {
-    if (pop >= popThresholds[i]) level = i + 2; // thresholds[0] -> level 2
+  for (let i = 0; i < supplyThresholds.length && level < maxLevel; i++) {
+    if (supply >= supplyThresholds[i]) level = i + 2; // thresholds[0] -> level 2
     else break;
   }
   return Math.min(level, maxLevel);
 }
 
-// ── Building population ──
-export function buildingPop(state: GameState, building: BuildingState, registry: DataRegistry): number {
+// ── Building output & supply ──
+/** Count REB1s of `kind` adjacent to `pos` that belong to the same city. */
+function adjacentSameCity(state: GameState, pos: Coord, kind: BuildingKind, cityId: CityId | null): number {
+  let count = 0;
+  for (const b of state.buildings) {
+    if (b.kind !== kind) continue;
+    if (b.cityId !== cityId) continue; // same city only (Bug 3)
+    if (chebyshev(b.position, pos) <= 1) count++;
+  }
+  return count;
+}
+
+function atLevel(arr: number[] | undefined, level: number): number {
+  if (!arr) return 0;
+  return arr[Math.min(level, arr.length) - 1] ?? 0;
+}
+
+/** Resource produced per turn by a building (and which resource). */
+export function buildingOutput(state: GameState, building: BuildingState, registry: DataRegistry): { resource: ResourceKind; amount: number } {
+  const def = registry.economy.buildings[building.kind];
+  if (!def) return { resource: 'ore', amount: 0 };
+  if (def.outputByLevel) {
+    return { resource: def.output, amount: atLevel(def.outputByLevel, building.level) };
+  }
+  if (def.outputPerAdjacentByLevel && def.adjacentTo) {
+    const per = atLevel(def.outputPerAdjacentByLevel, building.level);
+    return { resource: def.output, amount: per * adjacentSameCity(state, building.position, def.adjacentTo, building.cityId) };
+  }
+  return { resource: def.output, amount: 0 };
+}
+
+/** Supply contributed to its city by a building. */
+export function buildingSupply(state: GameState, building: BuildingState, registry: DataRegistry): number {
   const def = registry.economy.buildings[building.kind];
   if (!def) return 0;
-  if (def.popPerLevel !== undefined) {
-    // mine / extractor: scales with its own level
-    return def.popPerLevel * building.level;
-  }
-  if (def.popPerAdjacent !== undefined && def.adjacentTo) {
-    // processor / purifier: counts adjacent buildings of a kind in its 3x3
-    let count = 0;
-    for (const other of state.buildings) {
-      if (other.kind !== def.adjacentTo) continue;
-      if (chebyshev(other.position, building.position) <= 1) count++;
-    }
-    return def.popPerAdjacent * count;
+  if (def.supplyByLevel) return atLevel(def.supplyByLevel, building.level);
+  if (def.supplyPerAdjacentByLevel && def.adjacentTo) {
+    const per = atLevel(def.supplyPerAdjacentByLevel, building.level);
+    return per * adjacentSameCity(state, building.position, def.adjacentTo, building.cityId);
   }
   return 0;
 }
 
-/** Recompute pop + level for every city from current buildings. Call after any economy mutation. */
+/** Recompute supply + level for every city from current buildings. Call after any economy mutation. */
 export function recomputeCities(state: GameState, registry: DataRegistry): void {
-  // Reset, then attribute each building's pop to the city owning its territory.
-  for (const city of state.cities) city.pop = 0;
+  for (const city of state.cities) city.supply = 0;
   for (const building of state.buildings) {
     const city = cityById(state, building.cityId);
     if (!city) continue;
-    city.pop += buildingPop(state, building, registry);
+    city.supply += buildingSupply(state, building, registry);
   }
   for (const city of state.cities) {
-    city.level = cityLevelForPop(city.pop, registry);
+    city.level = cityLevelForSupply(city.supply, registry);
   }
 }
 
-// ── Unit slot accounting ──
+// ── Unit pop (capacity) accounting ──
 /** Number of living units homed at a city (stale entries for dead units are ignored). */
 export function unitsHomedAt(state: GameState, cityId: CityId): number {
   let count = 0;
@@ -113,23 +142,33 @@ export function unitsHomedAt(state: GameState, cityId: CityId): number {
   return count;
 }
 
-export function cityHasFreeSlot(state: GameState, city: CityState, registry: DataRegistry): boolean {
-  return unitsHomedAt(state, city.id) < citySlots(city, registry);
+export function cityHasCapacity(state: GameState, city: CityState, registry: DataRegistry): boolean {
+  return unitsHomedAt(state, city.id) < cityPop(city, registry);
 }
 
 // ── Resource income ──
-export function calculateShardIncome(state: GameState, playerId: PlayerId, registry: DataRegistry): number {
+export function calculateOreIncome(state: GameState, playerId: PlayerId, registry: DataRegistry): number {
   let income = 0;
   for (const city of state.cities) {
     if (city.owner === playerId) income += cityProduction(city, registry);
   }
+  income += buildingIncome(state, playerId, 'ore', registry);
   return income;
 }
 
-export function calculatePlasmaIncome(_state: GameState, _playerId: PlayerId, _registry: DataRegistry): number {
-  // No plasma production source yet — extractors feed pop, not plasma.
-  // Reserved so the turn loop and UI already have the hook.
-  return 0;
+export function calculatePlasmaIncome(state: GameState, playerId: PlayerId, registry: DataRegistry): number {
+  return buildingIncome(state, playerId, 'plasma', registry);
+}
+
+function buildingIncome(state: GameState, playerId: PlayerId, resource: ResourceKind, registry: DataRegistry): number {
+  let total = 0;
+  for (const building of state.buildings) {
+    const city = cityById(state, building.cityId);
+    if (!city || city.owner !== playerId) continue;
+    const out = buildingOutput(state, building, registry);
+    if (out.resource === resource) total += out.amount;
+  }
+  return total;
 }
 
 // ── Unit costs ──
@@ -137,19 +176,25 @@ export function getUnitPlasmaCost(typeId: string, registry: DataRegistry): numbe
   return registry.economy.unitPlasmaCost[typeId] ?? 0;
 }
 
+// ── Build / upgrade costs ──
+/** Ore cost to build (level 1) or to upgrade to `targetLevel`. */
+export function buildingCost(def: BuildingDef, targetLevel: number): { ore: number; plasma: number } {
+  const ore = def.costByLevel[targetLevel - 1] ?? 0;
+  const plasma = def.plasmaCostByLevel?.[targetLevel - 1] ?? 0; // pinned: absent for now
+  return { ore, plasma };
+}
+
+function techMet(state: GameState, playerId: PlayerId, tech: string | null | undefined): boolean {
+  if (!tech) return true;
+  return state.players[playerId].researchedTechs.includes(tech);
+}
+
 // ── Build legality ──
 function countCityBuildings(state: GameState, cityId: CityId, kind: BuildingKind): number {
   return state.buildings.filter(b => b.cityId === cityId && b.kind === kind).length;
 }
 
-function hasAdjacentBuilding(state: GameState, pos: Coord, kind: BuildingKind): boolean {
-  return state.buildings.some(b => b.kind === kind && chebyshev(b.position, pos) <= 1);
-}
-
-/**
- * Whether `playerId` may build `kind` at `pos` right now. Pure predicate used
- * by both getLegalActions and applyAction so they never disagree.
- */
+/** Whether `playerId` may build `kind` at `pos` right now (predicate shared by legal-actions + apply). */
 export function canBuild(state: GameState, registry: DataRegistry, playerId: PlayerId, kind: BuildingKind, pos: Coord): boolean {
   const def = registry.economy.buildings[kind];
   if (!def) return false;
@@ -158,47 +203,50 @@ export function canBuild(state: GameState, registry: DataRegistry, playerId: Pla
   if (!tile || tile.isCity) return false;
   if (buildingAt(state, pos)) return false; // one building per tile
 
-  // Must be inside a city you own.
   const city = territoryCityAt(state, registry, pos);
   if (!city || city.owner !== playerId) return false;
 
-  // Per-city cap.
   if (def.perCity !== null && countCityBuildings(state, city.id, kind) >= def.perCity) return false;
+  if (!techMet(state, playerId, def.techRequired)) return false;
 
-  // Tech gate.
-  if (def.techRequired && !state.players[playerId].researchedTechs.includes(def.techRequired)) return false;
-
-  // Tile requirement.
-  if (def.on === 'shard' || def.on === 'plasma') {
+  if (def.on === 'ore' || def.on === 'plasma') {
     if (resourceKindAt(state, pos) !== def.on) return false;
   } else {
-    // 'land': a passable, non-resource tile, and it must actually help
-    // (at least one adjacent building of the kind it boosts).
+    // 'land': a passable, non-resource tile that has at least one same-city
+    // REB1 of the kind it boosts adjacent to it (otherwise it does nothing).
     const terrain = registry.terrainTypes[tile.terrain];
     if (!terrain || !terrain.passable) return false;
     if (resourceKindAt(state, pos) !== null) return false;
-    if (def.adjacentTo && !hasAdjacentBuilding(state, pos, def.adjacentTo)) return false;
+    if (def.adjacentTo && adjacentSameCity(state, pos, def.adjacentTo, city.id) < 1) return false;
   }
 
-  // Affordable.
-  return state.players[playerId].shard >= def.cost;
+  const cost = buildingCost(def, 1);
+  const player = state.players[playerId];
+  return player.ore >= cost.ore && player.plasma >= cost.plasma;
 }
 
-export function upgradeCostFor(building: BuildingState, registry: DataRegistry): number | null {
+export function upgradeCostFor(building: BuildingState, registry: DataRegistry): { ore: number; plasma: number } | null {
   const def = registry.economy.buildings[building.kind];
-  if (!def || !def.upgradeCosts) return null;
+  if (!def) return null;
   if (building.level >= def.maxLevel) return null;
-  return def.upgradeCosts[building.level - 1] ?? null; // level 1 -> upgradeCosts[0]
+  return buildingCost(def, building.level + 1);
 }
 
 export function canUpgradeBuilding(state: GameState, registry: DataRegistry, playerId: PlayerId, pos: Coord): boolean {
   const building = buildingAt(state, pos);
   if (!building) return false;
+  const def = registry.economy.buildings[building.kind];
+  if (!def) return false;
   const city = cityById(state, building.cityId);
   if (!city || city.owner !== playerId) return false;
-  const cost = upgradeCostFor(building, registry);
-  if (cost === null) return false;
-  return state.players[playerId].shard >= cost;
+
+  const nextLevel = building.level + 1;
+  if (nextLevel > def.maxLevel) return false;
+  if (!techMet(state, playerId, def.upgradeTechRequired?.[building.level - 1])) return false;
+
+  const cost = buildingCost(def, nextLevel);
+  const player = state.players[playerId];
+  return player.ore >= cost.ore && player.plasma >= cost.plasma;
 }
 
 export function canFoundCity(state: GameState, registry: DataRegistry, playerId: PlayerId, pos: Coord): boolean {
@@ -209,7 +257,7 @@ export function canFoundCity(state: GameState, registry: DataRegistry, playerId:
     const hasUnit = state.units.some(u => u.owner === playerId && u.position.x === pos.x && u.position.y === pos.y);
     if (!hasUnit) return false;
   }
-  return state.players[playerId].shard >= cost;
+  return state.players[playerId].ore >= cost;
 }
 
 // ════════════════════════════════════════════════════════════════════════
@@ -232,13 +280,13 @@ export function calculateUpkeep(state: GameState, playerId: PlayerId, registry: 
 }
 
 /**
- * Add shard income, then pay (currently disabled) upkeep. If upkeep ever
- * exceeds what a player can afford, units desert cheapest-first
- * (deterministic). Shard is guaranteed to end >= 0. Mutates `state`.
+ * Add ore income, then pay (currently disabled) upkeep. If upkeep ever exceeds
+ * what a player can afford, units desert cheapest-first (deterministic). Ore is
+ * guaranteed to end >= 0. Mutates `state`.
  */
 export function settleEconomy(state: GameState, playerId: PlayerId, income: number, registry: DataRegistry): Unit[] {
   const player = state.players[playerId];
-  const available = player.shard + income;
+  const available = player.ore + income;
 
   const owned = state.units
     .filter(u => u.owner === playerId)
@@ -264,6 +312,6 @@ export function settleEconomy(state: GameState, playerId: PlayerId, income: numb
     for (const u of deserted) delete state.unitHomeCity[u.id];
   }
 
-  player.shard = available - upkeep;
+  player.ore = available - upkeep;
   return deserted;
 }

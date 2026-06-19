@@ -1,6 +1,6 @@
 import React from 'react';
 import { useGameStore } from '../store/gameStore.js';
-import { calculateShardIncome, computeScores, cityProduction, citySlots, unitsHomedAt } from '@tactica/engine';
+import { calculateOreIncome, calculatePlasmaIncome, computeScores, cityProduction, cityPop, unitsHomedAt } from '@tactica/engine';
 import type { Action } from '@tactica/engine';
 
 export function Inspector() {
@@ -25,7 +25,8 @@ export function Inspector() {
       {gameState.players.map(p => {
         const faction = registry.factions[p.factionId];
         const unitCount = gameState.units.filter(u => u.owner === p.id).length;
-        const income = calculateShardIncome(gameState, p.id, registry);
+        const oreIncome = calculateOreIncome(gameState, p.id, registry);
+        const plasmaIncome = calculatePlasmaIncome(gameState, p.id, registry);
         const playerCities = gameState.cities.filter(c => c.owner === p.id);
         const cityCount = playerCities.length;
         return (
@@ -38,16 +39,16 @@ export function Inspector() {
               {faction?.name || `Player ${p.id + 1}`}
             </div>
             <div className="stat-row">
-              <span className="stat-label">Shard ◈</span>
-              <span className="stat-value">{p.shard}</span>
+              <span className="stat-label">Ore ◈</span>
+              <span className="stat-value">{p.ore}</span>
             </div>
             <div className="stat-row">
               <span className="stat-label">Plasma ✦</span>
               <span className="stat-value">{p.plasma}</span>
             </div>
             <div className="stat-row">
-              <span className="stat-label">Shard/turn</span>
-              <span className="stat-value">+{income}</span>
+              <span className="stat-label">Income/turn</span>
+              <span className="stat-value">+{oreIncome}◈ +{plasmaIncome}✦</span>
             </div>
             <div className="stat-row">
               <span className="stat-label">Cities</span>
@@ -59,7 +60,7 @@ export function Inspector() {
                   {c.isCapital ? '★ Capital' : 'City'} (L{c.level})
                 </span>
                 <span className="stat-value">
-                  {unitsHomedAt(gameState, c.id)}/{citySlots(c, registry)} slots · {cityProduction(c, registry)}◈ · pop {c.pop}
+                  units {unitsHomedAt(gameState, c.id)}/{cityPop(c, registry)} · {cityProduction(c, registry)}◈ · supply {c.supply}
                 </span>
               </div>
             ))}

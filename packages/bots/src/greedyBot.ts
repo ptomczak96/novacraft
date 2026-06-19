@@ -112,7 +112,7 @@ export class GreedyBot implements Bot {
             score += (ut.attack + ut.maxHP * 0.5) * this.weights.incomeWeight * 0.5;
             // Don't overspend
             const player = visibleState.players[visibleState.currentPlayer];
-            if (player.shard - ut.cost < 3) {
+            if (player.ore - ut.cost < 3) {
               score -= this.weights.safetyWeight * 5;
             }
             // Weigh ongoing upkeep so the bot doesn't doomstack into bankruptcy.

@@ -76,9 +76,6 @@ export const GameConfigSchema = z.object({
     eliminateAllUnits: z.boolean(),
     highestScoreAtLimit: z.boolean(),
   }),
-  cityIncome: z.number(),
-  resourceIncome: z.number(),
-  startingGold: z.number(),
   combatConfig: CombatConfigSchema,
   scoreWeights: z.object({
     cityValue: z.number(),
@@ -89,30 +86,34 @@ export const GameConfigSchema = z.object({
 });
 
 export const BuildingDefSchema = z.object({
-  on: z.enum(['shard', 'plasma', 'land']),
-  cost: z.number().min(0),
+  on: z.enum(['ore', 'plasma', 'land']),
+  output: z.enum(['ore', 'plasma']),
   maxLevel: z.number().min(1),
   perCity: z.number().min(1).nullable(),
-  popPerLevel: z.number().min(0).optional(),
-  upgradeCosts: z.array(z.number().min(0)).optional(),
-  popPerAdjacent: z.number().min(0).optional(),
+  costByLevel: z.array(z.number().min(0)),
+  plasmaCostByLevel: z.array(z.number().min(0)).optional(),
+  outputByLevel: z.array(z.number().min(0)).optional(),
+  supplyByLevel: z.array(z.number().min(0)).optional(),
   adjacentTo: z.enum(['mine', 'extractor', 'processor', 'purifier']).optional(),
+  outputPerAdjacentByLevel: z.array(z.number().min(0)).optional(),
+  supplyPerAdjacentByLevel: z.array(z.number().min(0)).optional(),
   techRequired: z.string().nullable().optional(),
+  upgradeTechRequired: z.array(z.string().nullable()).optional(),
 });
 
 export const EconomyDataSchema = z.object({
   upkeepMultiplier: z.number().min(0),
   upkeepDefault: z.number().min(0),
   upkeepByUnit: z.record(z.number().min(0)),
-  startingShard: z.number().min(0),
+  startingOre: z.number().min(0),
   startingPlasma: z.number().min(0),
   city: z.object({
     maxLevel: z.number().min(1),
     capitalBaseProduction: z.number().min(0),
     cityBaseProduction: z.number().min(0),
     productionPerLevel: z.number().min(0),
-    slotsBase: z.number().min(1),
-    popThresholds: z.array(z.number().min(0)),
+    popBase: z.number().min(1),
+    supplyThresholds: z.array(z.number().min(0)),
     territoryRadius: z.number().min(1),
   }),
   buildings: z.record(BuildingDefSchema),

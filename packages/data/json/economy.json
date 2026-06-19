@@ -13,7 +13,7 @@
     "sylvan_treant": 2
   },
 
-  "startingShard": 0,
+  "startingOre": 0,
   "startingPlasma": 0,
 
   "city": {
@@ -21,47 +21,57 @@
     "capitalBaseProduction": 20,
     "cityBaseProduction": 10,
     "productionPerLevel": 10,
-    "slotsBase": 2,
-    "popThresholds": [2, 5, 9, 14, 20],
+    "popBase": 2,
+    "supplyThresholds": [2, 5, 9, 14, 20],
     "territoryRadius": 1
   },
 
   "buildings": {
     "mine": {
-      "on": "shard",
-      "cost": 20,
+      "on": "ore",
+      "output": "ore",
       "maxLevel": 3,
       "perCity": null,
-      "popPerLevel": 1,
-      "upgradeCosts": [30, 50],
-      "techRequired": null
+      "costByLevel": [20, 40, 60],
+      "outputByLevel": [10, 20, 30],
+      "supplyByLevel": [1, 3, 6],
+      "techRequired": null,
+      "upgradeTechRequired": [null, null]
     },
     "extractor": {
       "on": "plasma",
-      "cost": 40,
+      "output": "plasma",
       "maxLevel": 3,
       "perCity": 1,
-      "popPerLevel": 2,
-      "upgradeCosts": [60, 100],
-      "techRequired": null
+      "costByLevel": [20, 40, 60],
+      "outputByLevel": [10, 20, 30],
+      "supplyByLevel": [1, 3, 6],
+      "techRequired": null,
+      "upgradeTechRequired": [null, null]
     },
     "processor": {
       "on": "land",
-      "cost": 50,
-      "maxLevel": 1,
+      "output": "ore",
+      "maxLevel": 3,
       "perCity": null,
-      "popPerAdjacent": 2,
       "adjacentTo": "mine",
-      "techRequired": null
+      "costByLevel": [50, 120, 200],
+      "outputPerAdjacentByLevel": [10, 20, 30],
+      "supplyPerAdjacentByLevel": [1, 3, 5],
+      "techRequired": null,
+      "upgradeTechRequired": [null, null]
     },
     "purifier": {
       "on": "land",
-      "cost": 100,
-      "maxLevel": 1,
+      "output": "plasma",
+      "maxLevel": 3,
       "perCity": 1,
-      "popPerAdjacent": 3,
       "adjacentTo": "extractor",
-      "techRequired": null
+      "costByLevel": [50, 120, 200],
+      "outputPerAdjacentByLevel": [10, 20, 30],
+      "supplyPerAdjacentByLevel": [1, 3, 5],
+      "techRequired": null,
+      "upgradeTechRequired": [null, null]
     }
   },
 

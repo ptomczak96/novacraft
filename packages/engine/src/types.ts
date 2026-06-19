@@ -79,9 +79,6 @@ export interface GameConfig {
     eliminateAllUnits: boolean;
     highestScoreAtLimit: boolean;
   };
-  cityIncome: number;
-  resourceIncome: number;
-  startingGold: number;
   combatConfig: CombatConfig;
   scoreWeights: {
     cityValue: number;
@@ -193,17 +190,21 @@ export interface EndTurnAction {
 }
 
 // ── Economy: Cities & Buildings ──
-export type ResourceKind = 'shard' | 'plasma';
+export type ResourceKind = 'ore' | 'plasma';
 export type BuildingKind = 'mine' | 'extractor' | 'processor' | 'purifier';
 export type CityId = number;
 
+// Terminology:
+//   pop    = how many units a city can support (capacity) = popBase + level - 1
+//   supply = leveling currency accumulated from buildings; crossing a
+//            supplyThreshold raises the city's level (and therefore its pop).
 export interface CityState {
   id: CityId;
   position: Coord; // the city/capital centre tile
   owner: PlayerId | null;
   isCapital: boolean;
-  level: number; // 1..maxLevel (derived from pop, stored for serialization)
-  pop: number; // total population from buildings in this city's territory
+  level: number; // 1..maxLevel (derived from supply, stored for serialization)
+  supply: number; // total supply from buildings in this city's territory
 }
 
 export interface BuildingState {
@@ -218,7 +219,7 @@ export interface BuildingState {
 export interface PlayerState {
   id: PlayerId;
   factionId: string;
-  shard: number; // primary resource (basic units + buildings)
+  ore: number; // primary resource (basic units + buildings)
   plasma: number; // advanced resource (high-tech units + buildings)
   researchedTechs: string[];
 }
@@ -274,16 +275,29 @@ export interface GameResult {
 // ── Economy ──
 // All economy tuning lives here (its own data file), keyed by ids, so this
 // feature does not touch units.json / terrain.json / mapgen.
+//
+// Two building shapes share this def:
+//   REB1 (mine, extractor)    — self output/supply by level (outputByLevel,
+//                               supplyByLevel)
+//   REB2 (processor, purifier) — output/supply PER adjacent same-city REB1
+//                               (outputPerAdjacentByLevel, supplyPerAdjacentByLevel)
 export interface BuildingDef {
   on: ResourceKind | 'land'; // tile requirement
-  cost: number; // shard cost to build at level 1
+  output: ResourceKind; // resource this building produces per turn
   maxLevel: number;
   perCity: number | null; // max of this building per city (null = unlimited)
-  popPerLevel?: number; // mine/extractor: pop produced = popPerLevel * level
-  upgradeCosts?: number[]; // mine/extractor: cost to reach level 2, 3, ...
-  popPerAdjacent?: number; // processor/purifier: pop per adjacent building
-  adjacentTo?: BuildingKind; // processor/purifier: which building it counts
-  techRequired?: string | null; // tech id gating this building (null = none)
+  costByLevel: number[]; // ore cost: [build, upgrade->L2, upgrade->L3, ...]
+  plasmaCostByLevel?: number[]; // optional plasma cost per level (pinned/unused for now)
+  // REB1:
+  outputByLevel?: number[]; // resource/turn at level
+  supplyByLevel?: number[]; // supply at level
+  // REB2:
+  adjacentTo?: BuildingKind; // which REB1 it counts in its 3x3 (same city only)
+  outputPerAdjacentByLevel?: number[]; // resource/turn per adjacent REB1, by level
+  supplyPerAdjacentByLevel?: number[]; // supply per adjacent REB1, by level
+  // Tech gating (mechanism present; all null for now = unlocked):
+  techRequired?: string | null; // tech to build at all
+  upgradeTechRequired?: (string | null)[]; // tech to reach L2, L3, ...
 }
 
 export interface EconomyData {
@@ -292,16 +306,16 @@ export interface EconomyData {
   upkeepDefault: number;
   upkeepByUnit: Record<string, number>;
 
-  startingShard: number;
+  startingOre: number;
   startingPlasma: number;
 
   city: {
     maxLevel: number;
-    capitalBaseProduction: number; // shard/turn at level 1 for a capital
-    cityBaseProduction: number; // shard/turn at level 1 for a founded city
-    productionPerLevel: number; // extra shard/turn per level above 1
-    slotsBase: number; // unit slots at level 1 (slots = slotsBase + level - 1)
-    popThresholds: number[]; // total pop to reach level 2, 3, ... maxLevel
+    capitalBaseProduction: number; // ore/turn at level 1 for a capital
+    cityBaseProduction: number; // ore/turn at level 1 for a founded city
+    productionPerLevel: number; // extra ore/turn per level above 1
+    popBase: number; // unit capacity at level 1 (pop = popBase + level - 1)
+    supplyThresholds: number[]; // total supply to reach level 2, 3, ... maxLevel
     territoryRadius: number; // Chebyshev radius of a city's territory
   };
 

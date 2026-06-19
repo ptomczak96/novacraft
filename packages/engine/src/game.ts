@@ -10,9 +10,9 @@ import { getReachableTiles, distance, inRange } from './pathfinding.js';
 import { resolveCombat, previewCombat } from './combat.js';
 import { computeVisibility } from './fog.js';
 import {
-  settleEconomy, calculateShardIncome, calculatePlasmaIncome, recomputeCities,
-  territoryCityAt, cityAt, cityHasFreeSlot, getUnitPlasmaCost,
-  canBuild, canUpgradeBuilding, upgradeCostFor, canFoundCity,
+  settleEconomy, calculateOreIncome, calculatePlasmaIncome, recomputeCities,
+  territoryCityAt, cityAt, cityHasCapacity, getUnitPlasmaCost,
+  canBuild, canUpgradeBuilding, upgradeCostFor, buildingCost, canFoundCity,
 } from './economy.js';
 
 // ── Deep clone helper (JSON round-trip, since state is JSON-serializable) ──
@@ -37,7 +37,7 @@ export function createGame(
   const players: PlayerState[] = factionIds.map((factionId, i) => ({
     id: i,
     factionId,
-    shard: registry.economy.startingShard,
+    ore: registry.economy.startingOre,
     plasma: registry.economy.startingPlasma,
     researchedTechs: [],
   }));
@@ -57,7 +57,7 @@ export function createGame(
         owner: tile.owner,
         isCapital: capitalKeys.has(`${x},${y}`),
         level: 1,
-        pop: 0,
+        supply: 0,
       });
     }
   }
@@ -168,11 +168,11 @@ export function getLegalActions(state: GameState, registry: DataRegistry, player
       // Need an empty city tile and a free slot in that city.
       const occupied = state.units.some(u => u.position.x === x && u.position.y === y);
       if (occupied) continue;
-      if (!cityHasFreeSlot(state, city, registry)) continue;
+      if (!cityHasCapacity(state, city, registry)) continue;
       for (const unitTypeId of faction.unitTypes) {
         const ut = registry.unitTypes[unitTypeId];
         if (!ut) continue;
-        if (ut.cost > player.shard) continue;
+        if (ut.cost > player.ore) continue;
         if (getUnitPlasmaCost(unitTypeId, registry) > player.plasma) continue;
         actions.push({ type: 'recruit', unitTypeId, cityPosition: { x, y } });
       }
@@ -200,7 +200,7 @@ export function getLegalActions(state: GameState, registry: DataRegistry, player
   // Research actions
   for (const [techId, tech] of Object.entries(registry.techs)) {
     if (player.researchedTechs.includes(techId)) continue;
-    if (tech.cost > player.shard) continue;
+    if (tech.cost > player.ore) continue;
     const prereqsMet = tech.prerequisites.every(p => player.researchedTechs.includes(p));
     if (!prereqsMet) continue;
     actions.push({ type: 'research', techId });
@@ -250,7 +250,15 @@ function applyMove(state: GameState, action: MoveAction, _registry: DataRegistry
   if (tile.isCity && tile.owner !== unit.owner) {
     tile.owner = unit.owner;
     const city = cityAt(state, action.to);
-    if (city) city.owner = unit.owner;
+    if (city) {
+      // Bug 1: the previous owner's units homed here become stateless
+      // (their home-city link is cleared) so they don't occupy the new
+      // owner's unit slots. No penalty for now — see economy-future-notes.
+      for (const u of state.units) {
+        if (state.unitHomeCity[u.id] === city.id) delete state.unitHomeCity[u.id];
+      }
+      city.owner = unit.owner;
+    }
   }
 
   // Capture resource tiles
@@ -307,9 +315,9 @@ function applyRecruit(state: GameState, action: RecruitAction, registry: DataReg
 
   const city = cityAt(state, action.cityPosition);
   if (!city || city.owner !== state.currentPlayer) return state;
-  if (!cityHasFreeSlot(state, city, registry)) return state;
+  if (!cityHasCapacity(state, city, registry)) return state;
 
-  player.shard -= unitType.cost;
+  player.ore -= unitType.cost;
   player.plasma -= getUnitPlasmaCost(action.unitTypeId, registry);
 
   const id = state.nextUnitId++;
@@ -333,7 +341,7 @@ function applyResearch(state: GameState, action: ResearchAction, registry: DataR
   const tech = registry.techs[action.techId];
   if (!tech) return state;
 
-  player.shard -= tech.cost;
+  player.ore -= tech.cost;
   player.researchedTechs.push(action.techId);
 
   return state;
@@ -345,7 +353,9 @@ function applyBuild(state: GameState, action: BuildAction, registry: DataRegistr
 
   const def = registry.economy.buildings[action.kind];
   const city = territoryCityAt(state, registry, action.position);
-  state.players[playerId].shard -= def.cost;
+  const cost = buildingCost(def, 1);
+  state.players[playerId].ore -= cost.ore;
+  state.players[playerId].plasma -= cost.plasma;
   state.buildings.push({
     id: state.nextBuildingId++,
     kind: action.kind,
@@ -354,7 +364,7 @@ function applyBuild(state: GameState, action: BuildAction, registry: DataRegistr
     cityId: city ? city.id : null,
   });
 
-  recomputeCities(state, registry); // pop/level may have changed
+  recomputeCities(state, registry); // supply/level may have changed
   return checkWinConditions(state, registry);
 }
 
@@ -369,7 +379,8 @@ function applyUpgradeBuilding(state: GameState, action: UpgradeBuildingAction, r
   const cost = upgradeCostFor(building, registry);
   if (cost === null) return state;
 
-  state.players[playerId].shard -= cost;
+  state.players[playerId].ore -= cost.ore;
+  state.players[playerId].plasma -= cost.plasma;
   building.level += 1;
 
   recomputeCities(state, registry);
@@ -392,9 +403,9 @@ function applyFoundCity(state: GameState, action: FoundCityAction, registry: Dat
     owner: playerId,
     isCapital: false,
     level: 1,
-    pop: 0,
+    supply: 0,
   });
-  state.players[playerId].shard -= registry.economy.foundCity.cost;
+  state.players[playerId].ore -= registry.economy.foundCity.cost;
 
   recomputeCities(state, registry);
   return checkWinConditions(state, registry);
@@ -417,38 +428,16 @@ function applyEndTurn(state: GameState, registry: DataRegistry): GameState {
   if (nextPlayer === 0) {
     state.turn++;
 
-    // Collect shard income (city production), then settle upkeep (dormant),
-    // and collect plasma income. See economy.ts for the rules.
+    // Collect ore income (city production + ore buildings), settle upkeep
+    // (dormant), then collect plasma income. See economy.ts for the rules.
     for (const player of state.players) {
-      const shardIncome = calculateShardIncome(state, player.id, registry);
-      settleEconomy(state, player.id, shardIncome, registry);
+      const oreIncome = calculateOreIncome(state, player.id, registry);
+      settleEconomy(state, player.id, oreIncome, registry);
       player.plasma += calculatePlasmaIncome(state, player.id, registry);
     }
   }
 
   return checkWinConditions(state, registry);
-}
-
-// ── Income ──
-export function calculateIncome(state: GameState, playerId: PlayerId, registry: DataRegistry): number {
-  let income = 0;
-  const player = state.players[playerId];
-  const cityIncomeBonus = getModifier(player, registry, 'cityIncomeBonus');
-  const resourceIncomeBonus = getModifier(player, registry, 'resourceIncomeBonus');
-
-  for (let y = 0; y < state.map.height; y++) {
-    for (let x = 0; x < state.map.width; x++) {
-      const tile = state.map.tiles[y][x];
-      if (tile.owner !== playerId) continue;
-      if (tile.isCity) {
-        income += state.config.cityIncome + cityIncomeBonus;
-      }
-      if (tile.isResourceTile) {
-        income += state.config.resourceIncome + resourceIncomeBonus;
-      }
-    }
-  }
-  return income;
 }
 
 // ── Tech modifiers ──
@@ -566,7 +555,7 @@ export function computeScores(state: GameState, registry: DataRegistry): Record<
         const ut = registry.unitTypes[u.typeId];
         return sum + (ut ? ut.cost : 0);
       }, 0);
-    const income = calculateShardIncome(state, player.id, registry);
+    const income = calculateOreIncome(state, player.id, registry);
 
     scores[player.id] =
       cities.length * state.config.scoreWeights.cityValue +
