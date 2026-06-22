@@ -36,15 +36,6 @@
     ]
   },
   {
-    "id": "taxation",
-    "name": "Taxation",
-    "cost": 6,
-    "prerequisites": [],
-    "effects": [
-      { "type": "globalModifier", "params": { "modifier": "cityIncomeBonus", "value": 1 } }
-    ]
-  },
-  {
     "id": "siege_engineering",
     "name": "Siege Engineering",
     "cost": 10,
@@ -60,15 +51,6 @@
     "prerequisites": ["roads"],
     "effects": [
       { "type": "globalModifier", "params": { "modifier": "allMovementBonus", "value": 1 } }
-    ]
-  },
-  {
-    "id": "diplomacy",
-    "name": "Diplomacy",
-    "cost": 12,
-    "prerequisites": ["taxation", "fortification"],
-    "effects": [
-      { "type": "globalModifier", "params": { "modifier": "resourceIncomeBonus", "value": 1 } }
     ]
   }
 ]
