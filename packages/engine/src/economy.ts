@@ -12,7 +12,7 @@ import type {
 //    pop    = unit capacity (max units a city supports) = popBase + level - 1
 //    supply = leveling currency from buildings; thresholds raise the level
 //    REB1   = mine / extractor   (self output + supply by level)
-//    REB2   = processor / purifier (output + supply per adjacent same-city REB1)
+//    REB2   = refinery / purifier (output + supply per adjacent same-city REB1)
 // ════════════════════════════════════════════════════════════════════════
 
 // ── Tile helpers (read mapgen markers with safe fallbacks) ──

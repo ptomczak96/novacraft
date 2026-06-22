@@ -191,7 +191,7 @@ export interface EndTurnAction {
 
 // ── Economy: Cities & Buildings ──
 export type ResourceKind = 'ore' | 'plasma';
-export type BuildingKind = 'mine' | 'extractor' | 'processor' | 'purifier';
+export type BuildingKind = 'mine' | 'extractor' | 'refinery' | 'purifier';
 export type CityId = number;
 
 // Terminology:
@@ -279,7 +279,7 @@ export interface GameResult {
 // Two building shapes share this def:
 //   REB1 (mine, extractor)    — self output/supply by level (outputByLevel,
 //                               supplyByLevel)
-//   REB2 (processor, purifier) — output/supply PER adjacent same-city REB1
+//   REB2 (refinery, purifier) — output/supply PER adjacent same-city REB1
 //                               (outputPerAdjacentByLevel, supplyPerAdjacentByLevel)
 export interface BuildingDef {
   on: ResourceKind | 'land'; // tile requirement

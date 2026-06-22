@@ -94,7 +94,7 @@ export const BuildingDefSchema = z.object({
   plasmaCostByLevel: z.array(z.number().min(0)).optional(),
   outputByLevel: z.array(z.number().min(0)).optional(),
   supplyByLevel: z.array(z.number().min(0)).optional(),
-  adjacentTo: z.enum(['mine', 'extractor', 'processor', 'purifier']).optional(),
+  adjacentTo: z.enum(['mine', 'extractor', 'refinery', 'purifier']).optional(),
   outputPerAdjacentByLevel: z.array(z.number().min(0)).optional(),
   supplyPerAdjacentByLevel: z.array(z.number().min(0)).optional(),
   techRequired: z.string().nullable().optional(),

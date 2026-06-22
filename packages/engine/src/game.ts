@@ -183,7 +183,7 @@ export function getLegalActions(state: GameState, registry: DataRegistry, player
   for (let y = 0; y < state.map.height; y++) {
     for (let x = 0; x < state.map.width; x++) {
       const pos = { x, y };
-      for (const kind of ['mine', 'extractor', 'processor', 'purifier'] as const) {
+      for (const kind of ['mine', 'extractor', 'refinery', 'purifier'] as const) {
         if (canBuild(state, registry, playerId, kind, pos)) {
           actions.push({ type: 'build', kind, position: pos });
         }

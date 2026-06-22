@@ -52,9 +52,9 @@ Self output + supply, scaling with the building's own level. Upgradeable to L3.
 | 3 | 60 | +30 | 6 |
 
 - Mine output = ore; Extractor output = plasma.
-- Mine: unlimited per city. Extractor: max 1 per city.
+- Mine & Extractor: unlimited per city (count is governed by ore/plasma tile spawns, not a hard cap).
 
-### REB2 — Processor (near mines) / Purifier (near extractors)
+### REB2 — Refinery (near mines) / Purifier (near extractors)
 Output + supply **per adjacent same-city REB1**, scaling with the REB2's level.
 Built on a land tile in the territory, adjacent to ≥1 same-city REB1. Upgradeable to L3.
 
@@ -64,9 +64,9 @@ Built on a land tile in the territory, adjacent to ≥1 same-city REB1. Upgradea
 | 2 | 120 | +20 | 3 |
 | 3 | 200 | +30 | 5 |
 
-- Processor output = ore (counts adjacent **mines**); Purifier output = plasma (counts adjacent **extractors**).
-- Processor: unlimited per city. Purifier: max 1 per city.
-- **Same-city only:** a processor never counts a mine in a different city's territory.
+- Refinery output = ore (counts adjacent **mines**); Purifier output = plasma (counts adjacent **extractors**).
+- Refinery: unlimited per city. Purifier: max 1 per city.
+- **Same-city only:** a refinery never counts a mine in a different city's territory.
 
 ## 4. Income (collected at turn rollover)
 
@@ -97,7 +97,7 @@ attack / recruit / research / useAbility / endTurn.
 - **Capture → stateless units:** when a city is captured, the previous owner's
   units homed there have their home-city link cleared, so they don't block the
   new owner's slots. No stat penalty yet (deferred — see notes).
-- **REB2 same-city:** processors/purifiers only count adjacent REB1s of their own city.
+- **REB2 same-city:** refineries/purifiers only count adjacent REB1s of their own city.
 
 ## 8. Map contract (what mapgen must provide)
 
@@ -122,11 +122,11 @@ removed tile-income system and are currently inert — repurpose or drop later.
 **Pinned for now (easy data tweaks in `economy.json`):**
 - REB2 cost is **ore-only**; a `plasmaCostByLevel` slot is reserved but unused.
 - Extractor uses the same cheap cost scale as mines (20/40/60) — may diverge later.
-- Purifier mirrors processor's cost scale (50/120/200).
+- Purifier mirrors the refinery's cost scale (50/120/200).
 
 **Deferred design notes (backlog):**
 1. Stateless units (home city lost) may get a penalty, e.g. −20% atk/def.
-2. Processors/purifiers may later draw from adjacent REBs in *other friendly* cities' territory (via tech).
+2. Refineries/purifiers may later draw from adjacent REBs in *other friendly* cities' territory (via tech).
 3. A pop/supply-producing building (StarCraft supply-depot style) to break the territory-tile cap on leveling.
 4. Option to level cities by paying ore/plasma outright (instead of only via supply).
 

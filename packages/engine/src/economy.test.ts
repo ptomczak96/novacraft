@@ -122,7 +122,7 @@ describe('REB1 — mines (output + supply)', () => {
   });
 });
 
-describe('REB2 — processors (output + supply per adjacent same-city mine)', () => {
+describe('REB2 — refineries (output + supply per adjacent same-city mine)', () => {
   it('produces +10 ore and +1 supply per adjacent mine', () => {
     const registry = getRegistry();
     let state = createGame(getConfig(), registry, ['ironclad', 'sylvan'], 7);
@@ -137,8 +137,8 @@ describe('REB2 — processors (output + supply per adjacent same-city mine)', ()
 
     const oreBefore = calculateOreIncome(state, 0, registry);
     const supplyBefore = cityAt(state, cap.position)!.supply;
-    expect(canBuild(state, registry, 0, 'processor', proc)).toBe(true);
-    state = applyAction(state, { type: 'build', kind: 'processor', position: proc }, registry);
+    expect(canBuild(state, registry, 0, 'refinery', proc)).toBe(true);
+    state = applyAction(state, { type: 'build', kind: 'refinery', position: proc }, registry);
 
     expect(calculateOreIncome(state, 0, registry)).toBe(oreBefore + 20); // +10 per mine x2
     expect(cityAt(state, cap.position)!.supply).toBe(supplyBefore + 2); // +1 per mine x2
