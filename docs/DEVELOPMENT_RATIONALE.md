@@ -1,9 +1,17 @@
 # Tactica — Development Rationale
 
 A running log of **why** decisions were made — not just *what* changed, but the
-reasoning/discussion behind it. New entries are appended as design decisions are
-made. Newest sections at the bottom of each area. (Companion to `ECONOMY.md`,
-`MODULES.md`, which describe the *current* state; this explains *how we got there*.)
+reasoning/discussion behind it. Companion to `ECONOMY.md` / `MODULES.md` (which
+describe the *current* state); this explains *how we got there*.
+
+**Conventions (see `CLAUDE.md` for the binding rule):**
+- **Append-only.** Never overwrite or delete prior entries.
+- New entries carry a **date** and **author**. If a decision supersedes an
+  earlier one, add a new dated entry noting it supersedes the prior — keep both,
+  so two contributors' reasoning and the evolution over time are all preserved.
+
+> The entries below are the **initial batch (2026-06-23)**, reconstructed from the
+> design discussion to date. Dated/attributed entries begin after this batch.
 
 ---
 
