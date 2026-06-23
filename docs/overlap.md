@@ -61,6 +61,14 @@ defence / range / sight, plus the noted abilities):**
 the techs exist + research + branch-unlock; unit unlocks are via tech `unlockUnit`
 effects; the `*Bonus` modifiers are read via `getModifier(...)`.
 
+**Current state / expected quirk:** the Armory L1/L2 techs are *researchable but
+inert* until you wire the units + effects — researching them currently does nothing.
+Side effect: greedy **self-play sims go drawish** (the bot wastes ore researching
+these no-payoff techs and under-builds units). This is a bot artifact, **not an
+engine bug** — 36 tests pass and determinism holds. It resolves as you implement
+the units/effects. (Decision: leave L1/L2 researchable for now rather than locking
+the branch.)
+
 **Status:** OPEN — awaiting units + combat/status/fog work on the Combat & units side.
 
 ### 2026-06-23 — tech → UI (tech-tree view)
