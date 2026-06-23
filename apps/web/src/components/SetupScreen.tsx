@@ -15,6 +15,11 @@ export function SetupScreen() {
     startGame([faction0, faction1], seed);
   };
 
+  // Map generation options (all optional; sensible defaults applied in the engine).
+  const mapgen = config.mapgen ?? {};
+  const setMapgen = (patch: Partial<NonNullable<typeof config.mapgen>>) =>
+    setConfig({ ...config, mapgen: { ...mapgen, ...patch } });
+
   const handleLoad = () => {
     const input = document.createElement('input');
     input.type = 'file';
@@ -49,6 +54,19 @@ export function SetupScreen() {
           <div className="setup-field">
             <label>Seed</label>
             <input type="number" value={seed} onChange={e => setSeed(Number(e.target.value))} />
+          </div>
+        </div>
+
+        <div className="setup-row">
+          <div className="setup-field">
+            <label>Map Type</label>
+            <select
+              value={mapgen.biome ?? 'grassland'}
+              onChange={e => setMapgen({ biome: e.target.value as NonNullable<typeof mapgen.biome> })}
+            >
+              <option value="grassland">Grassland</option>
+              <option value="stone">Stone</option>
+            </select>
           </div>
         </div>
 
