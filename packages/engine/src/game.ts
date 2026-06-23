@@ -31,7 +31,7 @@ export function createGame(
   const playerCount = factionIds.length;
 
   const [map, cityPositions, prngAfterMap] = generateMap(
-    config.mapWidth, config.mapHeight, playerCount, registry, prng,
+    config.mapWidth, config.mapHeight, playerCount, registry, prng, config.mapgen,
   );
 
   const players: PlayerState[] = factionIds.map((factionId, i) => ({
@@ -338,12 +338,15 @@ function applyRecruit(state: GameState, action: RecruitAction, registry: DataReg
 
 function applyResearch(state: GameState, action: ResearchAction, registry: DataRegistry): GameState {
   const player = state.players[state.currentPlayer];
+  if (player.researchedTechs.includes(action.techId)) return state; // already researched
+
+  // Techs defined in the engine registry charge their ore cost (and later apply
+  // effects). UI-only techs (not yet in tech-tree.json) are still recorded so the
+  // selection persists/saves — their functionality is implemented separately.
   const tech = registry.techs[action.techId];
-  if (!tech) return state;
+  if (tech) player.ore -= tech.cost;
 
-  player.ore -= tech.cost;
   player.researchedTechs.push(action.techId);
-
   return state;
 }
 

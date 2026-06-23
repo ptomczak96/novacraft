@@ -86,6 +86,19 @@ export interface GameConfig {
     incomeValue: number;
   };
   comebackThreshold: number; // fraction, e.g. 0.25 = 25%
+  mapgen?: MapGenOptions; // optional; sensible defaults applied when absent
+}
+
+// ── Map generation tuning ──
+// All fields optional so older configs/saves keep working. Generation currently
+// supports two biomes; water and lava generation is disabled (the classification
+// code remains in mapgen for when we re-enable them).
+export type Biome = 'grassland' | 'stone';
+
+export interface MapGenOptions {
+  biome?: Biome;            // overall map theme
+  resourceDensity?: number; // 0..1 — fraction of land carrying ore/plasma
+  ruinCount?: number;       // number of foundable-city ruins to scatter
 }
 
 export interface CombatConfig {

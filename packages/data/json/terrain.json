@@ -24,10 +24,10 @@
   {
     "id": "mountain",
     "name": "Mountain",
-    "movementCost": 99,
-    "defenceBonus": 0,
-    "blocksSight": true,
-    "passable": false,
+    "movementCost": 2,
+    "defenceBonus": 0.25,
+    "blocksSight": false,
+    "passable": true,
     "resourceYield": 0,
     "color": "#8d99ae",
     "icon": "⛰️"
@@ -64,5 +64,38 @@
     "resourceYield": 2,
     "color": "#f4a261",
     "icon": "💎"
+  },
+  {
+    "id": "sand",
+    "name": "Sand",
+    "movementCost": 1,
+    "defenceBonus": 0,
+    "blocksSight": false,
+    "passable": true,
+    "resourceYield": 0,
+    "color": "#e8d18a",
+    "icon": "🏜️"
+  },
+  {
+    "id": "snow",
+    "name": "Snow",
+    "movementCost": 2,
+    "defenceBonus": 0,
+    "blocksSight": false,
+    "passable": true,
+    "resourceYield": 0,
+    "color": "#eef2f7",
+    "icon": "❄️"
+  },
+  {
+    "id": "lava",
+    "name": "Lava",
+    "movementCost": 99,
+    "defenceBonus": 0,
+    "blocksSight": false,
+    "passable": false,
+    "resourceYield": 0,
+    "color": "#e8531f",
+    "icon": "🌋"
   }
 ]
