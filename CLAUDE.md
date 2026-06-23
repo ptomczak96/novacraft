@@ -44,6 +44,17 @@
 - `docs/ECONOMY.md` — current state of the economy system
 - `docs/MODULES.md` — module map, shared-core rules, how to avoid merge clashes
 - `docs/DEVELOPMENT_RATIONALE.md` — the *why* behind decisions (see logging rule below)
+- `docs/overlap.md` — cross-module hand-off log (see "commit to overlap" rule below)
+
+## Cross-module overlap log (REQUIRED)
+
+When a change in your module needs work, correction, or wiring in **another**
+contributor's module — or when the user says **"commit to overlap"** — append an
+entry to `docs/overlap.md` for the other module's owner: **what** the change is,
+**how** it should be wired, **why**, and **which module** it affects. Append-only,
+dated, and attributed (from `git config user.name`). Entries stay under **Open**
+until the owning module marks them **Done**. This is how cross-module work is
+handed between contributors (e.g. an economy tech whose effect lives in fog/mapgen).
 
 ## Development Rationale — decision log (REQUIRED, automatic)
 
