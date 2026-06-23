@@ -172,6 +172,11 @@ describe the *current* state); this explains *how we got there*.
   these gated until their (heavy) implementations exist. UI greying logged to overlap.
 - **Replicator deferred** to a dedicated task (first timed-construction + first
   out-of-city unit production) — backlog, not built.
+- **Armory L1/L2 left researchable despite being inert for now** (decision: leave
+  as-is; Patrick will plug in the units + stats shortly). Known side effect: greedy
+  self-play sims go drawish because the bot wastes ore researching not-yet-implemented
+  Armory techs — a bot artifact, not an engine bug (36 tests pass, determinism holds).
+  Resolves once Patrick wires the units/effects.
 
 ---
 
