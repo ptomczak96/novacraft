@@ -29,6 +29,40 @@ Format per entry: **[date] — author → affected module** · what / how / why 
   inert until fog is enabled.
 - **Status:** OPEN — awaiting fog wiring on the Map gen side.
 
+### 2026-06-23 — tech (Armory branch) → Combat & units (Patrick)
+The Armory tech tree unlocks units and combat mechanics that live in Patrick's
+module. The tech branch scaffolds the gates/effects; the guts below are his.
+
+**New units for `units.json` (stats left BLANK — Patrick to fill HP / move / attack /
+defence / range / sight, plus the noted abilities):**
+- **Marksman** — light, ranged. (unlocked by Small Arms)
+- **Medic** — light. Ability: heal a friendly unit; remove certain statuses (e.g. Trace). (Triage)
+- **Tank** — heavy. Supports "assault mode" (see Advanced Projectiles). (Forge)
+- **Stalker** — heavy. Has the Tracer Rounds action (see below). (Mech Bay)
+
+**Combat / status / fog mechanics:**
+- **Combined Arms (L1):** focus fire — when 2+ of a player's units hit the same
+  target in one turn, the 2nd/3rd/4th… hit each deals **+10%** damage (per-shot
+  bonus, NOT cumulative). The tech exposes a `focusFireBonus` modifier; combat
+  applies it during attack resolution.
+- **Advanced Projectiles (L2):** Tank "assault mode" gives **+1 attack range**.
+  Switching into or out of assault mode costs a full turn (can't move/attack that
+  turn). Needs a per-unit mode flag (new unit state) + combat range read. Tech
+  exposes `assaultRangeBonus`.
+- **Reactive Plating (L3):** Tanks & Mechs get **+10% defence**. Tech exposes
+  `heavyDefenceBonus`; combat applies it to those unit types.
+- **Tracer Rounds (L3):** a Stalker action **separate from attack** that applies
+  **Trace** to a target. A traced unit's **position** (not its FOV) is visible to
+  the enemy; works on cloaked units once revealed and persists as they move; can be
+  attacked by normal units. Trace can be healed (TBD). Needs: a new action, a status
+  effect, and a **fog/visibility** hook.
+
+**Tech-side (already on the economy/tech branch, no action needed from Patrick):**
+the techs exist + research + branch-unlock; unit unlocks are via tech `unlockUnit`
+effects; the `*Bonus` modifiers are read via `getModifier(...)`.
+
+**Status:** OPEN — awaiting units + combat/status/fog work on the Combat & units side.
+
 ## Done
 
 _(none yet)_
