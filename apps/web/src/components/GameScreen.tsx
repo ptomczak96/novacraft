@@ -1,10 +1,11 @@
-import React, { useEffect, useCallback, useRef } from 'react';
+import React, { useEffect, useCallback, useRef, useState } from 'react';
 import { useGameStore } from '../store/gameStore.js';
 import { MapView } from './MapView.js';
 import { EditorPanel } from './EditorPanel.js';
 import { Inspector } from './Inspector.js';
 import { UnitSheet } from './UnitSheet.js';
 import { CombatLog } from './CombatLog.js';
+import { TechTreeView } from './TechTreeView.js';
 import type { Action } from '@tactica/engine';
 import { getLegalActions } from '@tactica/engine';
 
@@ -19,6 +20,13 @@ export function GameScreen() {
 
   const autoPlayRef = useRef(autoPlay);
   autoPlayRef.current = autoPlay;
+
+  // Tech tree panel. Research is dispatched as an engine action so it's tracked
+  // per player and persists with the game state (and save/replay).
+  const [techOpen, setTechOpen] = useState(false);
+  const handleResearch = useCallback((id: string) => {
+    executeAction({ type: 'research', techId: id });
+  }, [executeAction]);
 
   // Bot play
   const doBotTurn = useCallback(() => {
@@ -128,6 +136,10 @@ export function GameScreen() {
             <button className="ghost" onClick={undo}>Undo</button>
             <button className="ghost" onClick={handleSave}>Save</button>
             <button className="ghost" onClick={handleCopyReplay}>Copy Replay</button>
+            <button className="ghost tech-btn" onClick={() => setTechOpen(true)} title="Research">
+              <img src="/ui/tech-button.png" alt="" />
+              Tech
+            </button>
             <button className="ghost" onClick={() => setInspectorOpen(!inspectorOpen)}>
               {inspectorOpen ? 'Hide' : 'Inspect'}
             </button>
@@ -175,6 +187,16 @@ export function GameScreen() {
       {/* Side panels */}
       {inspectorOpen && <Inspector />}
       {editorOpen && <EditorPanel />}
+
+      {/* Tech tree overlay — shows the current player's research (from game state) */}
+      {techOpen && (
+        <TechTreeView
+          factionName={faction?.name || `Player ${currentPlayer + 1}`}
+          researched={new Set(player.researchedTechs)}
+          onResearch={handleResearch}
+          onClose={() => setTechOpen(false)}
+        />
+      )}
     </div>
   );
 }
