@@ -1,5 +1,11 @@
-import { TILE_W, TILE_H, CANVAS_PAD, ELEVATION } from './constants.js';
+import { TILE_W, TILE_H, SPRITE_W, CANVAS_PAD, ELEVATION } from './constants.js';
 import type { GameMap } from '@tactica/engine';
+
+// Tile sprites are drawn wider/taller than the grid cell, so they overhang the
+// nominal diamond bounds. Reserve room so edge tiles aren't clipped.
+const SPRITE_H = SPRITE_W * (164 / 148);          // art aspect ratio
+const OVERHANG_X = Math.max(0, (SPRITE_W - TILE_W) / 2);
+const OVERHANG_Y = Math.max(0, SPRITE_H - TILE_H); // body hanging below the diamond
 
 /**
  * Convert tile grid coords to screen (canvas pixel) coords.
@@ -21,9 +27,9 @@ export function tileToScreen(
  * by the maximum negative offset (which comes from tile (0, maxY)).
  */
 export function computeOriginShift(mapHeight: number): number {
-  // tile (0, mapHeight-1) has sx = CANVAS_PAD + (0 - (mapHeight-1)) * TILE_W/2
-  // We want that sx >= CANVAS_PAD, so shift = (mapHeight-1) * TILE_W/2
-  return (mapHeight - 1) * (TILE_W / 2);
+  // tile (0, mapHeight-1) has sx = CANVAS_PAD + (0 - (mapHeight-1)) * TILE_W/2.
+  // Shift right by that much, plus the sprite's left overhang so it isn't clipped.
+  return (mapHeight - 1) * (TILE_W / 2) + OVERHANG_X;
 }
 
 /**
@@ -53,9 +59,8 @@ export function canvasSize(
   //   vertical:   from tile(0,0) to tile(maxX, maxY) → range = (maxX + maxY) * TILE_H/2
   // Plus extra for the base depth of the lowest tiles and padding.
   const maxElev = 24; // mountain elevation
-  const maxDepth = 16 + 8; // BASE_DEPTH + water sunken below
-  const w = (mapWidth + mapHeight - 1) * (TILE_W / 2) + TILE_W + CANVAS_PAD * 2;
-  const h = (mapWidth + mapHeight - 1) * (TILE_H / 2) + TILE_H + maxDepth + maxElev + CANVAS_PAD * 2;
+  const w = (mapWidth + mapHeight - 1) * (TILE_W / 2) + TILE_W + OVERHANG_X * 2 + CANVAS_PAD * 2;
+  const h = (mapWidth + mapHeight - 1) * (TILE_H / 2) + TILE_H + OVERHANG_Y + maxElev + CANVAS_PAD * 2;
   return { width: w, height: h };
 }
 
