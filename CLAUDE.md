@@ -38,3 +38,28 @@
 - `npm run sim -- --games 1000 --bot-a greedy --bot-b greedy --seed 42` — headless sim
 - `npm test` — run all tests
 - `npm run validate-data` — validate JSON data against schemas
+
+## Reference docs
+
+- `docs/ECONOMY.md` — current state of the economy system
+- `docs/MODULES.md` — module map, shared-core rules, how to avoid merge clashes
+- `docs/DEVELOPMENT_RATIONALE.md` — the *why* behind decisions (see logging rule below)
+
+## Development Rationale — decision log (REQUIRED, automatic)
+
+Whenever you (any AI assisting in this repo) make a design decision, or add /
+remove / rename / change something after discussion, **append an entry to
+`docs/DEVELOPMENT_RATIONALE.md` automatically, without asking.** Record *what
+changed* and *why* (the reasoning/discussion behind it).
+
+The log is **append-only — never overwrite or delete prior entries:**
+
+- Every entry starts with the **date** (`YYYY-MM-DD`) and the **author** (from
+  `git config user.name`/`user.email`, or "unknown" if unset).
+- If a new decision **supersedes or reverses an earlier one, keep both.** Add a
+  new dated entry that notes it supersedes the prior decision (and why) — do not
+  edit the old entry away. Two contributors changing the same thing at different
+  times should both remain in the log, each timestamped, so the evolution is
+  traceable.
+- This file is append-only specifically so two people's entries merge cleanly
+  and no one's rationale is lost.

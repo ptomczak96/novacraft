@@ -1,6 +1,6 @@
 import type { Bot } from './types.js';
 import type { Action, VisibleState, DataRegistry, Unit } from '@tactica/engine';
-import { previewCombat, createPRNG, nextRandom } from '@tactica/engine';
+import { previewCombat, createPRNG, nextRandom, getUnitUpkeep } from '@tactica/engine';
 import { getLegalActionsFromVisible } from './randomBot.js';
 
 interface GreedyWeights {
@@ -112,9 +112,11 @@ export class GreedyBot implements Bot {
             score += (ut.attack + ut.maxHP * 0.5) * this.weights.incomeWeight * 0.5;
             // Don't overspend
             const player = visibleState.players[visibleState.currentPlayer];
-            if (player.gold - ut.cost < 3) {
+            if (player.ore - ut.cost < 3) {
               score -= this.weights.safetyWeight * 5;
             }
+            // Weigh ongoing upkeep so the bot doesn't doomstack into bankruptcy.
+            score -= getUnitUpkeep(action.unitTypeId, registry) * this.weights.incomeWeight * 0.25;
           }
           break;
         }

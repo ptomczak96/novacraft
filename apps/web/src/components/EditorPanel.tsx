@@ -203,23 +203,6 @@ function ConfigEditor({ config, onChange }: { config: GameConfig; onChange: (c: 
           onChange={e => update('combatConfig.damageVariance', Number(e.target.value))} />
       </div>
 
-      <h3 style={{ marginTop: 16 }}>Economy</h3>
-      <div className="stat-row">
-        <label>City Income</label>
-        <input type="number" value={config.cityIncome}
-          onChange={e => update('cityIncome', Number(e.target.value))} />
-      </div>
-      <div className="stat-row">
-        <label>Resource Income</label>
-        <input type="number" value={config.resourceIncome}
-          onChange={e => update('resourceIncome', Number(e.target.value))} />
-      </div>
-      <div className="stat-row">
-        <label>Starting Gold</label>
-        <input type="number" value={config.startingGold}
-          onChange={e => update('startingGold', Number(e.target.value))} />
-      </div>
-
       <h3 style={{ marginTop: 16 }}>Scoring</h3>
       <div className="stat-row">
         <label>City Value</label>

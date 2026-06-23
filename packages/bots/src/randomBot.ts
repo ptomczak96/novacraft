@@ -90,22 +90,23 @@ export function getLegalActionsFromVisible(state: VisibleState, registry: DataRe
     }
   }
 
-  // Recruit
+  // Recruit — at owned cities with a free unit slot and enough resources
   if (faction) {
-    for (let y = 0; y < state.map.height; y++) {
-      for (let x = 0; x < state.map.width; x++) {
-        const tile = state.map.tiles[y][x];
-        if (tile.isCity && tile.owner === playerId) {
-          const occupied = state.units.some(u => u.position.x === x && u.position.y === y);
-          if (!occupied) {
-            for (const utId of faction.unitTypes) {
-              const ut = registry.unitTypes[utId];
-              if (ut && ut.cost <= player.gold) {
-                actions.push({ type: 'recruit', unitTypeId: utId, cityPosition: { x, y } });
-              }
-            }
-          }
-        }
+    const econ = registry.economy;
+    for (const city of state.cities) {
+      if (city.owner !== playerId) continue;
+      const { x, y } = city.position;
+      const occupied = state.units.some(u => u.position.x === x && u.position.y === y);
+      if (occupied) continue;
+      const capacity = econ.city.popBase + (city.level - 1);
+      const used = state.units.filter(u => state.unitHomeCity[u.id] === city.id).length;
+      if (used >= capacity) continue;
+      for (const utId of faction.unitTypes) {
+        const ut = registry.unitTypes[utId];
+        if (!ut) continue;
+        if (ut.cost > player.ore) continue;
+        if ((econ.unitPlasmaCost[utId] ?? 0) > player.plasma) continue;
+        actions.push({ type: 'recruit', unitTypeId: utId, cityPosition: { x, y } });
       }
     }
   }
@@ -113,7 +114,7 @@ export function getLegalActionsFromVisible(state: VisibleState, registry: DataRe
   // Research
   for (const [techId, tech] of Object.entries(registry.techs)) {
     if (player.researchedTechs.includes(techId)) continue;
-    if (tech.cost > player.gold) continue;
+    if (tech.cost > player.ore) continue;
     if (!tech.prerequisites.every(p => player.researchedTechs.includes(p))) continue;
     actions.push({ type: 'research', techId });
   }
