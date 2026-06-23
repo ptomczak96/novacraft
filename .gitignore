@@ -4,3 +4,4 @@ dist/
 results/
 *.tsbuildinfo
 .DS_Store
+.gstack/
