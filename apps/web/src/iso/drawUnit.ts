@@ -64,6 +64,7 @@ function filled(ctx: CanvasRenderingContext2D, fill: string, drawFn: () => void)
 // ── Unit size constants ──
 const UNIT_H = 22; // total figure height
 const FOOT_Y = 6;  // feet offset below center (standing on tile)
+const UNIT_SCALE = 1.5; // figures drawn 50% larger
 
 /**
  * Draw a unit on its tile (no elevation info).
@@ -88,8 +89,12 @@ export function drawUnitAt(
   elevation: number,
   registry: DataRegistry,
   isSelected: boolean,
+  posOverride?: { x: number; y: number },
 ) {
-  const { sx, sy } = tileToScreenShifted(unit.position.x, unit.position.y, mapHeight, elevation);
+  // posOverride allows fractional tile coords for smooth move animations.
+  const px = posOverride ? posOverride.x : unit.position.x;
+  const py = posOverride ? posOverride.y : unit.position.y;
+  const { sx, sy } = tileToScreenShifted(px, py, mapHeight, elevation);
   const cx = sx;
   const cy = sy + TILE_H / 2; // center of diamond
 
@@ -112,9 +117,13 @@ export function drawUnitAt(
     ctx.stroke();
   }
 
-  // ── Draw figure by type ──
+  // ── Draw figure by type (scaled up around the feet so it stays planted) ──
   const drawFn = UNIT_DRAWERS[unit.typeId] ?? drawGenericUnit;
-  drawFn(ctx, cx, cy, color, dark, light);
+  ctx.save();
+  ctx.translate(cx, cy + FOOT_Y);
+  ctx.scale(UNIT_SCALE, UNIT_SCALE);
+  drawFn(ctx, 0, -FOOT_Y, color, dark, light);
+  ctx.restore();
 
   // ── HP bar ──
   const unitType = registry.unitTypes[unit.typeId];

@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useCallback } from 'react';
+import React, { useRef, useEffect, useCallback, useState } from 'react';
 import { useGameStore } from '../store/gameStore.js';
 import { previewCombat } from '@tactica/engine';
 import type { Coord, Unit, Action } from '@tactica/engine';
@@ -7,12 +7,14 @@ import { ELEVATION, BG_COLOR } from './constants.js';
 import { canvasSize, screenToTile } from './projection.js';
 import { drawTile } from './drawTile.js';
 import { drawUnitAt } from './drawUnit.js';
+import { loadTileSprites } from './tileSprites.js';
 import {
   drawMoveHighlight,
   drawAttackHighlight,
   drawFogExplored,
   drawDamagePreview,
   drawGridLabel,
+  drawTerritoryBorders,
 } from './drawOverlays.js';
 
 interface IsoCanvasProps {
@@ -24,6 +26,21 @@ interface IsoCanvasProps {
 export function IsoCanvas({ mode, onPaint }: IsoCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const paintingRef = useRef(false);
+
+  // Bumped once tile sprites finish loading, to force a re-render with images.
+  const [spriteTick, setSpriteTick] = useState(0);
+  useEffect(() => {
+    loadTileSprites(() => setSpriteTick(t => t + 1));
+  }, []);
+
+  // ── Unit move animation (simple glide) ──
+  // When a unit's tile changes, glide it from old → new over MOVE_ANIM_MS by
+  // drawing it at fractional tile coords. A rAF loop bumps animTick to redraw.
+  const MOVE_ANIM_MS = 250;
+  const animsRef = useRef<Map<number, { fx: number; fy: number; tx: number; ty: number; start: number }>>(new Map());
+  const prevPosRef = useRef<Map<number, { x: number; y: number }>>(new Map());
+  const rafRef = useRef<number | undefined>(undefined);
+  const [animTick, setAnimTick] = useState(0);
 
   const {
     gameState, visibleState, registry, config,
@@ -47,6 +64,41 @@ export function IsoCanvas({ mode, onPaint }: IsoCanvasProps) {
     }
     return m;
   }, [units]);
+
+  // ── Detect unit moves → start glide animations ──
+  useEffect(() => {
+    const now = performance.now();
+    const live = new Set<number>();
+    for (const u of units) {
+      live.add(u.id);
+      const prev = prevPosRef.current.get(u.id);
+      if (prev && (prev.x !== u.position.x || prev.y !== u.position.y)) {
+        animsRef.current.set(u.id, {
+          fx: prev.x, fy: prev.y, tx: u.position.x, ty: u.position.y, start: now,
+        });
+      }
+      prevPosRef.current.set(u.id, { x: u.position.x, y: u.position.y });
+    }
+    // Forget units that no longer exist.
+    for (const id of [...prevPosRef.current.keys()]) {
+      if (!live.has(id)) { prevPosRef.current.delete(id); animsRef.current.delete(id); }
+    }
+    // Kick the animation loop if needed.
+    if (animsRef.current.size > 0 && rafRef.current === undefined) {
+      const step = () => {
+        const t = performance.now();
+        for (const [id, a] of animsRef.current) {
+          if (t - a.start >= MOVE_ANIM_MS) animsRef.current.delete(id);
+        }
+        setAnimTick(v => v + 1); // force redraw
+        rafRef.current = animsRef.current.size > 0 ? requestAnimationFrame(step) : undefined;
+      };
+      rafRef.current = requestAnimationFrame(step);
+    }
+  }, [units]);
+
+  // Cancel any running animation frame on unmount.
+  useEffect(() => () => { if (rafRef.current !== undefined) cancelAnimationFrame(rafRef.current); }, []);
 
   // ── Compute move/attack targets ──
   const { moveTargets, attackTargets } = React.useMemo(() => {
@@ -118,7 +170,15 @@ export function IsoCanvas({ mode, onPaint }: IsoCanvasProps) {
         const unit = unitByPos.get(key);
         if (unit) {
           const elev = ELEVATION[tile.terrain] ?? 0;
-          drawUnitAt(ctx, unit, map.height, elev, registry, unit.id === selectedUnitId);
+          // Glide animation: interpolate fractional tile pos if mid-move.
+          const anim = animsRef.current.get(unit.id);
+          let posOverride: { x: number; y: number } | undefined;
+          if (anim) {
+            const t = Math.min(1, (performance.now() - anim.start) / MOVE_ANIM_MS);
+            const e = t * t * (3 - 2 * t); // smoothstep ease
+            posOverride = { x: anim.fx + (anim.tx - anim.fx) * e, y: anim.fy + (anim.ty - anim.fy) * e };
+          }
+          drawUnitAt(ctx, unit, map.height, elev, registry, unit.id === selectedUnitId, posOverride);
         }
 
         // ── 5. Damage preview ──
@@ -146,9 +206,13 @@ export function IsoCanvas({ mode, onPaint }: IsoCanvasProps) {
         }
       }
     }
+
+    // ── Territory borders: single outer outline per player, drawn last ──
+    drawTerritoryBorders(ctx, map, map.height);
   }, [
     map, visibility, registry, config, units, unitByPos,
     selectedUnitId, hoveredTile, legalActions, moveTargets, attackTargets, mode,
+    spriteTick, animTick,
   ]);
 
   // Re-render whenever state changes
