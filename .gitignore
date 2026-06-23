@@ -5,3 +5,13 @@ results/
 *.tsbuildinfo
 .DS_Store
 .gstack/
+
+# Heavy source-art binaries (keep the PNG packs, skip the bloat)
+mapgen/UnityPackages/
+*.unitypackage
+*.psd
+mapgen/**/PSD/
+mapgen/**/Coupon*
+mapgen/**/*.pdf
+mapgen/**/*.url
+mapgen/**/*.txt
