@@ -116,9 +116,10 @@ describe the *current* state); this explains *how we got there*.
   (their modifiers weren't read by any code). Deleted the dead `taxation`/`diplomacy`
   first, then cleared the rest to design a real tree from scratch.
 
-- **6 branches × 3 levels; identical for both teams (for now).** Branches: Economy,
-  Logistics, Intel, Maneuver, Armory, Assault. Teams share the tree initially;
-  per-faction tweaks come after testing.
+- **6 branches × 3 levels; identical for both teams (for now).** Branches:
+  Refinement, Logistics, Intel, Maneuver, Armory, Assault. Teams share the tree
+  initially; per-faction tweaks come after testing. (Branch 1 was called "Economy"
+  during design, renamed to "Refinement" to avoid confusion with the economy module.)
 
 - **Branch-based prerequisites (for now).** Researching any level-1 tech in a branch
   unlocks all level-2 in that branch; any level-2 unlocks all level-3. Simple to start;
@@ -128,6 +129,28 @@ describe the *current* state); this explains *how we got there*.
   L1/L2/L3 = 50/60/70 with one city, +10/+20/+30 per additional city, computed at
   research time. → Prevents rushing tech; expanding makes future tech pricier
   (a deliberate tradeoff between expansion and research).
+
+---
+
+## Dated entries
+
+### 2026-06-23 — Artisan Ornaments — tech system + Refinement branch (L1–L2)
+
+- **Built the tech engine.** `TechDef` now carries `branch` + `level` (flat
+  `cost` removed — cost is derived). New `tech-config.json` holds the cost curve
+  (base 50/60/70 by level, +10/+20/+30 per extra city). New `engine/src/tech.ts`
+  module owns `getModifier` (moved out of game.ts so all modules share one reader),
+  `techCost`, and `isTechAvailable` (the branch-unlock rule: any L(n-1) in a branch
+  unlocks all L(n)). *Why:* implement the confirmed framework while keeping tech as
+  data + generic modifiers so it doesn't cross-cut into other modules.
+- **Refinement branch (L1–L2).** Drilling, Prospecting (L1); Slag Wash, Plasma Tap,
+  Refineries (L2). *Gating is owned by the economy data*, not tech code: mine's
+  `upgradeTechRequired`, extractor's & refinery's `techRequired` name the tech ids —
+  no tech id is hardcoded in economy logic. Slag Wash is a `mineOutputBonus` modifier
+  the economy reads. L3 deferred for beta.
+- **Prospecting scaffolded only.** Its reveal effect lives in fog/mapgen (Patrick's
+  module) and fog is off; logged to `docs/overlap.md` for him to wire later.
+- **Branch 1 renamed Economy → Refinement** to avoid confusion with the economy module.
 
 ---
 

@@ -2,6 +2,7 @@ import type {
   GameState, PlayerId, DataRegistry, Unit, Coord,
   CityState, CityId, BuildingState, BuildingKind, BuildingDef, ResourceKind,
 } from './types.js';
+import { getModifier } from './tech.js';
 
 // ════════════════════════════════════════════════════════════════════════
 //  Economy: cities, supply/level, resource-extraction buildings (REBs).
@@ -98,7 +99,16 @@ export function buildingOutput(state: GameState, building: BuildingState, regist
   const def = registry.economy.buildings[building.kind];
   if (!def) return { resource: 'ore', amount: 0 };
   if (def.outputByLevel) {
-    return { resource: def.output, amount: atLevel(def.outputByLevel, building.level) };
+    let amount = atLevel(def.outputByLevel, building.level);
+    // Slag Wash (Refinement tech) boosts all of the owner's mine output.
+    if (building.kind === 'mine') {
+      const owner = cityById(state, building.cityId)?.owner;
+      if (owner !== undefined && owner !== null) {
+        const bonus = getModifier(state.players[owner], registry, 'mineOutputBonus');
+        if (bonus) amount = Math.round(amount * (1 + bonus));
+      }
+    }
+    return { resource: def.output, amount };
   }
   if (def.outputPerAdjacentByLevel && def.adjacentTo) {
     const per = atLevel(def.outputPerAdjacentByLevel, building.level);

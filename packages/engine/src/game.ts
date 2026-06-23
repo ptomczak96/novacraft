@@ -14,6 +14,7 @@ import {
   territoryCityAt, cityAt, cityHasCapacity, getUnitPlasmaCost,
   canBuild, canUpgradeBuilding, upgradeCostFor, buildingCost, canFoundCity,
 } from './economy.js';
+import { getModifier, isTechAvailable, techCostForPlayer } from './tech.js';
 
 // ── Deep clone helper (JSON round-trip, since state is JSON-serializable) ──
 function clone<T>(obj: T): T {
@@ -197,12 +198,10 @@ export function getLegalActions(state: GameState, registry: DataRegistry, player
     }
   }
 
-  // Research actions
+  // Research actions — branch-unlock availability + city-scaled ore cost
   for (const [techId, tech] of Object.entries(registry.techs)) {
-    if (player.researchedTechs.includes(techId)) continue;
-    if (tech.cost > player.ore) continue;
-    const prereqsMet = tech.prerequisites.every(p => player.researchedTechs.includes(p));
-    if (!prereqsMet) continue;
+    if (!isTechAvailable(state, playerId, tech, registry)) continue;
+    if (techCostForPlayer(state, playerId, tech, registry) > player.ore) continue;
     actions.push({ type: 'research', techId });
   }
 
@@ -340,8 +339,9 @@ function applyResearch(state: GameState, action: ResearchAction, registry: DataR
   const player = state.players[state.currentPlayer];
   const tech = registry.techs[action.techId];
   if (!tech) return state;
+  if (!isTechAvailable(state, state.currentPlayer, tech, registry)) return state;
 
-  player.ore -= tech.cost;
+  player.ore -= techCostForPlayer(state, state.currentPlayer, tech, registry);
   player.researchedTechs.push(action.techId);
 
   return state;
@@ -440,21 +440,7 @@ function applyEndTurn(state: GameState, registry: DataRegistry): GameState {
   return checkWinConditions(state, registry);
 }
 
-// ── Tech modifiers ──
-function getModifier(player: PlayerState, registry: DataRegistry, modifierName: string): number {
-  let total = 0;
-  for (const techId of player.researchedTechs) {
-    const tech = registry.techs[techId];
-    if (!tech) continue;
-    for (const effect of tech.effects) {
-      if (effect.type === 'globalModifier' && effect.params['modifier'] === modifierName) {
-        total += (effect.params['value'] as number) || 0;
-      }
-    }
-  }
-  return total;
-}
-
+// ── Tech modifiers (getModifier lives in tech.ts) ──
 function getMovementBonus(player: PlayerState, registry: DataRegistry): number {
   return getModifier(player, registry, 'allMovementBonus');
 }

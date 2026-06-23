@@ -113,6 +113,7 @@ describe('REB1 — mines (output + supply)', () => {
     const a = makeOreTile(state, cap.position, 1, 0);
 
     state = applyAction(state, { type: 'build', kind: 'mine', position: a }, registry);
+    state = applyAction(state, { type: 'research', techId: 'drilling' }, registry); // Drilling unlocks mine L2
     const before = calculateOreIncome(state, 0, registry); // L1 city (20 base) + 10 mine = 30
     state = applyAction(state, { type: 'upgradeBuilding', position: a }, registry);
     expect(cityAt(state, cap.position)!.supply).toBe(3); // L2 mine = 3 supply
@@ -134,6 +135,9 @@ describe('REB2 — refineries (output + supply per adjacent same-city mine)', ()
     const proc = makeLandTile(state, cap.position, 0, 1); // adjacent to both mines
     state = applyAction(state, { type: 'build', kind: 'mine', position: m1 }, registry);
     state = applyAction(state, { type: 'build', kind: 'mine', position: m2 }, registry);
+    // Refinery is gated behind the Refineries tech (L2 → needs an L1 first).
+    state = applyAction(state, { type: 'research', techId: 'prospecting' }, registry);
+    state = applyAction(state, { type: 'research', techId: 'refineries' }, registry);
 
     const oreBefore = calculateOreIncome(state, 0, registry);
     const supplyBefore = cityAt(state, cap.position)!.supply;

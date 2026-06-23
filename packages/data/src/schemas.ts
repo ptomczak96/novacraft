@@ -54,9 +54,16 @@ export const TechEffectSchema = z.object({
 export const TechDefSchema = z.object({
   id: z.string(),
   name: z.string(),
-  cost: z.number().min(0),
-  prerequisites: z.array(z.string()),
+  branch: z.string(),
+  level: z.number().min(1),
   effects: z.array(TechEffectSchema),
+  prerequisites: z.array(z.string()).optional(),
+});
+
+export const TechConfigSchema = z.object({
+  maxLevel: z.number().min(1),
+  costBaseByLevel: z.array(z.number().min(0)),
+  costPerCityByLevel: z.array(z.number().min(0)),
 });
 
 export const CombatConfigSchema = z.object({

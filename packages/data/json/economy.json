@@ -36,7 +36,7 @@
       "outputByLevel": [10, 20, 30],
       "supplyByLevel": [1, 3, 6],
       "techRequired": null,
-      "upgradeTechRequired": [null, null]
+      "upgradeTechRequired": ["drilling", null]
     },
     "extractor": {
       "on": "plasma",
@@ -46,7 +46,7 @@
       "costByLevel": [20, 40, 60],
       "outputByLevel": [10, 20, 30],
       "supplyByLevel": [1, 3, 6],
-      "techRequired": null,
+      "techRequired": "plasma_tap",
       "upgradeTechRequired": [null, null]
     },
     "refinery": {
@@ -58,7 +58,7 @@
       "costByLevel": [50, 120, 200],
       "outputPerAdjacentByLevel": [10, 20, 30],
       "supplyPerAdjacentByLevel": [1, 3, 5],
-      "techRequired": null,
+      "techRequired": "refineries",
       "upgradeTechRequired": [null, null]
     },
     "purifier": {

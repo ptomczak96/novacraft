@@ -111,11 +111,22 @@ export function getLegalActionsFromVisible(state: VisibleState, registry: DataRe
     }
   }
 
-  // Research
+  // Research — branch-unlock availability + city-scaled ore cost
+  const cityCount = state.cities.filter(c => c.owner === playerId).length;
+  const tcfg = registry.techConfig;
   for (const [techId, tech] of Object.entries(registry.techs)) {
     if (player.researchedTechs.includes(techId)) continue;
-    if (tech.cost > player.ore) continue;
-    if (!tech.prerequisites.every(p => player.researchedTechs.includes(p))) continue;
+    if (tech.level > tcfg.maxLevel) continue;
+    if (tech.level > 1) {
+      const hasLower = player.researchedTechs.some(id => {
+        const t = registry.techs[id];
+        return !!t && t.branch === tech.branch && t.level === tech.level - 1;
+      });
+      if (!hasLower) continue;
+    }
+    if (tech.prerequisites && !tech.prerequisites.every(p => player.researchedTechs.includes(p))) continue;
+    const cost = (tcfg.costBaseByLevel[tech.level - 1] ?? 0) + (tcfg.costPerCityByLevel[tech.level - 1] ?? 0) * Math.max(0, cityCount - 1);
+    if (cost > player.ore) continue;
     actions.push({ type: 'research', techId });
   }
 

@@ -1,0 +1,5 @@
+{
+  "maxLevel": 3,
+  "costBaseByLevel": [50, 60, 70],
+  "costPerCityByLevel": [10, 20, 30]
+}

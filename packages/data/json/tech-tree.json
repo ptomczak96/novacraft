@@ -1,1 +1,41 @@
-[]
+[
+  {
+    "id": "drilling",
+    "name": "Drilling",
+    "branch": "refinement",
+    "level": 1,
+    "effects": []
+  },
+  {
+    "id": "prospecting",
+    "name": "Prospecting",
+    "branch": "refinement",
+    "level": 1,
+    "effects": [
+      { "type": "globalModifier", "params": { "modifier": "revealResourcesRange", "value": 4 } }
+    ]
+  },
+  {
+    "id": "slag_wash",
+    "name": "Slag Wash",
+    "branch": "refinement",
+    "level": 2,
+    "effects": [
+      { "type": "globalModifier", "params": { "modifier": "mineOutputBonus", "value": 0.1 } }
+    ]
+  },
+  {
+    "id": "plasma_tap",
+    "name": "Plasma Tap",
+    "branch": "refinement",
+    "level": 2,
+    "effects": []
+  },
+  {
+    "id": "refineries",
+    "name": "Refineries",
+    "branch": "refinement",
+    "level": 2,
+    "effects": []
+  }
+]

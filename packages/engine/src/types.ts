@@ -58,14 +58,23 @@ export interface FactionDef {
 export interface TechDef {
   id: string;
   name: string;
-  cost: number;
-  prerequisites: string[];
+  branch: string; // tech branch, e.g. 'refinement'
+  level: number; // 1..maxLevel
   effects: TechEffect[];
+  prerequisites?: string[]; // optional explicit prereqs, in addition to the branch-unlock rule
 }
 
 export interface TechEffect {
   type: 'unlockUnit' | 'globalModifier';
   params: Record<string, number | string>;
+}
+
+// Tech research cost scales with the number of cities the researcher owns:
+//   cost(level, cities) = costBaseByLevel[level-1] + costPerCityByLevel[level-1] * (cities - 1)
+export interface TechConfig {
+  maxLevel: number;
+  costBaseByLevel: number[]; // ore cost at 1 city, indexed by level-1
+  costPerCityByLevel: number[]; // extra ore per additional city, indexed by level-1
 }
 
 // ── Game Config ──
@@ -330,5 +339,6 @@ export interface DataRegistry {
   unitTypes: Record<string, UnitType>;
   factions: Record<string, FactionDef>;
   techs: Record<string, TechDef>;
+  techConfig: TechConfig;
   economy: EconomyData;
 }
