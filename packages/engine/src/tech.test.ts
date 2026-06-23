@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   createGame, applyAction, getLegalActions,
-  techCost, isTechAvailable, getModifier, calculateOreIncome,
+  techCost, isTechAvailable, isUnitUnlocked, getModifier, calculateOreIncome,
   canBuild, canUpgradeBuilding, cityAt,
 } from './index.js';
 import { buildRegistry, defaultConfig } from '@tactica/data';
@@ -120,5 +120,40 @@ describe('Tech gates on buildings', () => {
     expect(canUpgradeBuilding(state, r, 0, m)).toBe(false); // no Drilling
     state = applyAction(state, { type: 'research', techId: 'drilling' }, r);
     expect(canUpgradeBuilding(state, r, 0, m)).toBe(true);
+  });
+});
+
+describe('Armory branch', () => {
+  it('L2 Armory techs unlock after any L1 Armory tech', () => {
+    const r = getRegistry();
+    let state = createGame(getConfig(), r, ['ironclad', 'sylvan'], 7);
+    state.players[0].ore = 300;
+    expect(isTechAvailable(state, 0, r.techs['small_arms'], r)).toBe(true);
+    expect(isTechAvailable(state, 0, r.techs['forge'], r)).toBe(false);
+    state = applyAction(state, { type: 'research', techId: 'small_arms' }, r);
+    expect(isTechAvailable(state, 0, r.techs['forge'], r)).toBe(true);
+    expect(isTechAvailable(state, 0, r.techs['mech_bay'], r)).toBe(true);
+  });
+
+  it('locked L3 techs are never researchable', () => {
+    const r = getRegistry();
+    let state = createGame(getConfig(), r, ['ironclad', 'sylvan'], 7);
+    state.players[0].ore = 1000;
+    state = applyAction(state, { type: 'research', techId: 'small_arms' }, r);
+    state = applyAction(state, { type: 'research', techId: 'forge' }, r); // L2 done → L3 prereq met
+    expect(isTechAvailable(state, 0, r.techs['reactive_plating'], r)).toBe(false); // but locked
+    const research = getLegalActions(state, r, 0).filter(a => a.type === 'research').map(a => (a as { techId: string }).techId);
+    expect(research).not.toContain('reactive_plating');
+    expect(research).not.toContain('replicator');
+  });
+
+  it('tech-locks units behind unlockUnit techs', () => {
+    const r = getRegistry();
+    let state = createGame(getConfig(), r, ['ironclad', 'sylvan'], 7);
+    expect(isUnitUnlocked(state, 0, 'warrior', r)).toBe(true); // not gated by any tech
+    expect(isUnitUnlocked(state, 0, 'marksman', r)).toBe(false); // gated by Small Arms
+    state.players[0].ore = 100;
+    state = applyAction(state, { type: 'research', techId: 'small_arms' }, r);
+    expect(isUnitUnlocked(state, 0, 'marksman', r)).toBe(true);
   });
 });

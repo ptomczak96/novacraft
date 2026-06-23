@@ -104,6 +104,11 @@ export function getLegalActionsFromVisible(state: VisibleState, registry: DataRe
       for (const utId of faction.unitTypes) {
         const ut = registry.unitTypes[utId];
         if (!ut) continue;
+        // tech-locked units: skip unless a tech that unlocks this unit is researched
+        const unlockers = Object.entries(registry.techs).filter(
+          ([, t]) => t.effects.some(e => e.type === 'unlockUnit' && e.params['unit'] === utId),
+        );
+        if (unlockers.length > 0 && !unlockers.some(([tid]) => player.researchedTechs.includes(tid))) continue;
         if (ut.cost > player.ore) continue;
         if ((econ.unitPlasmaCost[utId] ?? 0) > player.plasma) continue;
         actions.push({ type: 'recruit', unitTypeId: utId, cityPosition: { x, y } });

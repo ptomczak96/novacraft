@@ -63,6 +63,14 @@ effects; the `*Bonus` modifiers are read via `getModifier(...)`.
 
 **Status:** OPEN — awaiting units + combat/status/fog work on the Combat & units side.
 
+### 2026-06-23 — tech → UI (tech-tree view)
+**Locked / preview techs.** Some techs carry `"locked": true` (currently the three
+Armory L3s: Reactive Plating, Tracer Rounds, Replicator). They are NOT researchable
+yet (the engine blocks them). When the tech-tree UI is built, it should still **show**
+these techs but render them **greyed out / disabled**, clearly labelled as a locked
+preview ("for show, not yet available"). Read the flag from `tech.locked`.
+**Status:** OPEN — awaiting the tech-tree UI.
+
 ## Done
 
 _(none yet)_

@@ -58,6 +58,7 @@ export const TechDefSchema = z.object({
   level: z.number().min(1),
   effects: z.array(TechEffectSchema),
   prerequisites: z.array(z.string()).optional(),
+  locked: z.boolean().optional(),
 });
 
 export const TechConfigSchema = z.object({

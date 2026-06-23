@@ -50,6 +50,7 @@ export function techCostForPlayer(state: GameState, playerId: PlayerId, tech: Te
  */
 export function isTechAvailable(state: GameState, playerId: PlayerId, tech: TechDef, registry: DataRegistry): boolean {
   const player = state.players[playerId];
+  if (tech.locked) return false; // preview-only techs can't be researched yet
   if (player.researchedTechs.includes(tech.id)) return false;
   if (tech.level > registry.techConfig.maxLevel) return false;
 
@@ -66,4 +67,22 @@ export function isTechAvailable(state: GameState, playerId: PlayerId, tech: Tech
   }
 
   return true;
+}
+
+/**
+ * Whether a unit type is recruitable for a player. A unit is "tech-locked" if
+ * any tech has an `unlockUnit` effect naming it; such a unit is available only
+ * once the player has researched at least one tech that unlocks it. Units named
+ * by no tech (e.g. Warrior, Scout) are always available.
+ */
+export function isUnitUnlocked(state: GameState, playerId: PlayerId, unitTypeId: string, registry: DataRegistry): boolean {
+  const unlockers: string[] = [];
+  for (const [techId, tech] of Object.entries(registry.techs)) {
+    for (const eff of tech.effects) {
+      if (eff.type === 'unlockUnit' && eff.params['unit'] === unitTypeId) unlockers.push(techId);
+    }
+  }
+  if (unlockers.length === 0) return true;
+  const researched = state.players[playerId].researchedTechs;
+  return unlockers.some(t => researched.includes(t));
 }

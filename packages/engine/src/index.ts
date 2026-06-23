@@ -4,7 +4,7 @@ export { resolveCombat, previewCombat, calculateDamage } from './combat.js';
 export type { CombatResult, CombatBreakdown } from './combat.js';
 export { getReachableTiles, distance, inRange } from './pathfinding.js';
 export { computeVisibility } from './fog.js';
-export { getModifier, ownedCityCount, techCost, techCostForPlayer, isTechAvailable } from './tech.js';
+export { getModifier, ownedCityCount, techCost, techCostForPlayer, isTechAvailable, isUnitUnlocked } from './tech.js';
 export {
   getUnitUpkeep, calculateUpkeep, settleEconomy,
   calculateOreIncome, calculatePlasmaIncome,

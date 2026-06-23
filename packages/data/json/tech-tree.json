@@ -37,5 +37,86 @@
     "branch": "refinement",
     "level": 2,
     "effects": []
+  },
+
+  {
+    "id": "small_arms",
+    "name": "Small Arms",
+    "branch": "armory",
+    "level": 1,
+    "effects": [
+      { "type": "unlockUnit", "params": { "unit": "marksman" } }
+    ]
+  },
+  {
+    "id": "triage",
+    "name": "Triage",
+    "branch": "armory",
+    "level": 1,
+    "effects": [
+      { "type": "unlockUnit", "params": { "unit": "medic" } }
+    ]
+  },
+  {
+    "id": "combined_arms",
+    "name": "Combined Arms",
+    "branch": "armory",
+    "level": 1,
+    "effects": [
+      { "type": "globalModifier", "params": { "modifier": "focusFireBonus", "value": 0.1 } }
+    ]
+  },
+  {
+    "id": "forge",
+    "name": "Forge",
+    "branch": "armory",
+    "level": 2,
+    "effects": [
+      { "type": "unlockUnit", "params": { "unit": "tank" } }
+    ]
+  },
+  {
+    "id": "mech_bay",
+    "name": "Mech Bay",
+    "branch": "armory",
+    "level": 2,
+    "effects": [
+      { "type": "unlockUnit", "params": { "unit": "stalker" } }
+    ]
+  },
+  {
+    "id": "advanced_projectiles",
+    "name": "Advanced Projectiles",
+    "branch": "armory",
+    "level": 2,
+    "effects": [
+      { "type": "globalModifier", "params": { "modifier": "assaultRangeBonus", "value": 1 } }
+    ]
+  },
+  {
+    "id": "reactive_plating",
+    "name": "Reactive Plating",
+    "branch": "armory",
+    "level": 3,
+    "locked": true,
+    "effects": [
+      { "type": "globalModifier", "params": { "modifier": "heavyDefenceBonus", "value": 0.1 } }
+    ]
+  },
+  {
+    "id": "tracer_rounds",
+    "name": "Tracer Rounds",
+    "branch": "armory",
+    "level": 3,
+    "locked": true,
+    "effects": []
+  },
+  {
+    "id": "replicator",
+    "name": "Replicator",
+    "branch": "armory",
+    "level": 3,
+    "locked": true,
+    "effects": []
   }
 ]

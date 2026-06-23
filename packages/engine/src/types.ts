@@ -62,6 +62,7 @@ export interface TechDef {
   level: number; // 1..maxLevel
   effects: TechEffect[];
   prerequisites?: string[]; // optional explicit prereqs, in addition to the branch-unlock rule
+  locked?: boolean; // preview only — shown in UI (greyed) but not yet researchable
 }
 
 export interface TechEffect {

@@ -14,7 +14,7 @@ import {
   territoryCityAt, cityAt, cityHasCapacity, getUnitPlasmaCost,
   canBuild, canUpgradeBuilding, upgradeCostFor, buildingCost, canFoundCity,
 } from './economy.js';
-import { getModifier, isTechAvailable, techCostForPlayer } from './tech.js';
+import { getModifier, isTechAvailable, techCostForPlayer, isUnitUnlocked } from './tech.js';
 
 // ── Deep clone helper (JSON round-trip, since state is JSON-serializable) ──
 function clone<T>(obj: T): T {
@@ -173,6 +173,7 @@ export function getLegalActions(state: GameState, registry: DataRegistry, player
       for (const unitTypeId of faction.unitTypes) {
         const ut = registry.unitTypes[unitTypeId];
         if (!ut) continue;
+        if (!isUnitUnlocked(state, playerId, unitTypeId, registry)) continue;
         if (ut.cost > player.ore) continue;
         if (getUnitPlasmaCost(unitTypeId, registry) > player.plasma) continue;
         actions.push({ type: 'recruit', unitTypeId, cityPosition: { x, y } });

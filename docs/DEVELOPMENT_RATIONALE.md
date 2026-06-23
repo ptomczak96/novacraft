@@ -152,6 +152,27 @@ describe the *current* state); this explains *how we got there*.
   module) and fog is off; logged to `docs/overlap.md` for him to wire later.
 - **Branch 1 renamed Economy → Refinement** to avoid confusion with the economy module.
 
+### 2026-06-23 — Artisan Ornaments — Armory branch (tech scaffolding only)
+
+- **Armory is mostly Patrick's module.** Of 9 techs, 8 unlock units or combat
+  mechanics (Combat & units); only Replicator is economy. *Decision:* the economy/
+  tech branch builds only the **tech scaffolding** (entries, unlock gates, generic
+  combat modifiers as data); Patrick implements the combat/unit/status/fog guts from
+  `docs/overlap.md`. Keeps tech non-cross-cutting.
+- **Unit-unlock mechanism wired.** A unit is recruitable unless a tech `unlockUnit`
+  effect names it and that tech is unresearched (Warrior/Scout stay always-available).
+  Small Arms→Marksman, Triage→Medic, Forge→Tank, Mech Bay→Stalker. The units don't
+  exist in `units.json` yet (Patrick), so they're simply unbuildable until added —
+  forward-compatible.
+- **Combat bonuses as generic modifiers** (`focusFireBonus`, `assaultRangeBonus`,
+  `heavyDefenceBonus`) — data only; combat reads them via getModifier when built.
+- **Locked/preview techs.** Added `TechDef.locked`; the engine never offers locked
+  techs for research. The three Armory L3s (Reactive Plating, Tracer Rounds,
+  Replicator) are locked previews — *why:* the user wants the full tree visible but
+  these gated until their (heavy) implementations exist. UI greying logged to overlap.
+- **Replicator deferred** to a dedicated task (first timed-construction + first
+  out-of-city unit production) — backlog, not built.
+
 ---
 
 *Deferred ideas (the "we'll tweak this later" items) live in the memory backlog,
