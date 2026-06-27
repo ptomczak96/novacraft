@@ -261,10 +261,9 @@ function applyMove(state: GameState, action: MoveAction, _registry: DataRegistry
     }
   }
 
-  // Capture resource tiles
-  if (tile.isResourceTile && tile.owner !== unit.owner) {
-    tile.owner = unit.owner;
-  }
+  // (No lone-resource capture: in the current economy a resource is owned only
+  // by being inside a city's claimed territory — standing on one does nothing,
+  // and capturing it just drew a stray 1-tile territory border.)
 
   return checkWinConditions(state, _registry);
 }
