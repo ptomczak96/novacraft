@@ -128,7 +128,7 @@ export function generateMap(
   width: number,
   height: number,
   playerCount: number,
-  _registry: DataRegistry,
+  registry: DataRegistry,
   prng: PRNGState,
   options?: MapGenOptions,
 ): [GameMap, Coord[], PRNGState] {
@@ -164,23 +164,8 @@ export function generateMap(
   // Resources are placed per-base (inside each starting perimeter) further down,
   // not scattered across the map.
 
-  // ── Ruins (foundable new-city sites) ──
-  // Scatter on plain-ish land, away from edges; without these the economy's
-  // found-city action has nowhere to go.
-  let ruinsPlaced = 0;
-  let attempts = 0;
-  while (ruinsPlaced < o.ruinCount && attempts < o.ruinCount * 40) {
-    attempts++;
-    const [rx, p1] = nextRandom(p); p = p1;
-    const [ry, p2] = nextRandom(p); p = p2;
-    const x = 1 + Math.floor(rx * (width - 2));
-    const y = 1 + Math.floor(ry * (height - 2));
-    const tile = tiles[y][x];
-    if (tile.isResourceTile || tile.isRuin) continue;
-    if (tile.terrain !== 'plains' && tile.terrain !== 'mountain') continue;
-    tile.isRuin = true;
-    ruinsPlaced++;
-  }
+  // (Ruins are placed after the cities below, so they can be spaced relative
+  // to the capitals' territories.)
 
   // ── Starting cities ──
   const cityPositions: Coord[] = [];
@@ -233,6 +218,86 @@ export function generateMap(
       const t = tiles[perimeter[k].y][perimeter[k].x];
       t.isResourceTile = true;
       t.resourceKind = kinds[k];
+    }
+  }
+
+  // ── Ruins (foundable new-city sites) + their resources ──
+  // Spacing: every city/ruin owns a 3x3 territory and territories NEVER overlap,
+  // so the minimum centre-to-centre distance is 3 (territories just touching).
+  // New ruins target a centre distance of 3/4/5 from the nearest existing centre,
+  // weighted 25/50/25, and fill the map at that spacing. Each ruin's territory
+  // then gets ore (0-4 tiles, weights 10/20/50/25/5) and plasma vents (0/1/2,
+  // weights 35/50/15). Fully deterministic via the map PRNG.
+  {
+    const cheb = (a: Coord, b: Coord) => Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
+    const centres: Coord[] = cityPositions.map(c => ({ ...c }));
+    const minDistTo = (pos: Coord) => centres.reduce((m, c) => Math.min(m, cheb(pos, c)), Infinity);
+    const passable = (x: number, y: number): boolean => {
+      const terr = registry.terrainTypes[tiles[y][x].terrain];
+      return !!terr && terr.passable && !tiles[y][x].isCity;
+    };
+    const weighted = (values: number[], weights: number[]): number => {
+      const total = weights.reduce((a, b) => a + b, 0);
+      const [r, np] = nextRandom(p); p = np;
+      let t = r * total;
+      for (let i = 0; i < values.length; i++) { t -= weights[i]; if (t < 0) return values[i]; }
+      return values[values.length - 1];
+    };
+    const pickFrom = <T>(arr: T[]): T => {
+      const [r, np] = nextRandom(p); p = np;
+      return arr[Math.min(arr.length - 1, Math.floor(r * arr.length))];
+    };
+
+    const ruins: Coord[] = [];
+    let safety = width * height * 4;
+    while (safety-- > 0) {
+      const valid: Coord[] = [];
+      for (let y = 1; y <= height - 2; y++) {
+        for (let x = 1; x <= width - 2; x++) {
+          const t = tiles[y][x];
+          if (t.isResourceTile || t.isRuin || !passable(x, y)) continue;
+          if (minDistTo({ x, y }) < 3) continue; // would overlap a territory
+          valid.push({ x, y });
+        }
+      }
+      if (valid.length === 0) break; // map full at this spacing
+      const target = weighted([3, 4, 5], [25, 50, 25]);
+      const atTarget = valid.filter(c => minDistTo(c) === target);
+      const chosen = pickFrom(atTarget.length > 0 ? atTarget : valid);
+      tiles[chosen.y][chosen.x].isRuin = true;
+      centres.push(chosen);
+      ruins.push(chosen);
+    }
+
+    // Resources in each ruin's 3x3 territory (its surrounding 8 tiles).
+    for (const ruin of ruins) {
+      const surround: Coord[] = [];
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          if (dx === 0 && dy === 0) continue;
+          const nx = ruin.x + dx, ny = ruin.y + dy;
+          if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
+          const t = tiles[ny][nx];
+          if (t.isResourceTile || t.isRuin || t.isCity || !passable(nx, ny)) continue;
+          surround.push({ x: nx, y: ny });
+        }
+      }
+      for (let k = surround.length - 1; k > 0; k--) {
+        const [r, np] = nextRandom(p); p = np;
+        const j = Math.floor(r * (k + 1));
+        [surround[k], surround[j]] = [surround[j], surround[k]];
+      }
+      const oreCount = Math.min(weighted([0, 1, 2, 3, 4], [10, 20, 50, 25, 5]), surround.length);
+      const plasmaCount = Math.min(weighted([0, 1, 2], [35, 50, 15]), surround.length - oreCount);
+      let idx = 0;
+      for (let k = 0; k < oreCount; k++, idx++) {
+        const t = tiles[surround[idx].y][surround[idx].x];
+        t.isResourceTile = true; t.resourceKind = 'ore';
+      }
+      for (let k = 0; k < plasmaCount; k++, idx++) {
+        const t = tiles[surround[idx].y][surround[idx].x];
+        t.isResourceTile = true; t.resourceKind = 'plasma';
+      }
     }
   }
 

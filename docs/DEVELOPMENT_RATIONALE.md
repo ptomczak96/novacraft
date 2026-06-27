@@ -178,6 +178,26 @@ describe the *current* state); this explains *how we got there*.
   Armory techs — a bot artifact, not an engine bug (36 tests pass, determinism holds).
   Resolves once Patrick wires the units/effects.
 
+### 2026-06-27 — Artisan Ornaments — map distributions (ruins, ore, plasma)
+
+The map's ruin/resource generation, now locked in (mapgen.ts):
+
+- **Territory spacing.** Every city/ruin owns a **3×3 territory** and territories
+  **never overlap** — the minimum centre-to-centre distance is **3** (the two 3×3
+  squares just touching). New ruins target a centre distance of **3 / 4 / 5** from
+  the nearest existing centre, weighted **25 / 50 / 25**, and fill the map at that
+  spacing (emergent count). *Why:* the whole pop/supply economy assumes one tile
+  belongs to exactly one city, so overlapping territories are disallowed.
+- **Per-capital resources** (unchanged): **2 ore + 1 plasma** vent in the capital's
+  territory.
+- **Ruin ore:** number of ore tiles in a ruin's territory = **0/1/2/3/4** with
+  weights **10/20/50/25/5**. (Those sum to 110, so they're applied as *relative
+  weights*, normalised — preserving the intended shape: mostly 2 ore.)
+- **Ruin plasma:** plasma vents in a ruin's territory = **0/1/2** with weights
+  **35/50/15**.
+
+All generation is deterministic via the map PRNG (same seed → identical map).
+
 ---
 
 *Deferred ideas (the "we'll tweak this later" items) live in the memory backlog,
