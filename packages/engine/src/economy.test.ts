@@ -334,3 +334,26 @@ describe('City capture', () => {
     }
   });
 });
+
+describe('City capture — full move→endTurn→capture flow', () => {
+  it('capture is offered the turn AFTER moving onto an undefended enemy city', () => {
+    const r = getRegistry();
+    let state = createGame(getConfig(), r, ['ironclad', 'sylvan'], 7);
+    const enemyCap = state.cities.find(c => c.owner === 1)!;
+    // Undefend it (remove the enemy unit on the tile), put a player-0 unit adjacent.
+    state.units = state.units.filter(u => !(u.position.x === enemyCap.position.x && u.position.y === enemyCap.position.y));
+    // Keep player 1 alive elsewhere so undefending the city doesn't end the game.
+    state.units.push({ id: 801, typeId: 'warrior', owner: 1, position: { x: enemyCap.position.x, y: enemyCap.position.y - 2 }, hp: 15, hasMoved: false, hasAttacked: false, abilityCooldowns: {} });
+    state.units.push({ id: 800, typeId: 'warrior', owner: 0, position: { x: enemyCap.position.x - 1, y: enemyCap.position.y }, hp: 15, hasMoved: false, hasAttacked: false, abilityCooldowns: {} });
+
+    // Move onto the city this turn → capture NOT yet available.
+    state = applyAction(state, { type: 'move', unitId: 800, to: { ...enemyCap.position } }, r);
+    expect(getLegalActions(state, r, 0).some(a => a.type === 'captureCity' && a.unitId === 800)).toBe(false);
+
+    // Cycle: player 0 ends, player 1 ends → back to player 0.
+    state = applyAction(state, { type: 'endTurn' }, r);
+    state = applyAction(state, { type: 'endTurn' }, r);
+    expect(state.currentPlayer).toBe(0);
+    expect(getLegalActions(state, r, 0).some(a => a.type === 'captureCity' && a.unitId === 800)).toBe(true);
+  });
+});
