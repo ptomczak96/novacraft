@@ -222,6 +222,16 @@ All generation is deterministic via the map PRNG (same seed → identical map).
   owner); the previous owner's units homed there go stateless.
   *Tech-on-capture handling is deferred — see the memory backlog.*
 
+### 2026-06-27 — Artisan Ornaments — per-city recruiting & scroll-zoom
+
+- **Per-city recruiting.** Recruiting is now city-specific: click an owned city to
+  select it, then a "Recruit" button + menu appear, and the unit you build belongs
+  to (and counts against the pop of) *that* city. Replaces the single global recruit
+  button that didn't let you choose the city.
+- **Scroll-to-zoom.** Mouse wheel zooms the board (CSS transform; clicking stays
+  accurate via the on-screen bounding box). Out-capped so a small map can't shrink
+  away; in-capped at ~a handful of tiles. (Pan-while-zoomed is a follow-up.)
+
 ---
 
 *Deferred ideas (the "we'll tweak this later" items) live in the memory backlog,

@@ -43,6 +43,7 @@ interface GameStore {
   visibleState: VisibleState | null;
   stateHistory: GameState[]; // for undo
   selectedUnitId: number | null;
+  selectedCity: Coord | null;
   hoveredTile: Coord | null;
   legalActions: Action[];
 
@@ -72,6 +73,7 @@ interface GameStore {
   // Actions
   startGame: (factions: [string, string], seed: number) => void;
   selectUnit: (unitId: number | null) => void;
+  setSelectedCity: (c: Coord | null) => void;
   setHoveredTile: (c: Coord | null) => void;
   executeAction: (action: Action) => void;
   undo: () => void;
@@ -114,6 +116,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   visibleState: null,
   stateHistory: [],
   selectedUnitId: null,
+  selectedCity: null,
   hoveredTile: null,
   legalActions: [],
 
@@ -155,7 +158,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
     });
   },
 
-  selectUnit: (unitId) => set({ selectedUnitId: unitId }),
+  selectUnit: (unitId) => set({ selectedUnitId: unitId, selectedCity: null }),
+  setSelectedCity: (c) => set({ selectedCity: c, selectedUnitId: null }),
   setHoveredTile: (c) => set({ hoveredTile: c }),
 
   executeAction: (action) => {

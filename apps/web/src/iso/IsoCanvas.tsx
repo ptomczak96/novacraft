@@ -46,6 +46,10 @@ export function IsoCanvas({ mode, onPaint }: IsoCanvasProps) {
   const rafRef = useRef<number | undefined>(undefined);
   const [animTick, setAnimTick] = useState(0);
 
+  // Scroll-to-zoom factor (applied as a CSS transform; clicking stays accurate
+  // because hit-testing uses the canvas's on-screen bounding box).
+  const [zoom, setZoom] = useState(1);
+
   // Tile the player clicked an ore/plasma resource on → show its "Build …?" box.
   const [buildPromptTile, setBuildPromptTile] = useState<Coord | null>(null);
   // Action boxes drawn this frame (found-city / build), kept for click hit-testing.
@@ -54,7 +58,7 @@ export function IsoCanvas({ mode, onPaint }: IsoCanvasProps) {
   const {
     gameState, visibleState, registry, config,
     selectedUnitId, hoveredTile, legalActions,
-    selectUnit, setHoveredTile, executeAction,
+    selectUnit, setSelectedCity, setHoveredTile, executeAction,
     mapEditorState,
   } = useGameStore();
 
@@ -287,6 +291,21 @@ export function IsoCanvas({ mode, onPaint }: IsoCanvasProps) {
   // Re-render whenever state changes
   useEffect(() => { render(); }, [render]);
 
+  // ── Scroll-to-zoom ──
+  // Out-cap so a small map can't shrink away; in-cap ~ showing a handful of tiles.
+  const minZoom = 0.5;
+  const maxZoom = Math.max(2, (map?.width ?? 12) / 5);
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      setZoom(z => Math.min(maxZoom, Math.max(minZoom, z * (e.deltaY < 0 ? 1.12 : 0.89))));
+    };
+    canvas.addEventListener('wheel', onWheel, { passive: false });
+    return () => canvas.removeEventListener('wheel', onWheel);
+  }, [minZoom, maxZoom]);
+
   // ── Mouse → tile coordinate translation ──
   const getTileFromEvent = useCallback((e: React.MouseEvent<HTMLCanvasElement>): Coord | null => {
     if (!map) return null;
@@ -346,6 +365,14 @@ export function IsoCanvas({ mode, onPaint }: IsoCanvasProps) {
       return;
     }
 
+    // Clicked an owned (empty) city tile → select it for recruiting.
+    const here = map?.tiles[tile.y]?.[tile.x];
+    if (here?.isCity && here.owner === currentPlayer) {
+      setSelectedCity({ x: tile.x, y: tile.y });
+      setBuildPromptTile(null);
+      return;
+    }
+
     // 2. Clicked an ore/plasma tile where a mine/extractor can be built → prompt.
     const buildable = legalActions.some(
       a => a.type === 'build' && (a.kind === 'mine' || a.kind === 'extractor') && a.position.x === tile.x && a.position.y === tile.y,
@@ -356,7 +383,7 @@ export function IsoCanvas({ mode, onPaint }: IsoCanvasProps) {
     setBuildPromptTile(null);
   }, [
     mode, getTileFromEvent, map, unitByPos, selectedUnitId, currentPlayer,
-    moveTargets, attackTargets, legalActions, executeAction, selectUnit, onPaint,
+    moveTargets, attackTargets, legalActions, executeAction, selectUnit, setSelectedCity, onPaint,
   ]);
 
   // ── Hover handler ──
@@ -403,6 +430,8 @@ export function IsoCanvas({ mode, onPaint }: IsoCanvasProps) {
         width,
         height,
         cursor: 'pointer',
+        transform: `scale(${zoom})`,
+        transformOrigin: 'center center',
       }}
       onClick={handleClick}
       onMouseMove={handleMouseMove}
