@@ -16,6 +16,10 @@ import {
   drawGridLabel,
   drawTerritoryBorders,
 } from './drawOverlays.js';
+import {
+  drawBuildingLabel, drawResourceLabel, drawActionBox, drawNameBadge, pointInRect,
+  type ScreenRect,
+} from './drawEconomy.js';
 
 interface IsoCanvasProps {
   mode: 'game' | 'editor';
@@ -42,6 +46,11 @@ export function IsoCanvas({ mode, onPaint }: IsoCanvasProps) {
   const rafRef = useRef<number | undefined>(undefined);
   const [animTick, setAnimTick] = useState(0);
 
+  // Tile the player clicked an ore/plasma resource on → show its "Build …?" box.
+  const [buildPromptTile, setBuildPromptTile] = useState<Coord | null>(null);
+  // Action boxes drawn this frame (found-city / build), kept for click hit-testing.
+  const actionBoxesRef = useRef<{ rect: ScreenRect; action: Action }[]>([]);
+
   const {
     gameState, visibleState, registry, config,
     selectedUnitId, hoveredTile, legalActions,
@@ -54,6 +63,7 @@ export function IsoCanvas({ mode, onPaint }: IsoCanvasProps) {
   const map = mode === 'game' ? visibleState?.map : mapEditorState?.map;
   const units = mode === 'game' ? (visibleState?.units ?? []) : (mapEditorState?.units ?? []);
   const visibility = mode === 'game' ? visibleState?.visibility : null;
+  const buildings = mode === 'game' ? (visibleState?.buildings ?? []) : (mapEditorState?.buildings ?? []);
   const currentPlayer = state?.currentPlayer ?? 0;
 
   // ── Build unit position map ──
@@ -64,6 +74,12 @@ export function IsoCanvas({ mode, onPaint }: IsoCanvasProps) {
     }
     return m;
   }, [units]);
+
+  const buildingByPos = React.useMemo(() => {
+    const m = new Map<string, (typeof buildings)[number]>();
+    for (const b of buildings) m.set(`${b.position.x},${b.position.y}`, b);
+    return m;
+  }, [buildings]);
 
   // ── Detect unit moves → start glide animations ──
   useEffect(() => {
@@ -209,10 +225,57 @@ export function IsoCanvas({ mode, onPaint }: IsoCanvasProps) {
 
     // ── Territory borders: single outer outline per player, drawn last ──
     drawTerritoryBorders(ctx, map, map.height);
+
+    // ── Buildings + plasma-vent labels (drawn on top of tiles) ──
+    for (let y = 0; y < map.height; y++) {
+      for (let x = 0; x < map.width; x++) {
+        if ((visibility?.[y]?.[x] ?? 'visible') === 'hidden') continue;
+        const b = buildingByPos.get(`${x},${y}`);
+        if (b) { drawBuildingLabel(ctx, b, map.height); continue; }
+        const tile = map.tiles[y][x];
+        if (tile.resourceKind === 'plasma') drawResourceLabel(ctx, x, y, map.height, 'plasma');
+      }
+    }
+
+    // ── Action boxes (found-city always; build-mine/extractor on prompt) ──
+    const boxes: { rect: ScreenRect; action: Action }[] = [];
+    if (mode === 'game') {
+      for (const a of legalActions) {
+        if (a.type === 'foundCity') {
+          boxes.push({ rect: drawActionBox(ctx, a.position.x, a.position.y, map.height, 'Found City'), action: a });
+        }
+      }
+      if (buildPromptTile) {
+        const { x, y } = buildPromptTile;
+        const a = legalActions.find(
+          ac => ac.type === 'build' && (ac.kind === 'mine' || ac.kind === 'extractor') && ac.position.x === x && ac.position.y === y,
+        );
+        const tile = map.tiles[y]?.[x];
+        if (a && tile && !buildingByPos.has(`${x},${y}`)) {
+          const label = tile.resourceKind === 'plasma' ? 'Build Extractor?' : 'Build Mine?';
+          boxes.push({ rect: drawActionBox(ctx, x, y, map.height, label), action: a });
+        }
+      }
+    }
+    actionBoxesRef.current = boxes;
+
+    // ── Hover name tooltip (unit / building / resource / ruin) ──
+    if (mode === 'game' && hoveredTile) {
+      const { x, y } = hoveredTile;
+      const u = unitByPos.get(`${x},${y}`);
+      const b = buildingByPos.get(`${x},${y}`);
+      const tile = map.tiles[y]?.[x];
+      const name = u ? (registry.unitTypes[u.typeId]?.name ?? u.typeId)
+        : b ? b.kind
+        : tile?.resourceKind ? tile.resourceKind
+        : tile?.isRuin ? 'ruin'
+        : null;
+      if (name) drawNameBadge(ctx, x, y, map.height, name);
+    }
   }, [
-    map, visibility, registry, config, units, unitByPos,
+    map, visibility, registry, config, units, unitByPos, buildings, buildingByPos,
     selectedUnitId, hoveredTile, legalActions, moveTargets, attackTargets, mode,
-    spriteTick, animTick,
+    buildPromptTile, spriteTick, animTick,
   ]);
 
   // Re-render whenever state changes
@@ -233,15 +296,30 @@ export function IsoCanvas({ mode, onPaint }: IsoCanvasProps) {
 
   // ── Click handler ──
   const handleClick = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
-    const tile = getTileFromEvent(e);
-    if (!tile) return;
-
     if (mode === 'editor') {
-      onPaint?.(tile.x, tile.y);
+      const t = getTileFromEvent(e);
+      if (t) onPaint?.(t.x, t.y);
       return;
     }
 
-    // Game mode click logic (same as old MapView)
+    // 1. Did the click land on an on-canvas action box (Found City / Build …)?
+    const canvas = canvasRef.current;
+    if (canvas && map) {
+      const rect = canvas.getBoundingClientRect();
+      const { width, height } = canvasSize(map.width, map.height);
+      const mx = (e.clientX - rect.left) * (width / rect.width);
+      const my = (e.clientY - rect.top) * (height / rect.height);
+      for (const box of actionBoxesRef.current) {
+        if (pointInRect(mx, my, box.rect)) {
+          executeAction(box.action);
+          setBuildPromptTile(null);
+          return;
+        }
+      }
+    }
+
+    const tile = getTileFromEvent(e);
+    if (!tile) { setBuildPromptTile(null); return; }
     const key = `${tile.x},${tile.y}`;
     const unit = unitByPos.get(key);
 
@@ -249,22 +327,29 @@ export function IsoCanvas({ mode, onPaint }: IsoCanvasProps) {
       const moveAction = legalActions.find(
         a => a.type === 'move' && a.unitId === selectedUnitId && a.to.x === tile.x && a.to.y === tile.y,
       );
-      if (moveAction) { executeAction(moveAction); return; }
+      if (moveAction) { executeAction(moveAction); setBuildPromptTile(null); return; }
     }
-
     if (selectedUnitId != null && attackTargets.has(key)) {
-      const action = attackTargets.get(key)!;
-      executeAction(action);
+      executeAction(attackTargets.get(key)!);
+      setBuildPromptTile(null);
+      return;
+    }
+    if (unit && unit.owner === currentPlayer) {
+      selectUnit(unit.id === selectedUnitId ? null : unit.id);
+      setBuildPromptTile(null);
       return;
     }
 
-    if (unit && unit.owner === currentPlayer) {
-      selectUnit(unit.id === selectedUnitId ? null : unit.id);
-    } else {
-      selectUnit(null);
-    }
+    // 2. Clicked an ore/plasma tile where a mine/extractor can be built → prompt.
+    const buildable = legalActions.some(
+      a => a.type === 'build' && (a.kind === 'mine' || a.kind === 'extractor') && a.position.x === tile.x && a.position.y === tile.y,
+    );
+    if (buildable) { setBuildPromptTile(tile); selectUnit(null); return; }
+
+    selectUnit(null);
+    setBuildPromptTile(null);
   }, [
-    mode, getTileFromEvent, unitByPos, selectedUnitId, currentPlayer,
+    mode, getTileFromEvent, map, unitByPos, selectedUnitId, currentPlayer,
     moveTargets, attackTargets, legalActions, executeAction, selectUnit, onPaint,
   ]);
 

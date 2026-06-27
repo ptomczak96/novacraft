@@ -161,16 +161,18 @@ function drawVectorTile(
 function drawRuin(ctx: CanvasRenderingContext2D, cx: number, cy: number) {
   ctx.fillStyle = '#9a8f7a';
   ctx.strokeStyle = '#5a5145';
-  ctx.lineWidth = 1;
-  // Three broken pillars of varying height.
+  ctx.lineWidth = 2;
+  // Three broken pillars of varying height — large, still within one tile.
+  const w = 9;
+  const baseY = cy + 6; // plant the feet a touch below tile centre
   const pillars = [
-    { x: cx - 7, h: 10 },
-    { x: cx,     h: 14 },
-    { x: cx + 7, h: 8 },
+    { x: cx - 17, h: 26 },
+    { x: cx,      h: 36 },
+    { x: cx + 17, h: 22 },
   ];
   for (const pl of pillars) {
-    ctx.fillRect(pl.x - 2, cy - pl.h, 4, pl.h);
-    ctx.strokeRect(pl.x - 2, cy - pl.h, 4, pl.h);
+    ctx.fillRect(pl.x - w / 2, baseY - pl.h, w, pl.h);
+    ctx.strokeRect(pl.x - w / 2, baseY - pl.h, w, pl.h);
   }
 }
 

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useGameStore } from '../store/gameStore.js';
 import type { CombatBreakdown } from '@tactica/engine';
 
@@ -48,7 +48,25 @@ function BreakdownSection({ label, breakdown, attackerName, defenderName }: {
 
 export function CombatLog() {
   const { lastCombatResult } = useGameStore();
+  const [collapsed, setCollapsed] = useState(false);
   if (!lastCombatResult) return null;
+
+  // Collapsed → a small tab on the left to bring it back.
+  if (collapsed) {
+    return (
+      <button
+        onClick={() => setCollapsed(false)}
+        title="Show combat log"
+        style={{
+          position: 'fixed', left: 8, top: 110, zIndex: 50,
+          background: 'rgba(20,20,35,0.92)', color: '#fff',
+          border: '1px solid #444', borderRadius: 4, padding: '4px 8px', cursor: 'pointer',
+        }}
+      >
+        ▶ Log
+      </button>
+    );
+  }
 
   const { attacker, defender, attackBreakdown, retaliationBreakdown, defenderKilled, attackerKilled } = lastCombatResult;
 
@@ -56,7 +74,16 @@ export function CombatLog() {
   if (!attackBreakdown) {
     return (
       <div className="combat-log-panel">
-        <h3>Combat Log</h3>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <h3 style={{ margin: 0 }}>Combat Log</h3>
+        <button
+          onClick={() => setCollapsed(true)}
+          title="Hide"
+          style={{ background: 'transparent', border: 'none', color: 'inherit', cursor: 'pointer', fontSize: 16, lineHeight: 1, padding: '2px 6px' }}
+        >
+          ◀
+        </button>
+      </div>
         <div className="combat-log-matchup">
           <span className="combat-log-unit">{attacker.name}</span>
           <span className="combat-log-arrow">&rarr;</span>
@@ -72,7 +99,16 @@ export function CombatLog() {
 
   return (
     <div className="combat-log-panel">
-      <h3>Combat Log</h3>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <h3 style={{ margin: 0 }}>Combat Log</h3>
+        <button
+          onClick={() => setCollapsed(true)}
+          title="Hide"
+          style={{ background: 'transparent', border: 'none', color: 'inherit', cursor: 'pointer', fontSize: 16, lineHeight: 1, padding: '2px 6px' }}
+        >
+          ◀
+        </button>
+      </div>
 
       {/* Matchup header */}
       <div className="combat-log-matchup">
