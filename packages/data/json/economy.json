@@ -34,7 +34,7 @@
       "perCity": null,
       "costByLevel": [50, 70, 90],
       "outputByLevel": [10, 20, 30],
-      "supplyByLevel": [1, 3, 6],
+      "supplyByLevel": [1, 2, 4],
       "techRequired": null,
       "upgradeTechRequired": ["drilling", null]
     },
@@ -43,10 +43,10 @@
       "output": "plasma",
       "maxLevel": 3,
       "perCity": null,
-      "costByLevel": [20, 40, 60],
+      "costByLevel": [50, 70, 90],
       "outputByLevel": [10, 20, 30],
-      "supplyByLevel": [1, 3, 6],
-      "techRequired": "plasma_tap",
+      "supplyByLevel": [2, 3, 4],
+      "techRequired": null,
       "upgradeTechRequired": [null, null]
     },
     "refinery": {

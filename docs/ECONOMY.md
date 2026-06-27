@@ -45,24 +45,20 @@ A building belongs to the one city whose territory contains it.
 ### REB1 — Mine (on ore tile) / Extractor (on plasma vent)
 Self output + supply, scaling with the building's own level. Upgradeable to L3.
 
-**Mine** (TTR = cost ÷ marginal output/turn shown for the balance lens):
+Mine and Extractor share the **same cost & output** (TTR = cost ÷ marginal
+output/turn). They differ only in **supply** (their leveling contribution).
 
-| Level | Cost (ore) | Output/turn | Supply (total) | TTR |
-|---|---|---|---|---|
-| 1 | 50 | +10 | 1 | 5 |
-| 2 | 70 | +20 | 3 | 7 |
-| 3 | 90 | +30 | 6 | 9 |
-
-**Extractor** (still on the old cheap scale — deliberate asymmetry, may diverge further):
-
-| Level | Cost (plasma… via ore pool) | Output/turn | Supply (total) | TTR |
-|---|---|---|---|---|
-| 1 | 20 | +10 | 1 | 2 |
-| 2 | 40 | +20 | 3 | 4 |
-| 3 | 60 | +30 | 6 | 6 |
+| Level | Cost (ore) | Output/turn | TTR | Mine supply | Extractor supply |
+|---|---|---|---|---|---|
+| 1 | 50 | +10 | 5 | 1 | 2 |
+| 2 | 70 | +20 | 7 | 2 | 3 |
+| 3 | 90 | +30 | 9 | 4 | 4 |
 
 - Mine output = ore; Extractor output = plasma.
+- Supply is each building's *total* contribution at that level (not incremental).
 - Mine & Extractor: unlimited per city (count is governed by ore/plasma tile spawns, not a hard cap).
+- **No tech gate** on either — a mine builds on any ore tile, an extractor on any
+  plasma vent, within owned territory. (`plasma_tap` is now an inert/repurposable tech.)
 - **Starting ore per team = 20** (a small opening buffer; starting plasma = 0).
 
 ### REB2 — Refinery (near mines) / Purifier (near extractors)
@@ -135,8 +131,8 @@ removed tile-income system and are currently inert — repurpose or drop later.
 
 **Pinned for now (easy data tweaks in `economy.json`):**
 - REB2 cost is **ore-only**; a `plasmaCostByLevel` slot is reserved but unused.
-- Extractor still uses the old cheap cost scale (20/40/60) while mines now cost
-  50/70/90 — a deliberate asymmetry to revisit (extractor may be raised to match).
+- Extractor now matches the mine on cost (50/70/90) & output (+10/20/30); only
+  supply differs (mine 1/2/4, extractor 2/3/4). Base extractor tech gate removed.
 - Purifier mirrors the refinery's cost scale (50/120/200).
 
 **Deferred design notes (backlog):**

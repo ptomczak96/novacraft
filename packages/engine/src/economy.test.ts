@@ -105,7 +105,7 @@ describe('REB1 — mines (output + supply)', () => {
     expect(cityPop(capNow, registry)).toBe(3); // capacity rose
   });
 
-  it('upgrading a mine raises its output to 20 and supply to 3', () => {
+  it('upgrading a mine raises its output to 20 and supply to 2', () => {
     const registry = getRegistry();
     let state = createGame(getConfig(), registry, ['ironclad', 'sylvan'], 7);
     const cap = capitalOf(state, 0);
@@ -116,8 +116,8 @@ describe('REB1 — mines (output + supply)', () => {
     state = applyAction(state, { type: 'research', techId: 'drilling' }, registry); // Drilling unlocks mine L2
     const before = calculateOreIncome(state, 0, registry); // L1 city (20 base) + 10 mine = 30
     state = applyAction(state, { type: 'upgradeBuilding', position: a }, registry);
-    expect(cityAt(state, cap.position)!.supply).toBe(3); // L2 mine = 3 supply
-    expect(cityAt(state, cap.position)!.level).toBe(2); // 3 supply crosses the 2-threshold
+    expect(cityAt(state, cap.position)!.supply).toBe(2); // L2 mine = 2 supply
+    expect(cityAt(state, cap.position)!.level).toBe(2); // 2 supply crosses the 2-threshold
     // +10 from mine output (10→20) AND +10 from the city leveling (base 20→30).
     expect(calculateOreIncome(state, 0, registry)).toBe(before + 20);
   });

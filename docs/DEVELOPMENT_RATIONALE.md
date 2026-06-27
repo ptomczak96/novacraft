@@ -249,6 +249,24 @@ All generation is deterministic via the map PRNG (same seed → identical map).
   L2 = 70/10 = **7**, L3 = 90/10 = **9** (was 2/4/6). Extractor cost left at 20/40/60
   for now — a deliberate asymmetry to revisit, flagged in ECONOMY.md.
 
+### 2026-06-28 — Artisan Ornaments — extractor↔mine symmetry & supply retune
+
+- **Extractor now mirrors the mine** on cost (50/70/90, TTR 5/7/9) and output
+  (+10/20/30). Previously the extractor was on the old cheap 20/40/60 scale; making
+  the two REB1s symmetric keeps ore and plasma extraction on equal economic footing.
+- **Supply retuned** (a building's total leveling contribution at each level):
+  mine = **1/2/4**, extractor = **2/3/4** (was 1/3/6 for both). Plasma extraction
+  pulls slightly more weight per building toward city leveling than ore does.
+- **Extractor tech gate removed.** It was gated behind `plasma_tap` (a refinement L2
+  tech with empty effects), which — via the branch-unlock rule — made extractors
+  effectively unbuildable in normal play ("can't build on a plasma vent"). Dropped
+  the gate so an extractor builds on any owned plasma vent just like a mine on ore.
+  `plasma_tap` is left in the tree as an inert/repurposable tech.
+
+This is part of the larger **city-levels** work kicked off this session; subsequent
+entries will cover the leveling modal, bonuses (income/pop/fortify/supply/reveal),
+and territory expansion as each lands.
+
 ---
 
 *Deferred ideas (the "we'll tweak this later" items) live in the memory backlog,

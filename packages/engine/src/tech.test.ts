@@ -84,15 +84,13 @@ describe('Slag Wash boosts mine output', () => {
 });
 
 describe('Tech gates on buildings', () => {
-  it('Plasma Tap gates the extractor', () => {
+  it('extractor is buildable on a plasma vent with no tech (mirrors the mine)', () => {
     const r = getRegistry();
     let state = createGame(getConfig(), r, ['ironclad', 'sylvan'], 7);
     const cap = capitalOf(state, 0);
     state.players[0].ore = 300;
     const p = makeTile(state, cap.position, 1, 0, 'plasma');
-    expect(canBuild(state, r, 0, 'extractor', p)).toBe(false);
-    state = applyAction(state, { type: 'research', techId: 'prospecting' }, r);
-    state = applyAction(state, { type: 'research', techId: 'plasma_tap' }, r);
+    // No tech gate: an owned plasma vent is buildable immediately, like a mine on ore.
     expect(canBuild(state, r, 0, 'extractor', p)).toBe(true);
   });
 
