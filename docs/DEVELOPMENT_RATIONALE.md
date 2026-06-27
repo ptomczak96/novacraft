@@ -232,6 +232,23 @@ All generation is deterministic via the map PRNG (same seed → identical map).
   accurate via the on-screen bounding box). Out-capped so a small map can't shrink
   away; in-capped at ~a handful of tiles. (Pan-while-zoomed is a follow-up.)
 
+### 2026-06-28 — Artisan Ornaments — scattered resources, starting ore, mine costs
+
+- **Resources now sprinkle OUTSIDE the 3×3 territories**, not just on the perimeter
+  of cities/ruins. Density ≈ 66% of a city 3×3 (a city places ~3 resources across 8
+  perimeter tiles, so `sprinkleP = 0.66 × 3/8 ≈ 0.2475` per eligible off-territory
+  tile), mix ~2:1 ore:plasma to match capitals. *Why:* cities will gain border
+  expansion later, so there should already be something worth claiming nearby. The
+  pass runs after city/ruin placement, skips any tile inside a territory
+  (`minDistTo ≤ 1`), and threads the same PRNG so maps stay deterministic.
+- **Starting ore per team: 0 → 20.** Gives a small opening buffer so the first
+  mine (now pricier — see below) isn't an impossibly slow first build.
+- **Mine build/upgrade cost: 20/40/60 → 50/70/90 (L1/L2/L3).** *Why:* the old scale
+  made mines almost free relative to their payback; raising it lengthens TTR into a
+  more deliberate range. **TTR** (cost ÷ marginal output/turn): L1 = 50/10 = **5**,
+  L2 = 70/10 = **7**, L3 = 90/10 = **9** (was 2/4/6). Extractor cost left at 20/40/60
+  for now — a deliberate asymmetry to revisit, flagged in ECONOMY.md.
+
 ---
 
 *Deferred ideas (the "we'll tweak this later" items) live in the memory backlog,

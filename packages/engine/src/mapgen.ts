@@ -299,6 +299,23 @@ export function generateMap(
         t.isResourceTile = true; t.resourceKind = 'plasma';
       }
     }
+
+    // Scattered resources OUTSIDE all city/ruin territories — a light sprinkling
+    // (~66% of a city's 3x3 density, i.e. 3 resources / 8 tiles) so there's
+    // something to grab when city borders expand later. ~2:1 ore:plasma like cities.
+    const sprinkleP = 0.66 * (3 / 8);
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const t = tiles[y][x];
+        if (t.isResourceTile || t.isRuin || t.isCity || !passable(x, y)) continue;
+        if (minDistTo({ x, y }) <= 1) continue; // inside a territory → skip
+        const [rr, pa] = nextRandom(p); p = pa;
+        if (rr >= sprinkleP) continue;
+        const [rk, pb] = nextRandom(p); p = pb;
+        t.isResourceTile = true;
+        t.resourceKind = rk < 1 / 3 ? 'plasma' : 'ore';
+      }
+    }
   }
 
   return [{ width, height, tiles }, cityPositions, p];
