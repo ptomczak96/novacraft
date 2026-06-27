@@ -64,6 +64,7 @@ export function IsoCanvas({ mode, onPaint }: IsoCanvasProps) {
   const units = mode === 'game' ? (visibleState?.units ?? []) : (mapEditorState?.units ?? []);
   const visibility = mode === 'game' ? visibleState?.visibility : null;
   const buildings = mode === 'game' ? (visibleState?.buildings ?? []) : (mapEditorState?.buildings ?? []);
+  const cities = mode === 'game' ? (visibleState?.cities ?? []) : (mapEditorState?.cities ?? []);
   const currentPlayer = state?.currentPlayer ?? 0;
 
   // ── Build unit position map ──
@@ -223,8 +224,9 @@ export function IsoCanvas({ mode, onPaint }: IsoCanvasProps) {
       }
     }
 
-    // ── Territory borders: single outer outline per player, drawn last ──
-    drawTerritoryBorders(ctx, map, map.height);
+    // ── Territory borders: one outline per CITY territory (so touching cities
+    // don't fuse), drawn last ──
+    drawTerritoryBorders(ctx, map, map.height, cities);
 
     // ── Buildings + plasma-vent labels (drawn on top of tiles) ──
     for (let y = 0; y < map.height; y++) {
@@ -273,7 +275,7 @@ export function IsoCanvas({ mode, onPaint }: IsoCanvasProps) {
       if (name) drawNameBadge(ctx, x, y, map.height, name);
     }
   }, [
-    map, visibility, registry, config, units, unitByPos, buildings, buildingByPos,
+    map, visibility, registry, config, units, unitByPos, buildings, buildingByPos, cities,
     selectedUnitId, hoveredTile, legalActions, moveTargets, attackTargets, mode,
     buildPromptTile, spriteTick, animTick,
   ]);

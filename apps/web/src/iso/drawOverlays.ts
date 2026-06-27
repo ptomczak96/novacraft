@@ -4,7 +4,7 @@ import {
   LABEL_FONT, LABEL_COLOR, PLAYER_COLORS,
 } from './constants.js';
 import { tileToScreenShifted } from './projection.js';
-import type { GameMap } from '@tactica/engine';
+import type { GameMap, CityState } from '@tactica/engine';
 
 const HW = TILE_W / 2;
 const HH = TILE_H / 2;
@@ -140,10 +140,21 @@ export function drawTerritoryBorders(
   ctx: CanvasRenderingContext2D,
   map: GameMap,
   mapHeight: number,
+  cities: CityState[] = [],
 ) {
-  const ownerAt = (x: number, y: number): number | null => {
+  const cheb = (ax: number, ay: number, bx: number, by: number) =>
+    Math.max(Math.abs(ax - bx), Math.abs(ay - by));
+  // A tile's "region" = the city whose 3x3 territory contains it, so two adjacent
+  // cities (even of the same player) get a line between them instead of fusing.
+  // Falls back to the owner for any owned tile not inside a city.
+  const regionAt = (x: number, y: number): string | null => {
     if (x < 0 || y < 0 || x >= map.width || y >= map.height) return null;
-    return map.tiles[y][x].owner;
+    const owner = map.tiles[y][x].owner;
+    if (owner === null) return null;
+    for (const c of cities) {
+      if (cheb(c.position.x, c.position.y, x, y) <= 1) return `c${c.id}`;
+    }
+    return `o${owner}`;
   };
 
   ctx.lineJoin = 'round';
@@ -180,10 +191,11 @@ export function drawTerritoryBorders(
         ctx.stroke();
       };
 
-      if (ownerAt(x, y - 1) !== owner) seg(top, right);
-      if (ownerAt(x + 1, y) !== owner) seg(right, bottom);
-      if (ownerAt(x, y + 1) !== owner) seg(bottom, left);
-      if (ownerAt(x - 1, y) !== owner) seg(left, top);
+      const region = regionAt(x, y);
+      if (regionAt(x, y - 1) !== region) seg(top, right);
+      if (regionAt(x + 1, y) !== region) seg(right, bottom);
+      if (regionAt(x, y + 1) !== region) seg(bottom, left);
+      if (regionAt(x - 1, y) !== region) seg(left, top);
     }
   }
 }
