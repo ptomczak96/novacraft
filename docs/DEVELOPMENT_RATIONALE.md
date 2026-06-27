@@ -198,6 +198,16 @@ The map's ruin/resource generation, now locked in (mapgen.ts):
 
 All generation is deterministic via the map PRNG (same seed → identical map).
 
+### 2026-06-27 — Artisan Ornaments — territory ownership & resource capture
+
+- **Founded cities claim their full 3×3 territory** (ownership only — terrain and
+  resources preserved), matching capitals. Previously only the centre tile was
+  owned, so the red territory border rendered as a single square.
+- **Removed lone-resource capture on move.** Stepping a unit onto a resource tile
+  no longer sets ownership. *Why:* it was leftover from the old tile-income economy
+  and now only drew a stray 1-tile territory border. Resources are owned by being
+  inside a city's claimed territory, not by standing on them.
+
 ---
 
 *Deferred ideas (the "we'll tweak this later" items) live in the memory backlog,
