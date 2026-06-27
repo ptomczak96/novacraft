@@ -1,7 +1,7 @@
 import type {
   GameState, GameConfig, GameResult, Action, MoveAction, AttackAction,
   RecruitAction, ResearchAction, BuildAction, UpgradeBuildingAction, FoundCityAction,
-  EndTurnAction, Unit, PlayerId, CityState,
+  CaptureCityAction, EndTurnAction, Unit, PlayerId, CityState,
   VisibleState, DataRegistry, Coord, PlayerState, TileVisibility,
 } from './types.js';
 import { createPRNG } from './prng.js';
@@ -138,6 +138,15 @@ export function getLegalActions(state: GameState, registry: DataRegistry, player
     const unitType = registry.unitTypes[unit.typeId];
     if (!unitType) continue;
 
+    // Capture: standing on an enemy/neutral city, but only when the unit didn't
+    // move onto it this turn (so capture becomes available the FOLLOWING turn).
+    if (!unit.hasMoved) {
+      const onCity = cityAt(state, unit.position);
+      if (onCity && onCity.owner !== playerId) {
+        actions.push({ type: 'captureCity', unitId: unit.id });
+      }
+    }
+
     // Move actions
     if (!unit.hasMoved) {
       const reachable = getReachableTiles(unit, unitType, state.map, state.units, registry, movementBonus);
@@ -232,6 +241,8 @@ export function applyAction(state: GameState, action: Action, registry: DataRegi
       return applyUpgradeBuilding(newState, action, registry);
     case 'foundCity':
       return applyFoundCity(newState, action, registry);
+    case 'captureCity':
+      return applyCaptureCity(newState, action, registry);
     case 'endTurn':
       return applyEndTurn(newState, registry);
     default:
@@ -245,25 +256,9 @@ function applyMove(state: GameState, action: MoveAction, _registry: DataRegistry
   unit.position = { ...action.to };
   unit.hasMoved = true;
 
-  // Check city capture — unit on enemy/neutral city captures it (keeps level + buildings)
-  const tile = state.map.tiles[action.to.y][action.to.x];
-  if (tile.isCity && tile.owner !== unit.owner) {
-    tile.owner = unit.owner;
-    const city = cityAt(state, action.to);
-    if (city) {
-      // Bug 1: the previous owner's units homed here become stateless
-      // (their home-city link is cleared) so they don't occupy the new
-      // owner's unit slots. No penalty for now — see economy-future-notes.
-      for (const u of state.units) {
-        if (state.unitHomeCity[u.id] === city.id) delete state.unitHomeCity[u.id];
-      }
-      city.owner = unit.owner;
-    }
-  }
-
-  // (No lone-resource capture: in the current economy a resource is owned only
-  // by being inside a city's claimed territory — standing on one does nothing,
-  // and capturing it just drew a stray 1-tile territory border.)
+  // No instant capture: a unit standing on an enemy/neutral city captures it on a
+  // LATER turn via the explicit captureCity action (see applyCaptureCity). Lone
+  // resources aren't captured either — ownership comes from a city's territory.
 
   return checkWinConditions(state, _registry);
 }
@@ -301,6 +296,11 @@ function applyAttack(state: GameState, action: AttackAction, registry: DataRegis
     // If unit has noMoveAndAttack, also mark as moved
     if (attackerType.traits.includes('noMoveAndAttack')) {
       attacker.hasMoved = true;
+    }
+    // Melee units advance into the tile of a unit they kill (Polytopia-style).
+    if (result.defenderKilled && attackerType.attackRange === 1) {
+      attacker.position = { ...defender.position };
+      attacker.hasMoved = true; // can't also capture a city this same turn
     }
   }
 
@@ -423,6 +423,34 @@ function applyFoundCity(state: GameState, action: FoundCityAction, registry: Dat
     supply: 0,
   });
   state.players[playerId].ore -= registry.economy.foundCity.cost;
+
+  recomputeCities(state, registry);
+  return checkWinConditions(state, registry);
+}
+
+function applyCaptureCity(state: GameState, action: CaptureCityAction, registry: DataRegistry): GameState {
+  const unit = state.units.find(u => u.id === action.unitId);
+  if (!unit || unit.owner !== state.currentPlayer) return state;
+  if (unit.hasMoved) return state; // can't capture the same turn you moved onto it
+  const city = cityAt(state, unit.position);
+  if (!city || city.owner === unit.owner) return state; // must be an enemy/neutral city
+
+  // The previous owner's units homed here become stateless (home link cleared).
+  for (const u of state.units) {
+    if (state.unitHomeCity[u.id] === city.id) delete state.unitHomeCity[u.id];
+  }
+  // Transfer the city and its 3x3 territory. Buildings keep their cityId, so
+  // their output now follows the new owner automatically — everything transfers.
+  city.owner = state.currentPlayer;
+  const { x, y } = city.position;
+  for (let dy = -1; dy <= 1; dy++) {
+    for (let dx = -1; dx <= 1; dx++) {
+      const t = state.map.tiles[y + dy]?.[x + dx];
+      if (t) t.owner = state.currentPlayer;
+    }
+  }
+  unit.hasMoved = true;
+  unit.hasAttacked = true; // capturing spends the unit's turn
 
   recomputeCities(state, registry);
   return checkWinConditions(state, registry);

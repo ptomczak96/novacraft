@@ -160,6 +160,7 @@ export type Action =
   | BuildAction
   | UpgradeBuildingAction
   | FoundCityAction
+  | CaptureCityAction
   | EndTurnAction;
 
 export interface MoveAction {
@@ -206,6 +207,11 @@ export interface UpgradeBuildingAction {
 export interface FoundCityAction {
   type: 'foundCity';
   position: Coord;
+}
+
+export interface CaptureCityAction {
+  type: 'captureCity';
+  unitId: UnitId;
 }
 
 export interface EndTurnAction {

@@ -178,10 +178,12 @@ describe('Capture frees the new owner’s slots (Bug 1)', () => {
     // Player 1's warrior is homed at the enemy capital.
     expect(unitsHomedAt(state, enemyCap.id)).toBe(1);
 
-    // Place a player-0 unit adjacent and move it onto the enemy capital.
-    const id = 999;
-    state.units.push({ id, typeId: 'warrior', owner: 0, position: { x: enemyCap.position.x - 1, y: enemyCap.position.y }, hp: 15, hasMoved: false, hasAttacked: false, abilityCooldowns: {} });
-    state = applyAction(state, { type: 'move', unitId: id, to: enemyCap.position }, registry);
+    // Move the enemy's unit off the city tile (still homed there), put a player-0
+    // unit on the city, and capture it (capture is now an explicit action).
+    const enemyUnit = state.units.find(u => state.unitHomeCity[u.id] === enemyCap.id)!;
+    enemyUnit.position = { x: enemyCap.position.x, y: enemyCap.position.y - 1 };
+    state.units.push({ id: 999, typeId: 'warrior', owner: 0, position: { ...enemyCap.position }, hp: 15, hasMoved: false, hasAttacked: false, abilityCooldowns: {} });
+    state = applyAction(state, { type: 'captureCity', unitId: 999 }, registry);
 
     const captured = cityAt(state, enemyCap.position)!;
     expect(captured.owner).toBe(0);
@@ -280,6 +282,54 @@ describe('Founding a city', () => {
     for (let dy = -1; dy <= 1; dy++) {
       for (let dx = -1; dx <= 1; dx++) {
         expect(state.map.tiles[pos.y + dy][pos.x + dx].owner).toBe(0);
+      }
+    }
+  });
+});
+
+describe('Melee advance on kill', () => {
+  it('a melee unit moves onto the tile of a unit it kills (ranged does not)', () => {
+    const r = getRegistry();
+    let state = createGame(getConfig(), r, ['ironclad', 'sylvan'], 7);
+    state.units = [];
+    const aPos = { x: 5, y: 5 }, dPos = { x: 6, y: 5 };
+    state.units.push({ id: 1, typeId: 'warrior', owner: 0, position: { ...aPos }, hp: 15, hasMoved: false, hasAttacked: false, abilityCooldowns: {} });
+    state.units.push({ id: 2, typeId: 'scout', owner: 1, position: { ...dPos }, hp: 1, hasMoved: false, hasAttacked: false, abilityCooldowns: {} });
+    state = applyAction(state, { type: 'attack', unitId: 1, targetId: 2 }, r);
+    expect(state.units.find(u => u.id === 2)).toBeUndefined(); // defender killed
+    expect(state.units.find(u => u.id === 1)!.position).toEqual(dPos); // warrior advanced
+  });
+});
+
+describe('City capture', () => {
+  function putUnitOnEnemyCap(state: GameState, hasMoved: boolean) {
+    const enemyCap = state.cities.find(c => c.owner === 1)!;
+    state.units = state.units.filter(u => !(u.position.x === enemyCap.position.x && u.position.y === enemyCap.position.y));
+    state.units.push({ id: 700, typeId: 'warrior', owner: 0, position: { ...enemyCap.position }, hp: 15, hasMoved, hasAttacked: false, abilityCooldowns: {} });
+    return enemyCap;
+  }
+
+  it('capture is offered only when the unit did not move onto the city this turn', () => {
+    const r = getRegistry();
+    const moved = createGame(getConfig(), r, ['ironclad', 'sylvan'], 7);
+    putUnitOnEnemyCap(moved, true);
+    expect(getLegalActions(moved, r, 0).some(a => a.type === 'captureCity')).toBe(false);
+
+    const settled = createGame(getConfig(), r, ['ironclad', 'sylvan'], 7);
+    putUnitOnEnemyCap(settled, false);
+    expect(getLegalActions(settled, r, 0).some(a => a.type === 'captureCity' && a.unitId === 700)).toBe(true);
+  });
+
+  it('capturing transfers the city and its 3x3 territory to the captor', () => {
+    const r = getRegistry();
+    let state = createGame(getConfig(), r, ['ironclad', 'sylvan'], 7);
+    const enemyCap = putUnitOnEnemyCap(state, false);
+    state = applyAction(state, { type: 'captureCity', unitId: 700 }, r);
+    expect(state.cities.find(c => c.id === enemyCap.id)!.owner).toBe(0);
+    for (let dy = -1; dy <= 1; dy++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        const t = state.map.tiles[enemyCap.position.y + dy]?.[enemyCap.position.x + dx];
+        if (t) expect(t.owner).toBe(0);
       }
     }
   });

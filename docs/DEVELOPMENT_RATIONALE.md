@@ -208,6 +208,20 @@ All generation is deterministic via the map PRNG (same seed → identical map).
   and now only drew a stray 1-tile territory border. Resources are owned by being
   inside a city's claimed territory, not by standing on them.
 
+### 2026-06-27 — Artisan Ornaments — melee advance & delayed city capture
+
+- **Melee advance on kill.** A melee unit (attackRange 1) that kills its target
+  moves onto the target's tile (Polytopia-style). Ranged units don't advance.
+- **City capture is no longer instant.** Moving onto an enemy/neutral city no
+  longer captures it. Instead, a unit standing on an enemy city can capture it via
+  an explicit `captureCity` action — but only when it *didn't move onto the city
+  that turn* (eligibility = on enemy city AND `!hasMoved`), so capture becomes
+  available the **following** turn. In the UI, selecting the unit shows a
+  "Capture City?" box. Capturing transfers the city, its 3×3 territory, and its
+  buildings to the captor (buildings keep their cityId, so output follows the new
+  owner); the previous owner's units homed there go stateless.
+  *Tech-on-capture handling is deferred — see the memory backlog.*
+
 ---
 
 *Deferred ideas (the "we'll tweak this later" items) live in the memory backlog,

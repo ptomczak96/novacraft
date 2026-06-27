@@ -102,6 +102,7 @@ function formatAction(a: Action): string {
     case 'build': return `Build ${a.kind} @ (${a.position.x},${a.position.y})`;
     case 'upgradeBuilding': return `Upgrade building @ (${a.position.x},${a.position.y})`;
     case 'foundCity': return `Found city @ (${a.position.x},${a.position.y})`;
+    case 'captureCity': return `Capture city (unit#${a.unitId})`;
     case 'endTurn': return '── End Turn ──';
     default: return JSON.stringify(a);
   }

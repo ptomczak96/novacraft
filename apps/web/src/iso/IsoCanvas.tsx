@@ -246,6 +246,10 @@ export function IsoCanvas({ mode, onPaint }: IsoCanvasProps) {
         if (a.type === 'foundCity') {
           boxes.push({ rect: drawActionBox(ctx, a.position.x, a.position.y, map.height, 'Found City'), action: a });
         }
+        if (a.type === 'captureCity' && a.unitId === selectedUnitId) {
+          const u = units.find(uu => uu.id === a.unitId);
+          if (u) boxes.push({ rect: drawActionBox(ctx, u.position.x, u.position.y, map.height, 'Capture City?'), action: a });
+        }
       }
       if (buildPromptTile) {
         const { x, y } = buildPromptTile;
