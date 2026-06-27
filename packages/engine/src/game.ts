@@ -405,6 +405,16 @@ function applyFoundCity(state: GameState, action: FoundCityAction, registry: Dat
   tile.isRuin = false;
   tile.owner = playerId;
 
+  // Claim the full 3x3 territory (ownership only — keep the ruin's terrain and
+  // resources), so a founded city has a real territory like a capital.
+  for (let dy = -1; dy <= 1; dy++) {
+    for (let dx = -1; dx <= 1; dx++) {
+      const t = state.map.tiles[y + dy]?.[x + dx];
+      if (!t || t.isCity) continue;
+      t.owner = playerId;
+    }
+  }
+
   state.cities.push({
     id: state.nextCityId++,
     position: { x, y },

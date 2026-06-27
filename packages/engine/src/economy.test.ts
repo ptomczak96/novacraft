@@ -263,3 +263,24 @@ describe('Determinism with the economy', () => {
     expect(JSON.stringify(replay.buildings)).toBe(JSON.stringify(state.buildings));
   });
 });
+
+describe('Founding a city', () => {
+  it('claims the full 3x3 territory (ownership), not just the centre tile', () => {
+    const registry = getRegistry();
+    let state = createGame(getConfig(), registry, ['ironclad', 'sylvan'], 7);
+    const pos = { x: 6, y: 6 }; // open space, away from the corner capitals
+    state.map.tiles[pos.y][pos.x].isRuin = true;
+    state.map.tiles[pos.y][pos.x].isCity = false;
+    state.units.push({ id: 500, typeId: 'warrior', owner: 0, position: { ...pos }, hp: 15, hasMoved: false, hasAttacked: false, abilityCooldowns: {} });
+    state.players[0].ore = 50;
+
+    state = applyAction(state, { type: 'foundCity', position: pos }, registry);
+
+    expect(state.cities.some(c => c.position.x === pos.x && c.position.y === pos.y && c.owner === 0)).toBe(true);
+    for (let dy = -1; dy <= 1; dy++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        expect(state.map.tiles[pos.y + dy][pos.x + dx].owner).toBe(0);
+      }
+    }
+  });
+});
