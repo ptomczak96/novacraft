@@ -1,7 +1,7 @@
 import type {
   GameState, GameConfig, GameResult, Action, MoveAction, AttackAction,
   RecruitAction, ResearchAction, BuildAction, UpgradeBuildingAction, FoundCityAction,
-  CaptureCityAction, EndTurnAction, Unit, PlayerId, CityState,
+  CaptureCityAction, LevelUpCityAction, EndTurnAction, Unit, PlayerId, CityState,
   VisibleState, DataRegistry, Coord, PlayerState, TileVisibility,
 } from './types.js';
 import { createPRNG } from './prng.js';
@@ -11,8 +11,9 @@ import { resolveCombat, previewCombat } from './combat.js';
 import { computeVisibility } from './fog.js';
 import {
   settleEconomy, calculateOreIncome, calculatePlasmaIncome, recomputeCities,
-  territoryCityAt, cityAt, cityHasCapacity, getUnitPlasmaCost,
+  territoryCityAt, cityAt, cityById, cityHasCapacity, getUnitPlasmaCost,
   canBuild, canUpgradeBuilding, upgradeCostFor, buildingCost, canFoundCity,
+  cityCanLevelUp, levelUpChoices,
 } from './economy.js';
 import { getModifier, isTechAvailable, techCostForPlayer, isUnitUnlocked } from './tech.js';
 
@@ -59,6 +60,10 @@ export function createGame(
         isCapital: capitalKeys.has(`${x},${y}`),
         level: 1,
         supply: 0,
+        incomeBonus: 0,
+        popBonus: 0,
+        bonusSupply: 0,
+        fortified: false,
       });
     }
   }
@@ -208,6 +213,18 @@ export function getLegalActions(state: GameState, registry: DataRegistry, player
     }
   }
 
+  // Level-up actions — for each owned city ready to level, offer both reward
+  // choices for the level it would reach. (Deferred choices reveal/territory are
+  // still emitted; their effect lands in a later group. UI may disable them.)
+  for (const city of state.cities) {
+    if (city.owner !== playerId) continue;
+    if (!cityCanLevelUp(city, registry)) continue;
+    const choices = levelUpChoices(city.level + 1);
+    if (!choices) continue;
+    actions.push({ type: 'levelUpCity', cityId: city.id, choice: choices.a });
+    actions.push({ type: 'levelUpCity', cityId: city.id, choice: choices.b });
+  }
+
   // Research actions — branch-unlock availability + city-scaled ore cost
   for (const [techId, tech] of Object.entries(registry.techs)) {
     if (!isTechAvailable(state, playerId, tech, registry)) continue;
@@ -243,6 +260,8 @@ export function applyAction(state: GameState, action: Action, registry: DataRegi
       return applyFoundCity(newState, action, registry);
     case 'captureCity':
       return applyCaptureCity(newState, action, registry);
+    case 'levelUpCity':
+      return applyLevelUpCity(newState, action, registry);
     case 'endTurn':
       return applyEndTurn(newState, registry);
     default:
@@ -421,6 +440,10 @@ function applyFoundCity(state: GameState, action: FoundCityAction, registry: Dat
     isCapital: false,
     level: 1,
     supply: 0,
+    incomeBonus: 0,
+    popBonus: 0,
+    bonusSupply: 0,
+    fortified: false,
   });
   state.players[playerId].ore -= registry.economy.foundCity.cost;
 
@@ -457,6 +480,30 @@ function applyCaptureCity(state: GameState, action: CaptureCityAction, registry:
   unit.hasAttacked = true; // capturing spends the unit's turn
 
   recomputeCities(state, registry);
+  return checkWinConditions(state, registry);
+}
+
+function applyLevelUpCity(state: GameState, action: LevelUpCityAction, registry: DataRegistry): GameState {
+  const city = cityById(state, action.cityId);
+  if (!city || city.owner !== state.currentPlayer) return state;
+  if (!cityCanLevelUp(city, registry)) return state;
+
+  const targetLevel = city.level + 1;
+  const choices = levelUpChoices(targetLevel);
+  if (!choices || (action.choice !== choices.a && action.choice !== choices.b)) return state;
+
+  city.level = targetLevel;
+  switch (action.choice) {
+    case 'income': city.incomeBonus += 30; break;   // perpetual +30 ore/turn (capture-invariant)
+    case 'pop': city.popBonus += 1; break;          // +1 unit capacity, stacks on the per-level pop
+    case 'fortify': city.fortified = true; break;   // combat module applies the ×1.5 defence
+    case 'supply': city.bonusSupply += 3; break;    // permanent supply toward further leveling
+    // 'reveal' (needs fog) and 'territory' (needs the tile-picker) land in later
+    // groups; selecting them still levels the city, effect wired up then.
+    default: break;
+  }
+
+  recomputeCities(state, registry); // fold bonusSupply (if any) back into city.supply
   return checkWinConditions(state, registry);
 }
 

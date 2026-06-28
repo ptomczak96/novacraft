@@ -9,6 +9,7 @@ export {
   getUnitUpkeep, calculateUpkeep, settleEconomy,
   calculateOreIncome, calculatePlasmaIncome,
   cityProduction, cityPop, cityLevelForSupply, citySupplyProgress, cityAt, cityById, territoryCityAt,
+  citySupplyForLevel, cityCanLevelUp, levelUpChoices, LEVEL_CHOICE_MAX,
   unitsHomedAt, cityHasCapacity, recomputeCities, buildingOutput, buildingSupply,
   getUnitPlasmaCost, canBuild, canUpgradeBuilding, upgradeCostFor, buildingCost, canFoundCity,
   resourceKindAt,

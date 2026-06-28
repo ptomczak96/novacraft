@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   createGame, applyAction, getLegalActions,
   calculateOreIncome, calculatePlasmaIncome, cityProduction, cityPop, cityLevelForSupply,
-  cityAt, canBuild, unitsHomedAt,
+  cityAt, canBuild, unitsHomedAt, cityCanLevelUp,
   createPRNG, nextRandom,
 } from './index.js';
 import { buildRegistry, defaultConfig } from '@tactica/data';
@@ -57,8 +57,8 @@ describe('createGame economy init', () => {
 describe('City production / pop (capacity) / supply→level', () => {
   it('capital produces 20 at L1 (+10/level); founded city produces 10', () => {
     const registry = getRegistry();
-    const cap: CityState = { id: 1, position: { x: 0, y: 0 }, owner: 0, isCapital: true, level: 1, supply: 0 };
-    const city: CityState = { id: 2, position: { x: 0, y: 0 }, owner: 0, isCapital: false, level: 1, supply: 0 };
+    const cap: CityState = { id: 1, position: { x: 0, y: 0 }, owner: 0, isCapital: true, level: 1, supply: 0, incomeBonus: 0, popBonus: 0, bonusSupply: 0, fortified: false };
+    const city: CityState = { id: 2, position: { x: 0, y: 0 }, owner: 0, isCapital: false, level: 1, supply: 0, incomeBonus: 0, popBonus: 0, bonusSupply: 0, fortified: false };
     expect(cityProduction(cap, registry)).toBe(20);
     expect(cityProduction(city, registry)).toBe(10);
     cap.level = 3;
@@ -67,7 +67,7 @@ describe('City production / pop (capacity) / supply→level', () => {
 
   it('pop (unit capacity) = level + 1', () => {
     const registry = getRegistry();
-    const city: CityState = { id: 1, position: { x: 0, y: 0 }, owner: 0, isCapital: false, level: 1, supply: 0 };
+    const city: CityState = { id: 1, position: { x: 0, y: 0 }, owner: 0, isCapital: false, level: 1, supply: 0, incomeBonus: 0, popBonus: 0, bonusSupply: 0, fortified: false };
     expect(cityPop(city, registry)).toBe(2);
     city.level = 3;
     expect(cityPop(city, registry)).toBe(4);
@@ -85,7 +85,7 @@ describe('City production / pop (capacity) / supply→level', () => {
 });
 
 describe('REB1 — mines (output + supply)', () => {
-  it('a level-1 mine adds +10 ore output and +1 supply; two mines reach L2', () => {
+  it('a level-1 mine adds +10 ore output and +1 supply; two mines unlock + accept L2', () => {
     const registry = getRegistry();
     let state = createGame(getConfig(), registry, ['ironclad', 'sylvan'], 7);
     const cap = capitalOf(state, 0);
@@ -99,13 +99,19 @@ describe('REB1 — mines (output + supply)', () => {
 
     const b = makeOreTile(state, cap.position, 0, 1);
     state = applyAction(state, { type: 'build', kind: 'mine', position: b }, registry);
-    const capNow = cityAt(state, cap.position)!;
+    let capNow = cityAt(state, cap.position)!;
     expect(capNow.supply).toBe(2);
-    expect(capNow.level).toBe(2); // hit the 2-supply threshold
-    expect(cityPop(capNow, registry)).toBe(3); // capacity rose
+    expect(capNow.level).toBe(1); // threshold met, but not yet accepted
+    expect(cityCanLevelUp(capNow, registry)).toBe(true);
+
+    // Accept L2, choosing +1 pop.
+    state = applyAction(state, { type: 'levelUpCity', cityId: capNow.id, choice: 'pop' }, registry);
+    capNow = cityAt(state, cap.position)!;
+    expect(capNow.level).toBe(2);
+    expect(cityPop(capNow, registry)).toBe(4); // popBase 2 + (level-1)=1 + popBonus 1
   });
 
-  it('upgrading a mine raises its output to 20 and supply to 2', () => {
+  it('upgrading a mine raises its output to 20 and supply to 2 (level stays 1 until accepted)', () => {
     const registry = getRegistry();
     let state = createGame(getConfig(), registry, ['ironclad', 'sylvan'], 7);
     const cap = capitalOf(state, 0);
@@ -116,10 +122,19 @@ describe('REB1 — mines (output + supply)', () => {
     state = applyAction(state, { type: 'research', techId: 'drilling' }, registry); // Drilling unlocks mine L2
     const before = calculateOreIncome(state, 0, registry); // L1 city (20 base) + 10 mine = 30
     state = applyAction(state, { type: 'upgradeBuilding', position: a }, registry);
-    expect(cityAt(state, cap.position)!.supply).toBe(2); // L2 mine = 2 supply
-    expect(cityAt(state, cap.position)!.level).toBe(2); // 2 supply crosses the 2-threshold
-    // +10 from mine output (10→20) AND +10 from the city leveling (base 20→30).
-    expect(calculateOreIncome(state, 0, registry)).toBe(before + 20);
+
+    const city = cityAt(state, cap.position)!;
+    expect(city.supply).toBe(2); // L2 mine = 2 supply
+    expect(city.level).toBe(1); // supply met, but leveling is now the player's choice
+    // Only the mine's extra output so far — no level-base bump until accepted.
+    expect(calculateOreIncome(state, 0, registry)).toBe(before + 10);
+
+    // Accept the level-up, choosing the income reward.
+    state = applyAction(state, { type: 'levelUpCity', cityId: city.id, choice: 'income' }, registry);
+    const leveled = cityAt(state, cap.position)!;
+    expect(leveled.level).toBe(2);
+    // +10 base (20→30) AND +30 income bonus, on top of the mine's +10.
+    expect(calculateOreIncome(state, 0, registry)).toBe(before + 10 + 10 + 30);
   });
 });
 
@@ -307,6 +322,66 @@ describe('Founding a city', () => {
     expect(getLegalActions(state, registry, 0).some(a => a.type === 'foundCity')).toBe(true);
     state = applyAction(state, { type: 'foundCity', position: pos }, registry);
     expect(state.cities.some(c => c.position.x === pos.x && c.position.y === pos.y && c.owner === 0)).toBe(true);
+  });
+});
+
+describe('City leveling (choice-based)', () => {
+  // Build N mines around the capital so supply reaches `target`.
+  function buildMines(state: GameState, registry: DataRegistry, cap: CityState, n: number): GameState {
+    const offsets = [[1, 0], [0, 1], [-1, 0], [0, -1], [1, 1], [-1, -1], [1, -1], [-1, 1]];
+    state.players[0].ore = 1000;
+    for (let i = 0; i < n; i++) {
+      const pos = makeOreTile(state, cap.position, offsets[i][0], offsets[i][1]);
+      state = applyAction(state, { type: 'build', kind: 'mine', position: pos }, registry);
+    }
+    return state;
+  }
+
+  it('rejects a choice that is not offered for the target level', () => {
+    const registry = getRegistry();
+    let state = createGame(getConfig(), registry, ['ironclad', 'sylvan'], 7);
+    const cap = capitalOf(state, 0);
+    state = buildMines(state, registry, cap, 2); // supply 2 → L2 available (income | pop)
+    const city = cityAt(state, cap.position)!;
+    // 'fortify' is an L3 choice, not valid for reaching L2 → no-op.
+    state = applyAction(state, { type: 'levelUpCity', cityId: city.id, choice: 'fortify' }, registry);
+    expect(cityAt(state, cap.position)!.level).toBe(1);
+  });
+
+  it('the +3 supply choice persists and counts toward further leveling', () => {
+    const registry = getRegistry();
+    let state = createGame(getConfig(), registry, ['ironclad', 'sylvan'], 7);
+    const cap = capitalOf(state, 0);
+    state = buildMines(state, registry, cap, 5); // 5 mines = 5 supply (≥ L3 threshold 5)
+    let city = cityAt(state, cap.position)!;
+    state = applyAction(state, { type: 'levelUpCity', cityId: city.id, choice: 'income' }, registry); // L2
+    city = cityAt(state, cap.position)!;
+    state = applyAction(state, { type: 'levelUpCity', cityId: city.id, choice: 'fortify' }, registry); // L3
+    city = cityAt(state, cap.position)!;
+    expect(city.level).toBe(3);
+    expect(city.fortified).toBe(true);
+    // Now at L3 (threshold 5, supply 5). Choosing +3 supply at L4 needs supply ≥ 9.
+    state = applyAction(state, { type: 'levelUpCity', cityId: city.id, choice: 'supply' }, registry);
+    // supply was only 5 (< 9) so L4 is not yet available → no-op.
+    expect(cityAt(state, cap.position)!.level).toBe(3);
+  });
+
+  it('level-up bonuses survive capture (economic value transfers unchanged)', () => {
+    const registry = getRegistry();
+    let state = createGame(getConfig(), registry, ['ironclad', 'sylvan'], 7);
+    const cap = capitalOf(state, 0);
+    state = buildMines(state, registry, cap, 2);
+    let city = cityAt(state, cap.position)!;
+    state = applyAction(state, { type: 'levelUpCity', cityId: city.id, choice: 'income' }, registry);
+    city = cityAt(state, cap.position)!;
+    expect(city.incomeBonus).toBe(30);
+
+    // Simulate capture by flipping owner (capture path only changes owner).
+    city.owner = 1;
+    const after = cityAt(state, cap.position)!;
+    expect(after.level).toBe(2);
+    expect(after.incomeBonus).toBe(30); // bonus stays with the city
+    expect(cityProduction(after, registry)).toBe(20 + 10 + 30); // capital base + level + bonus
   });
 });
 

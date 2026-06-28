@@ -14,6 +14,23 @@ Format per entry: **[date] — author → affected module** · what / how / why 
 
 ## Open
 
+### 2026-06-28 — economy (city levels) → Combat & units (Patrick)
+**Fortified cities give a defensive bonus.** A city-level-3 reward, **Fortify**,
+sets a new flag `city.fortified = true` on `CityState`.
+- **What:** a unit defending **inside a fortified city** should receive a **×1.5
+  multiplier to its defence** in combat.
+- **How (suggested):** in `combat.ts`, when computing the defender's effective
+  defence, check whether the defender is standing on a fortified city and, if so,
+  multiply defence by 1.5. To find the city: the defender's tile is a city centre
+  (`cityAt(state, defender.position)`), **or** — if "inside" should mean the whole
+  3×3 territory — use `territoryCityAt(state, registry, defender.position)`. **Please
+  confirm with Patrick/Artisan which scope is intended** (centre tile vs full
+  territory). Both helpers are exported from the engine.
+- **Why:** the economy module owns leveling and stores the `fortified` flag, but the
+  actual combat math lives in the combat module. The flag is set and capture-invariant
+  today; only the defence multiplier is missing.
+- **Status:** OPEN — awaiting the defence-multiplier read in `combat.ts`.
+
 ### 2026-06-23 — economy → Map gen / fog-of-war (Patrick)
 **Tech: Prospecting (Refinement branch, L1).**
 - **What:** Prospecting reveals all resource tiles (ore outcrops, plasma vents)

@@ -59,7 +59,7 @@ describe('Research deducts the city-scaled cost', () => {
 
     let s2 = createGame(getConfig(), r, ['ironclad', 'sylvan'], 7);
     s2.players[0].ore = 80;
-    s2.cities.push({ id: 999, position: { x: 0, y: 0 }, owner: 0, isCapital: false, level: 1, supply: 0 });
+    s2.cities.push({ id: 999, position: { x: 0, y: 0 }, owner: 0, isCapital: false, level: 1, supply: 0, incomeBonus: 0, popBonus: 0, bonusSupply: 0, fortified: false });
     s2 = applyAction(s2, { type: 'research', techId: 'drilling' }, r);
     expect(s2.players[0].ore).toBe(20); // 80 - 60 (two cities)
   });

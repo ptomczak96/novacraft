@@ -1,6 +1,6 @@
 import type {
   GameState, PlayerId, DataRegistry, Unit, Coord,
-  CityState, CityId, BuildingState, BuildingKind, BuildingDef, ResourceKind,
+  CityState, CityId, BuildingState, BuildingKind, BuildingDef, ResourceKind, LevelUpChoice,
 } from './types.js';
 import { getModifier } from './tech.js';
 
@@ -54,16 +54,21 @@ function buildingAt(state: GameState, pos: Coord): BuildingState | undefined {
   return state.buildings.find(b => b.position.x === pos.x && b.position.y === pos.y);
 }
 
+// Highest level reachable via the level-up choice system today. Bonuses are only
+// designed for reaching L2/L3/L4; L5/L6 are deferred (see backlog), so cities cap
+// here for now even though economy.json still allows maxLevel 6.
+export const LEVEL_CHOICE_MAX = 4;
+
 // ── City production / pop (capacity) / level ──
 export function cityProduction(city: CityState, registry: DataRegistry): number {
   const c = registry.economy.city;
   const base = city.isCapital ? c.capitalBaseProduction : c.cityBaseProduction;
-  return base + c.productionPerLevel * (city.level - 1);
+  return base + c.productionPerLevel * (city.level - 1) + (city.incomeBonus ?? 0);
 }
 
 /** Unit capacity of a city (how many units it can support). */
 export function cityPop(city: CityState, registry: DataRegistry): number {
-  return registry.economy.city.popBase + (city.level - 1);
+  return registry.economy.city.popBase + (city.level - 1) + (city.popBonus ?? 0);
 }
 
 /** Highest level whose cumulative supply threshold is satisfied. */
@@ -89,10 +94,9 @@ export function citySupplyProgress(
   city: CityState,
   registry: DataRegistry,
 ): { current: number; needed: number; atMax: boolean } {
-  const { supplyThresholds, maxLevel } = registry.economy.city;
-  if (city.level >= maxLevel) return { current: 0, needed: 0, atMax: true };
-  const base = city.level >= 2 ? supplyThresholds[city.level - 2] : 0; // supply to reach current level
-  const next = supplyThresholds[city.level - 1]; // supply to reach next level
+  if (city.level >= LEVEL_CHOICE_MAX) return { current: 0, needed: 0, atMax: true };
+  const base = citySupplyForLevel(city.level, registry); // supply to reach current level
+  const next = citySupplyForLevel(city.level + 1, registry); // supply to reach next level
   return { current: city.supply - base, needed: next - base, atMax: false };
 }
 
@@ -148,16 +152,40 @@ export function buildingSupply(state: GameState, building: BuildingState, regist
   return 0;
 }
 
-/** Recompute supply + level for every city from current buildings. Call after any economy mutation. */
+/**
+ * Recompute each city's accumulated supply from its buildings (+ any permanent
+ * bonusSupply). Level is NO LONGER derived here — it only advances when the
+ * player accepts a level-up (levelUpCity), so the player keeps the bonus choice.
+ * Call after any economy mutation.
+ */
 export function recomputeCities(state: GameState, registry: DataRegistry): void {
-  for (const city of state.cities) city.supply = 0;
+  for (const city of state.cities) city.supply = city.bonusSupply ?? 0;
   for (const building of state.buildings) {
     const city = cityById(state, building.cityId);
     if (!city) continue;
     city.supply += buildingSupply(state, building, registry);
   }
-  for (const city of state.cities) {
-    city.level = cityLevelForSupply(city.supply, registry);
+}
+
+/** Cumulative supply needed to REACH `level` (2..). Level 1 needs none. */
+export function citySupplyForLevel(level: number, registry: DataRegistry): number {
+  if (level <= 1) return 0;
+  return registry.economy.city.supplyThresholds[level - 2];
+}
+
+/** Whether `city` has enough supply to accept its next level-up right now. */
+export function cityCanLevelUp(city: CityState, registry: DataRegistry): boolean {
+  if (city.level >= LEVEL_CHOICE_MAX) return false; // L5/L6 bonuses not designed yet
+  return city.supply >= citySupplyForLevel(city.level + 1, registry);
+}
+
+/** The two reward options offered when a city reaches `targetLevel` (the new level). */
+export function levelUpChoices(targetLevel: number): { a: LevelUpChoice; b: LevelUpChoice } | null {
+  switch (targetLevel) {
+    case 2: return { a: 'income', b: 'pop' };
+    case 3: return { a: 'fortify', b: 'reveal' };
+    case 4: return { a: 'supply', b: 'territory' };
+    default: return null;
   }
 }
 

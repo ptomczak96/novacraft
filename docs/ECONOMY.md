@@ -24,13 +24,33 @@ Every city has a **level** (1–6). Two distinct per-city stats — *do not conf
 
 | Term | Meaning | Formula |
 |---|---|---|
-| **pop** | unit capacity (max units the city can support) | `popBase(2) + level - 1` → L1=2 … L6=7 |
-| **supply** | leveling progress accumulated from buildings | crosses thresholds to raise level |
+| **pop** | unit capacity (max units the city can support) | `popBase(2) + level - 1 + popBonus` |
+| **supply** | leveling progress accumulated from buildings | crosses thresholds to unlock a level-up |
 
 **Supply thresholds** (cumulative total to *reach* a level): L2=2, L3=5, L4=9, L5=14, L6=20.
-Cities **auto-level** the moment accumulated supply crosses a threshold (no extra cost).
+The per-level cost therefore rises 2/3/4/5/6; the UI shows a per-level counter that
+**resets each level** (0/2 → 2/2, then 0/3, 0/4 …) via `citySupplyProgress()`.
 
-**Ore production** per turn by level:
+**Leveling is a player choice, not automatic.** When a city's supply crosses the next
+threshold, the owner is offered a **level-up** (the "Congratulations" modal). Accepting
+raises the level **and** applies one of two chosen rewards. Until accepted the city
+stays at its current level (so it keeps the choice). `recomputeCities` updates supply
+only; level advances solely via the `levelUpCity` action.
+
+**Level-up rewards** (all stored on the city → **capture-invariant**: they transfer
+with the city and never reset when an enemy takes it):
+
+| Reaching | Option A | Option B |
+|---|---|---|
+| **L2** | City income **+30** ore/turn (`incomeBonus`) | **+1 pop** (`popBonus`) |
+| **L3** | **Fortify** (`fortified` → ×1.5 def inside, *combat module*) | **Reveal map** *(needs fog — deferred)* |
+| **L4** | **+3 supply** (`bonusSupply`, counts toward leveling) | **Expand territory** *(needs tile-picker — deferred)* |
+
+> **Cap:** cities currently stop at **L4** (`LEVEL_CHOICE_MAX`) — L5/L6 rewards are
+> not designed yet (backlog). The deferred options (reveal, territory) appear in the
+> modal but disabled until their groups land.
+
+**Ore production** per turn by level (plus any `incomeBonus`):
 - Capital: `20 + 10×(level-1)` → 20 / 30 / 40 / 50 / 60 / 70
 - Founded city: `10 + 10×(level-1)` → 10 / 20 / 30 / 40 / 50 / 60
 

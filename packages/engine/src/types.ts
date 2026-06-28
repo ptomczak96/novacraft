@@ -161,6 +161,7 @@ export type Action =
   | UpgradeBuildingAction
   | FoundCityAction
   | CaptureCityAction
+  | LevelUpCityAction
   | EndTurnAction;
 
 export interface MoveAction {
@@ -214,6 +215,15 @@ export interface CaptureCityAction {
   unitId: UnitId;
 }
 
+/** Player-chosen reward when a city levels up (see LevelUpChoice). */
+export type LevelUpChoice = 'income' | 'pop' | 'fortify' | 'reveal' | 'supply' | 'territory';
+
+export interface LevelUpCityAction {
+  type: 'levelUpCity';
+  cityId: CityId;
+  choice: LevelUpChoice;
+}
+
 export interface EndTurnAction {
   type: 'endTurn';
 }
@@ -232,8 +242,14 @@ export interface CityState {
   position: Coord; // the city/capital centre tile
   owner: PlayerId | null;
   isCapital: boolean;
-  level: number; // 1..maxLevel (derived from supply, stored for serialization)
-  supply: number; // total supply from buildings in this city's territory
+  level: number; // 1..maxLevel — only raised by the levelUpCity action (player choice)
+  supply: number; // Σ building supply in this city's territory + bonusSupply
+  // ── Level-up bonuses (chosen via levelUpCity; all capture-invariant — they
+  //    live on the city and transfer with it, never reset on capture) ──
+  incomeBonus: number; // +ore/turn from "City income +30" choices
+  popBonus: number; // extra unit capacity from "+1 pop" choices
+  bonusSupply: number; // permanent supply from "+3 supply" choices (counts toward leveling)
+  fortified: boolean; // "Fortify" chosen → units inside get a defensive bonus (combat module reads this)
 }
 
 export interface BuildingState {

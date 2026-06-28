@@ -295,6 +295,33 @@ and territory expansion as each lands.
   the on-canvas "Found City" box is driven by legal actions, so it now only appears
   the following turn automatically.
 
+### 2026-06-28 — Artisan Ornaments — choice-based city leveling + level-up modal
+
+- **Leveling is no longer automatic.** Previously `recomputeCities` derived a city's
+  level straight from its supply. Now level only advances via a new **`levelUpCity`**
+  action: when supply crosses the next threshold, `getLegalActions` offers the two
+  rewards for that level, the "Congratulations" modal pops on the human's turn, and
+  the player's pick both raises the level and applies the reward. *Why:* the design
+  calls for a meaningful choice at each level, which a pure derivation can't express.
+  `recomputeCities` now only recomputes `supply`; it never touches `level`.
+- **New capture-invariant city fields:** `incomeBonus`, `popBonus`, `bonusSupply`,
+  `fortified`. They live on `CityState`, so capture (which only flips `owner`)
+  preserves them — satisfying "a city's economic value never changes when captured,
+  it just transfers." `cityProduction` adds `incomeBonus`; `cityPop` adds `popBonus`;
+  `recomputeCities` seeds supply from `bonusSupply`.
+- **Rewards:** L2 → +30 income **or** +1 pop; L3 → Fortify **or** Reveal map; L4 →
+  +3 supply **or** Expand territory. The three economy-pure rewards (income, pop,
+  supply) and the **fortified** flag are wired now. **Reveal map** (needs fog) and
+  **Expand territory** (needs the tile-picker UI) are deferred to their own groups and
+  shown disabled in the modal. The fortify *combat* effect (×1.5 defence inside a
+  fortified city) is handed to the combat module via `docs/overlap.md`.
+- **Level cap at L4 for now** (`LEVEL_CHOICE_MAX = 4`): only L2–L4 rewards are
+  designed. economy.json still says maxLevel 6, but the choice system stops at 4 and
+  `citySupplyProgress` reports "MAX" there. L5/L6 reward design is a backlog item.
+- **Supply display resets per level** (`citySupplyProgress`) even though stored supply
+  is cumulative — see the prior 2026-06-28 city-info-card entry; the same helper now
+  also bounds at the L4 cap.
+
 ---
 
 *Deferred ideas (the "we'll tweak this later" items) live in the memory backlog,
