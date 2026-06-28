@@ -77,6 +77,25 @@ export function cityLevelForSupply(supply: number, registry: DataRegistry): numb
   return Math.min(level, maxLevel);
 }
 
+/**
+ * Supply progress *within the current level*, for display. The stored
+ * `supply` is cumulative, but the UI shows a per-level counter that "resets"
+ * each time the city levels: current = supply − (threshold reached for this
+ * level), needed = (next threshold) − (this level's threshold). E.g. an L1
+ * city needs 2 to reach L2 (shown 0/2 → 2/2); once at L2 it shows 0/3, etc.
+ * At max level there is no next threshold (atMax = true).
+ */
+export function citySupplyProgress(
+  city: CityState,
+  registry: DataRegistry,
+): { current: number; needed: number; atMax: boolean } {
+  const { supplyThresholds, maxLevel } = registry.economy.city;
+  if (city.level >= maxLevel) return { current: 0, needed: 0, atMax: true };
+  const base = city.level >= 2 ? supplyThresholds[city.level - 2] : 0; // supply to reach current level
+  const next = supplyThresholds[city.level - 1]; // supply to reach next level
+  return { current: city.supply - base, needed: next - base, atMax: false };
+}
+
 // ── Building output & supply ──
 /** Count REB1s of `kind` adjacent to `pos` that belong to the same city. */
 function adjacentSameCity(state: GameState, pos: Coord, kind: BuildingKind, cityId: CityId | null): number {

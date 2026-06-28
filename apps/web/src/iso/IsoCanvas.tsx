@@ -365,9 +365,10 @@ export function IsoCanvas({ mode, onPaint }: IsoCanvasProps) {
       return;
     }
 
-    // Clicked an owned (empty) city tile → select it for recruiting.
+    // Clicked any city tile → select it (shows the pop/supply info box; owned
+    // empty cities additionally get the recruit panel via MapView).
     const here = map?.tiles[tile.y]?.[tile.x];
-    if (here?.isCity && here.owner === currentPlayer) {
+    if (here?.isCity) {
       setSelectedCity({ x: tile.x, y: tile.y });
       setBuildPromptTile(null);
       return;

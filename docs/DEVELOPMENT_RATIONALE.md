@@ -267,6 +267,22 @@ This is part of the larger **city-levels** work kicked off this session; subsequ
 entries will cover the leveling modal, bonuses (income/pop/fortify/supply/reveal),
 and territory expansion as each lands.
 
+### 2026-06-28 — Artisan Ornaments — city info card (pop & supply readout)
+
+- **Clicking any city** (owned, enemy, or neutral) now selects it and shows a small
+  info card: **Population** 🧍 `used/max` and **Supply** 🏭 `current/needed`. Owned
+  empty cities still get the recruit panel as before. Enemy/neutral pop counts are
+  best-effort under fog (only visible homed units are counted) — acceptable for a
+  readout; revisit if fog hides too much.
+- **Supply is shown as a per-level counter that resets each level**, even though the
+  stored `supply` is cumulative. New engine helper `citySupplyProgress(city)` returns
+  `{current, needed, atMax}` where `current = supply − thisLevelThreshold` and
+  `needed = nextThreshold − thisLevelThreshold`. This is why the existing cumulative
+  thresholds `[2,5,9,14,20]` already encode the requested per-level costs 2/3/4/5/6:
+  an L1 city shows 0/2→2/2, then 0/3 at L2, 0/4 at L3, etc. No data change needed —
+  the reset is purely a display transform. (Leveling is still auto-derived from
+  supply here; the choice-driven level-up modal is the next group.)
+
 ---
 
 *Deferred ideas (the "we'll tweak this later" items) live in the memory backlog,

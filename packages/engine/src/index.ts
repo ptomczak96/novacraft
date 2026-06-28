@@ -8,7 +8,7 @@ export { getModifier, ownedCityCount, techCost, techCostForPlayer, isTechAvailab
 export {
   getUnitUpkeep, calculateUpkeep, settleEconomy,
   calculateOreIncome, calculatePlasmaIncome,
-  cityProduction, cityPop, cityLevelForSupply, cityAt, cityById, territoryCityAt,
+  cityProduction, cityPop, cityLevelForSupply, citySupplyProgress, cityAt, cityById, territoryCityAt,
   unitsHomedAt, cityHasCapacity, recomputeCities, buildingOutput, buildingSupply,
   getUnitPlasmaCost, canBuild, canUpgradeBuilding, upgradeCostFor, buildingCost, canFoundCity,
   resourceKindAt,
