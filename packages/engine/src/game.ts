@@ -509,7 +509,12 @@ function applyLevelUpCity(state: GameState, action: LevelUpCityAction, registry:
   switch (action.choice) {
     case 'income': city.incomeBonus += 30; break;   // perpetual +30 ore/turn (capture-invariant)
     case 'pop': city.popBonus += 1; break;          // +1 unit capacity, stacks on the per-level pop
-    case 'fortify': city.fortified = true; break;   // combat module applies the ×1.5 defence
+    case 'fortify': {                               // combat applies the extra ×1.5 defence
+      city.fortified = true;
+      const ct = state.map.tiles[city.position.y]?.[city.position.x];
+      if (ct) ct.fortified = true;                  // mirror onto the tile so combat (tile-based) reads it
+      break;
+    }
     case 'supply': city.bonusSupply += 3; break;    // permanent supply toward further leveling
     default: break;
   }

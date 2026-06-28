@@ -344,6 +344,22 @@ and territory expansion as each lands.
   powerhouse identity — see the economy backlog. It's an intentional asymmetry idea,
   not yet a decision.
 
+### 2026-06-28 — Artisan Ornaments — Fortify wired into combat (stacks ×1.5 on cities)
+
+- **Fortify (L3 reward) now applies its defence bonus in `combat.ts`.** Discovery
+  that drove the design: `getDefenseMultiplier` *already* returns ×1.5 for **any**
+  city tile, so a literal "Fortify = ×1.5" would be a no-op. To make Fortify a real
+  upgrade, it **stacks** an extra `FORTIFY_MULTIPLIER = 1.5` on top of the base city
+  ×1.5 → a fortified city gives **×2.25** to the defender's force. Flagged to the user;
+  easily retuned via the one constant.
+- **Wiring:** `city.fortified` (canonical, capture-invariant) is mirrored onto the
+  city-centre `tile.fortified` when Fortify is chosen; combat is tile-based and reads
+  `tile.fortified`, so no need to thread the city list into the combat module. "Inside
+  the city" = standing on the **centre tile**. Implemented by the economy side directly
+  since Patrick had no in-flight combat work (overlap entry moved to Done).
+- **Reveal Map** stays disabled ("coming soon") pending fog of war, which is the next
+  thing to be built.
+
 ---
 
 *Deferred ideas (the "we'll tweak this later" items) live in the memory backlog,

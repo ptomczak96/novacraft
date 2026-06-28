@@ -2,6 +2,7 @@ import React, { useMemo, useEffect } from 'react';
 import { cityPop, citySupplyProgress } from '@tactica/engine';
 import { useGameStore } from '../store/gameStore.js';
 import { IsoCanvas } from '../iso/IsoCanvas.js';
+import { TerritorySelectBar } from './TerritorySelectBar.js';
 
 const UNIT_ICONS: Record<string, string> = {
   scout: '🏃',
@@ -53,6 +54,9 @@ export function MapView() {
   return (
     <div className="map-container" style={{ position: 'relative' }}>
       <IsoCanvas mode="game" />
+
+      {/* Territory-expansion picker — pinned to the map's top-right corner */}
+      <TerritorySelectBar />
 
       {/* City info card — pop & supply for the selected city (any owner) */}
       {cityInfo && (

@@ -130,6 +130,7 @@ export interface Tile {
   // resourceKind is treated as a shard outcrop by the economy layer.
   resourceKind?: ResourceKind | null; // 'shard' | 'plasma' | null
   isRuin?: boolean; // a site where a new city can be founded
+  fortified?: boolean; // city centre fortified (L3 reward) — combat reads this for extra defence
 }
 
 export interface GameMap {

@@ -7,7 +7,6 @@ import { UnitSheet } from './UnitSheet.js';
 import { CombatLog } from './CombatLog.js';
 import { TechTreeView } from './TechTreeView.js';
 import { LevelUpModal } from './LevelUpModal.js';
-import { TerritorySelectBar } from './TerritorySelectBar.js';
 import type { Action } from '@tactica/engine';
 import { getLegalActions, cityProduction, buildingOutput } from '@tactica/engine';
 
@@ -199,9 +198,6 @@ export function GameScreen() {
 
         {/* City level-up choice (pops when an owned city has enough supply) */}
         <LevelUpModal />
-
-        {/* Territory-expansion picker bar (L4 "Expand territory" reward) */}
-        <TerritorySelectBar />
 
         {/* Game Over */}
         {gameState.phase === 'finished' && (

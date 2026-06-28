@@ -125,6 +125,25 @@ describe('Combat', () => {
     expect(a.attackerDamage).toBe(b.attackerDamage);
     expect(a.defenderRetaliation).toBe(b.defenderRetaliation);
   });
+
+  it('a fortified city protects the defender more than a normal city', () => {
+    const registry = getRegistry();
+    const mkMap = (fortified: boolean) => {
+      const tiles = Array.from({ length: 12 }, () => Array.from({ length: 12 }, () => ({ terrain: 'plains', owner: null, isCity: false, isResourceTile: false })));
+      tiles[0][1] = { terrain: 'plains', owner: null, isCity: true, isResourceTile: false, fortified } as typeof tiles[0][0];
+      return { width: 12, height: 12, tiles };
+    };
+    const dmgTo = (fortified: boolean) => previewCombat(
+      { id: 1, typeId: 'warrior', owner: 0, position: { x: 0, y: 0 }, hp: 15, hasMoved: false, hasAttacked: false, abilityCooldowns: {} },
+      registry.unitTypes['warrior'],
+      { id: 2, typeId: 'warrior', owner: 1, position: { x: 1, y: 0 }, hp: 15, hasMoved: false, hasAttacked: false, abilityCooldowns: {} },
+      registry.unitTypes['warrior'],
+      mkMap(fortified), registry, defaultConfig.combatConfig,
+    ).attackerDamage;
+    // Both are on a city (base ×1.5); the fortified one stacks an extra ×1.5,
+    // so the defender takes strictly less damage.
+    expect(dmgTo(true)).toBeLessThan(dmgTo(false));
+  });
 });
 
 describe('Determinism', () => {

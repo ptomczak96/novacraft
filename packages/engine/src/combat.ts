@@ -61,11 +61,18 @@ export function calculateDamage(
   };
 }
 
+// Extra multiplier a Fortify'd city (L3 city reward) grants ON TOP of the base
+// city/terrain ×1.5. So a fortified city = 1.5 × 1.5 = 2.25 to the defender's
+// force. Tune here if a different fortify strength is wanted.
+const FORTIFY_MULTIPLIER = 1.5;
+
 /** Determine the Polytopia defense multiplier for a tile. */
 function getDefenseMultiplier(tile: Tile, terrain: { defenceBonus: number } | undefined): number {
-  if (tile.isCity) return 1.5;
-  if (terrain && terrain.defenceBonus > 0) return 1.5;
-  return 1.0;
+  let mult = 1.0;
+  if (tile.isCity) mult = 1.5;
+  else if (terrain && terrain.defenceBonus > 0) mult = 1.5;
+  if (tile.fortified) mult *= FORTIFY_MULTIPLIER; // Fortify stacks on the base city bonus
+  return mult;
 }
 
 /** Build a terrain label for the combat breakdown. */

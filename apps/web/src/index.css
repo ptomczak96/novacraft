@@ -571,28 +571,28 @@ label {
 }
 .levelup-later:hover { color: var(--text); }
 
-/* Territory-expansion picker bar */
+/* Territory-expansion picker — pinned to the top-right corner, off the map */
 .territory-bar {
   position: absolute;
-  bottom: 16px;
-  left: 50%;
-  transform: translateX(-50%);
+  top: 16px;
+  right: 16px;
   display: flex;
-  align-items: center;
-  gap: 16px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  width: 220px;
   background: var(--bg-surface);
   border: 1px solid #2fae5e;
   border-radius: 10px;
-  padding: 10px 16px;
+  padding: 12px 14px;
   z-index: 20;
   box-shadow: 0 8px 30px rgba(0,0,0,0.5);
-  max-width: 90%;
 }
 
-.territory-count { font-size: 15px; white-space: nowrap; }
+.territory-count { font-size: 16px; }
 .territory-count b { color: #5ee08a; font-variant-numeric: tabular-nums; }
-.territory-hint { font-size: 12px; color: var(--text-muted); line-height: 1.3; }
-.territory-actions { display: flex; gap: 8px; }
+.territory-hint { font-size: 11.5px; color: var(--text-muted); line-height: 1.35; }
+.territory-actions { display: flex; gap: 8px; justify-content: flex-end; }
 
 /* Map editor toolbar */
 .map-editor-toolbar {
