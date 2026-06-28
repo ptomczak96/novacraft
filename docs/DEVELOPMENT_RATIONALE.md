@@ -283,6 +283,18 @@ and territory expansion as each lands.
   the reset is purely a display transform. (Leveling is still auto-derived from
   supply here; the choice-driven level-up modal is the next group.)
 
+### 2026-06-28 — Artisan Ornaments — found-city turn delay (matches capture)
+
+- **Founding a city now requires the unit to NOT have moved this turn** — i.e. you
+  can only found on the turn *after* moving onto a ruin, identical to the existing
+  city-capture rule. `canFoundCity` now finds the unit on the ruin and rejects if
+  `unit.hasMoved`. Applying a found also sets the founder's `hasMoved` (founding
+  consumes the unit's turn, so it can't found-then-move-away). *Why:* consistency —
+  both "take this tile's settlement" actions (found, capture) should cost a turn of
+  standing still, preventing move-and-claim in a single turn. UI needs no change:
+  the on-canvas "Found City" box is driven by legal actions, so it now only appears
+  the following turn automatically.
+
 ---
 
 *Deferred ideas (the "we'll tweak this later" items) live in the memory backlog,

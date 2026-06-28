@@ -424,6 +424,10 @@ function applyFoundCity(state: GameState, action: FoundCityAction, registry: Dat
   });
   state.players[playerId].ore -= registry.economy.foundCity.cost;
 
+  // Founding consumes the unit's turn (mirrors capture), so it can't also move away.
+  const founder = state.units.find(u => u.owner === playerId && u.position.x === x && u.position.y === y);
+  if (founder) founder.hasMoved = true;
+
   recomputeCities(state, registry);
   return checkWinConditions(state, registry);
 }

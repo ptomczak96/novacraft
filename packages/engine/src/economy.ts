@@ -283,8 +283,10 @@ export function canFoundCity(state: GameState, registry: DataRegistry, playerId:
   if (cityAt(state, pos)) return false;
   const { cost, requiresUnitOnTile } = registry.economy.foundCity;
   if (requiresUnitOnTile) {
-    const hasUnit = state.units.some(u => u.owner === playerId && u.position.x === pos.x && u.position.y === pos.y);
-    if (!hasUnit) return false;
+    // The unit must be on the ruin AND not have moved this turn — so founding
+    // (like capturing) is only available the turn AFTER moving onto the ruin.
+    const unit = state.units.find(u => u.owner === playerId && u.position.x === pos.x && u.position.y === pos.y);
+    if (!unit || unit.hasMoved) return false;
   }
   return state.players[playerId].ore >= cost;
 }

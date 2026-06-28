@@ -285,6 +285,29 @@ describe('Founding a city', () => {
       }
     }
   });
+
+  it('cannot found on the same turn a unit moved onto the ruin (only the turn after)', () => {
+    const registry = getRegistry();
+    let state = createGame(getConfig(), registry, ['ironclad', 'sylvan'], 7);
+    const pos = { x: 6, y: 6 };
+    state.map.tiles[pos.y][pos.x].isRuin = true;
+    state.map.tiles[pos.y][pos.x].isCity = false;
+    // A unit that just moved onto the ruin this turn (hasMoved = true).
+    state.units.push({ id: 502, typeId: 'warrior', owner: 0, position: { ...pos }, hp: 15, hasMoved: true, hasAttacked: false, abilityCooldowns: {} });
+    state.players[0].ore = 50;
+
+    // Same turn: founding is neither offered nor applied.
+    expect(getLegalActions(state, registry, 0).some(a => a.type === 'foundCity')).toBe(false);
+    const before = state.cities.length;
+    state = applyAction(state, { type: 'foundCity', position: pos }, registry);
+    expect(state.cities.length).toBe(before);
+
+    // Following turn (hasMoved reset): founding now works.
+    state.units.find(u => u.id === 502)!.hasMoved = false;
+    expect(getLegalActions(state, registry, 0).some(a => a.type === 'foundCity')).toBe(true);
+    state = applyAction(state, { type: 'foundCity', position: pos }, registry);
+    expect(state.cities.some(c => c.position.x === pos.x && c.position.y === pos.y && c.owner === 0)).toBe(true);
+  });
 });
 
 describe('Melee advance on kill', () => {
