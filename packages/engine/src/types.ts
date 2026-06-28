@@ -29,7 +29,7 @@ export interface UnitType {
   defence: number;
   movement: number;
   attackRange: number;
-  sightRange: number;
+  visibility: number; // fog sight radius (Chebyshev): 0=own tile only, 1=3x3, 2=5x5, …
   abilities: AbilityDef[];
   traits: string[]; // e.g. "flying", "aquatic", "ignoresTerrainCost"
 }
@@ -291,6 +291,9 @@ export interface GameState {
   cities: CityState[];
   buildings: BuildingState[];
   unitHomeCity: Record<UnitId, CityId>; // unit id -> home city (slot accounting)
+  // Fog memory: explored[playerId][y][x] = has this player ever seen this tile.
+  // Persists "discovered" so a tile out of current sight shows as fog, not cloud.
+  explored: boolean[][][];
   currentPlayer: PlayerId;
   turn: number;
   nextUnitId: UnitId;

@@ -33,6 +33,7 @@ import {
   drawMoveHighlight,
   drawAttackHighlight,
   drawFogExplored,
+  drawCloud,
   drawDamagePreview,
   drawGridLabel,
   drawTerritoryBorders,
@@ -191,8 +192,8 @@ export function IsoCanvas({ mode, onPaint }: IsoCanvasProps) {
         const vis = visibility?.[y]?.[x] ?? 'visible';
         const key = `${x},${y}`;
 
-        // Hidden tiles: skip entirely (dark background shows through)
-        if (vis === 'hidden') continue;
+        // Hidden (undiscovered) tiles: cover with a white cloud, draw nothing else.
+        if (vis === 'hidden') { drawCloud(ctx, x, y, map.height); continue; }
 
         // ── 1. Draw tile prism ──
         drawTile(ctx, tile, x, y, map.height, registry);
@@ -253,7 +254,7 @@ export function IsoCanvas({ mode, onPaint }: IsoCanvasProps) {
 
     // ── Territory borders: one outline per CITY territory (so touching cities
     // don't fuse), drawn last ──
-    drawTerritoryBorders(ctx, map, map.height, cities);
+    drawTerritoryBorders(ctx, map, map.height, cities, visibility);
 
     // ── Buildings + plasma-vent labels (drawn on top of tiles) ──
     for (let y = 0; y < map.height; y++) {

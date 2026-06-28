@@ -14,6 +14,20 @@ Format per entry: **[date] — author → affected module** · what / how / why 
 
 ## Open
 
+### 2026-06-28 — fog of war → Graphics (Patrick)
+**Cloud & fog tile graphics.** Fog of war is now implemented and ON by default.
+Tiles have three render states (in `apps/web/src/iso`):
+- **Cloud** (`visibility === 'hidden'`, never discovered) — currently a flat **white
+  diamond** drawn by `drawCloud()` in `drawOverlays.ts`. **Please replace with a
+  painted "cloud" tile sprite.** It must fully hide terrain/structures beneath.
+- **Fog** (`visibility === 'explored'`, seen before, not currently in sight) — a grey
+  overlay (`drawFogExplored()` → `FOG_EXPLORED_OVERLAY`) drawn over the last-known
+  terrain & buildings. Could be given a translucent fog texture if desired.
+- **Visible** — full colour, no overlay.
+
+The engine already supplies the per-tile state in `visibleState.visibility[y][x]`;
+only the *art* for cloud (and optionally fog) is the open item. **Status:** OPEN.
+
 ### 2026-06-23 — economy → Map gen / fog-of-war (Patrick)
 **Tech: Prospecting (Refinement branch, L1).**
 - **What:** Prospecting reveals all resource tiles (ore outcrops, plasma vents)

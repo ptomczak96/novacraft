@@ -1,7 +1,7 @@
 {
   "mapWidth": 12,
   "mapHeight": 12,
-  "fogOfWar": false,
+  "fogOfWar": true,
   "turnLimit": 50,
   "winConditions": {
     "captureAllCities": true,

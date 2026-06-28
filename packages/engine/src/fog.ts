@@ -1,61 +1,72 @@
-import type { GameMap, Unit, PlayerId, TileVisibility, DataRegistry } from './types.js';
+import type { GameMap, GameState, Unit, CityState, PlayerId, TileVisibility, DataRegistry } from './types.js';
+
+/** An all-`false` explored grid sized to the map (one per player). */
+export function makeExploredGrid(width: number, height: number): boolean[][] {
+  return Array.from({ length: height }, () => Array.from({ length: width }, () => false));
+}
 
 /**
- * Compute visibility for a player using simple radius-with-blockers.
- * Each unit reveals tiles within its sight range, blocked by sight-blocking terrain.
+ * Tiles a player can see RIGHT NOW ('visible'); everything else is 'hidden'.
+ * Persistent "discovered" memory (fog vs cloud) is layered on separately from the
+ * stored `explored` grid — see getVisibleState. Sources of current sight:
+ *   - each owned unit reveals a square of Chebyshev radius = its `visibility`
+ *     (0 = own tile only, 1 = 3×3, 2 = 5×5, …), blocked by sight-blocking terrain;
+ *   - each owned city reveals its whole territory (base 3×3 + claimed extra tiles).
  */
 export function computeVisibility(
   map: GameMap,
   units: Unit[],
+  cities: CityState[],
   playerId: PlayerId,
   registry: DataRegistry,
-  previousVisibility?: TileVisibility[][],
 ): TileVisibility[][] {
   const visibility: TileVisibility[][] = [];
-
-  // Initialize from previous state (explored stays explored) or all hidden
   for (let y = 0; y < map.height; y++) {
     visibility[y] = [];
-    for (let x = 0; x < map.width; x++) {
-      if (previousVisibility && previousVisibility[y][x] !== 'hidden') {
-        visibility[y][x] = 'explored';
-      } else {
-        visibility[y][x] = 'hidden';
+    for (let x = 0; x < map.width; x++) visibility[y][x] = 'hidden';
+  }
+
+  const inBounds = (x: number, y: number) => x >= 0 && x < map.width && y >= 0 && y < map.height;
+
+  // Owned city territories are always currently visible.
+  const r = registry.economy.city.territoryRadius;
+  for (const c of cities) {
+    if (c.owner !== playerId) continue;
+    for (let dy = -r; dy <= r; dy++) {
+      for (let dx = -r; dx <= r; dx++) {
+        if (inBounds(c.position.x + dx, c.position.y + dy)) visibility[c.position.y + dy][c.position.x + dx] = 'visible';
       }
+    }
+    for (const t of c.extraTerritory ?? []) {
+      if (inBounds(t.x, t.y)) visibility[t.y][t.x] = 'visible';
     }
   }
 
-  // City tiles owned by player grant visibility on their tile
-  for (let y = 0; y < map.height; y++) {
-    for (let x = 0; x < map.width; x++) {
-      const tile = map.tiles[y][x];
-      if (tile.isCity && tile.owner === playerId) {
-        visibility[y][x] = 'visible';
-        // Cities see adjacent tiles
-        for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [-1, 1], [1, -1], [1, 1]]) {
-          const nx = x + dx;
-          const ny = y + dy;
-          if (nx >= 0 && nx < map.width && ny >= 0 && ny < map.height) {
-            visibility[ny][nx] = 'visible';
-          }
-        }
-      }
-    }
-  }
-
-  // Each owned unit reveals tiles
-  const playerUnits = units.filter(u => u.owner === playerId);
-  for (const unit of playerUnits) {
+  // Each owned unit reveals a square of its visibility radius.
+  for (const unit of units) {
+    if (unit.owner !== playerId) continue;
     const unitType = registry.unitTypes[unit.typeId];
     if (!unitType) continue;
-    const sightRange = unitType.sightRange;
-    revealFromPoint(map, visibility, unit.position.x, unit.position.y, sightRange, registry);
+    revealSquare(map, visibility, unit.position.x, unit.position.y, unitType.visibility, registry);
   }
 
   return visibility;
 }
 
-function revealFromPoint(
+/** OR the player's current sight into their persistent explored grid (mutates state). */
+export function updateExplored(state: GameState, playerId: PlayerId, registry: DataRegistry): void {
+  const vis = computeVisibility(state.map, state.units, state.cities, playerId, registry);
+  const grid = state.explored?.[playerId];
+  if (!grid) return;
+  for (let y = 0; y < state.map.height; y++) {
+    for (let x = 0; x < state.map.width; x++) {
+      if (vis[y][x] === 'visible') grid[y][x] = true;
+    }
+  }
+}
+
+/** Reveal a Chebyshev-radius square around (ox,oy), each tile gated by line of sight. */
+function revealSquare(
   map: GameMap,
   visibility: TileVisibility[][],
   ox: number,
@@ -63,15 +74,11 @@ function revealFromPoint(
   range: number,
   registry: DataRegistry,
 ): void {
-  // Simple approach: check all tiles within Manhattan distance <= range
-  // Use line-of-sight check with bresenham-like blocking
   for (let dy = -range; dy <= range; dy++) {
     for (let dx = -range; dx <= range; dx++) {
       const tx = ox + dx;
       const ty = oy + dy;
       if (tx < 0 || tx >= map.width || ty < 0 || ty >= map.height) continue;
-      if (Math.abs(dx) + Math.abs(dy) > range) continue;
-
       if (hasLineOfSight(map, ox, oy, tx, ty, registry)) {
         visibility[ty][tx] = 'visible';
       }
@@ -91,7 +98,6 @@ function hasLineOfSight(
   // Origin always visible to itself
   if (x0 === x1 && y0 === y1) return true;
 
-  // Step through the line
   const dx = Math.abs(x1 - x0);
   const dy = Math.abs(y1 - y0);
   const sx = x0 < x1 ? 1 : -1;
@@ -101,21 +107,12 @@ function hasLineOfSight(
   let cy = y0;
 
   while (true) {
-    // Move to next cell
     const e2 = 2 * err;
-    if (e2 > -dy) {
-      err -= dy;
-      cx += sx;
-    }
-    if (e2 < dx) {
-      err += dx;
-      cy += sy;
-    }
+    if (e2 > -dy) { err -= dy; cx += sx; }
+    if (e2 < dx) { err += dx; cy += sy; }
 
-    // Reached target
     if (cx === x1 && cy === y1) return true;
 
-    // Check if this intermediate cell blocks sight
     if (cx < 0 || cx >= map.width || cy < 0 || cy >= map.height) return false;
     const tile = map.tiles[cy][cx];
     const terrain = registry.terrainTypes[tile.terrain];

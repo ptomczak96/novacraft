@@ -9,7 +9,7 @@
     "defence": 1,
     "movement": 4,
     "attackRange": 1,
-    "sightRange": 4,
+    "visibility": 1,
     "abilities": [],
     "traits": []
   },
@@ -23,7 +23,7 @@
     "defence": 3,
     "movement": 2,
     "attackRange": 1,
-    "sightRange": 2,
+    "visibility": 1,
     "abilities": [],
     "traits": []
   },
@@ -37,7 +37,7 @@
     "defence": 1,
     "movement": 2,
     "attackRange": 2,
-    "sightRange": 3,
+    "visibility": 1,
     "abilities": [],
     "traits": []
   },
@@ -51,7 +51,7 @@
     "defence": 6,
     "movement": 1,
     "attackRange": 1,
-    "sightRange": 2,
+    "visibility": 1,
     "abilities": [],
     "traits": []
   },
@@ -65,7 +65,7 @@
     "defence": 1,
     "movement": 1,
     "attackRange": 3,
-    "sightRange": 2,
+    "visibility": 1,
     "abilities": [],
     "traits": ["noMoveAndAttack"]
   },
@@ -79,7 +79,7 @@
     "defence": 2,
     "movement": 3,
     "attackRange": 1,
-    "sightRange": 2,
+    "visibility": 1,
     "abilities": [
       {
         "id": "rage",
@@ -102,7 +102,7 @@
     "defence": 5,
     "movement": 1,
     "attackRange": 2,
-    "sightRange": 2,
+    "visibility": 1,
     "abilities": [],
     "traits": ["noMoveAndAttack"]
   },
@@ -116,7 +116,7 @@
     "defence": 2,
     "movement": 3,
     "attackRange": 2,
-    "sightRange": 4,
+    "visibility": 1,
     "abilities": [
       {
         "id": "camouflage",
@@ -139,7 +139,7 @@
     "defence": 4,
     "movement": 1,
     "attackRange": 1,
-    "sightRange": 3,
+    "visibility": 1,
     "abilities": [
       {
         "id": "entangle",

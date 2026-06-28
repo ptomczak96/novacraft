@@ -8,7 +8,7 @@ import { createPRNG } from './prng.js';
 import { generateMap } from './mapgen.js';
 import { getReachableTiles, distance, inRange } from './pathfinding.js';
 import { resolveCombat, previewCombat } from './combat.js';
-import { computeVisibility } from './fog.js';
+import { computeVisibility, updateExplored, makeExploredGrid } from './fog.js';
 import {
   settleEconomy, calculateOreIncome, calculatePlasmaIncome, recomputeCities,
   territoryCityAt, cityAt, cityById, cityHasCapacity, getUnitPlasmaCost,
@@ -90,7 +90,7 @@ export function createGame(
     if (capital) unitHomeCity[id] = capital.id;
   }
 
-  return {
+  const state: GameState = {
     config,
     map,
     units,
@@ -98,6 +98,7 @@ export function createGame(
     cities,
     buildings: [],
     unitHomeCity,
+    explored: players.map(() => makeExploredGrid(map.width, map.height)),
     currentPlayer: 0,
     turn: 1,
     nextUnitId,
@@ -109,6 +110,10 @@ export function createGame(
     winner: null,
     winConditionMet: null,
   };
+
+  // Seed each player's fog memory with what they can see at the start.
+  for (let p = 0; p < players.length; p++) updateExplored(state, p, registry);
+  return state;
 }
 
 function findAdjacentSpawn(map: { width: number; height: number; tiles: { terrain: string }[][] }, pos: Coord, occupiedPositions: Coord[]): Coord {
@@ -244,6 +249,20 @@ export function applyAction(state: GameState, action: Action, registry: DataRegi
   const newState = clone(state);
   newState.actionLog.push(action);
 
+  const result = dispatchAction(newState, action, registry);
+
+  // Refresh fog memory after the action: the acting player (their units may have
+  // moved and revealed new tiles) and, after an endTurn, the player now on turn.
+  if (result.config.fogOfWar && result.explored) {
+    updateExplored(result, state.currentPlayer, registry);
+    if (result.currentPlayer !== state.currentPlayer) {
+      updateExplored(result, result.currentPlayer, registry);
+    }
+  }
+  return result;
+}
+
+function dispatchAction(newState: GameState, action: Action, registry: DataRegistry): GameState {
   switch (action.type) {
     case 'move':
       return applyMove(newState, action, registry);
@@ -711,9 +730,23 @@ export function getVisibleState(state: GameState, playerId: PlayerId, registry: 
     };
   }
 
-  const visibility = computeVisibility(state.map, state.units, playerId, registry);
+  // Current sight ('visible' / 'hidden'), then overlay persistent fog memory:
+  // a tile that's been seen before but isn't currently visible shows as 'explored'
+  // (fog — terrain & structures as last known, no enemy units); never-seen = cloud.
+  const current = computeVisibility(state.map, state.units, state.cities, playerId, registry);
+  const explored = state.explored?.[playerId];
+  const visibility: TileVisibility[][] = [];
+  for (let y = 0; y < state.map.height; y++) {
+    visibility[y] = [];
+    for (let x = 0; x < state.map.width; x++) {
+      if (current[y][x] === 'visible') visibility[y][x] = 'visible';
+      else if (explored?.[y]?.[x]) visibility[y][x] = 'explored';
+      else visibility[y][x] = 'hidden';
+    }
+  }
 
-  // Filter units — only show own units and enemy units on visible tiles
+  // Filter units — only show own units and enemy units on currently-visible tiles
+  // (so a fog tile keeps its last-seen terrain/buildings but hides enemy units).
   const visibleUnits = state.units.filter(u => {
     if (u.owner === playerId) return true;
     return visibility[u.position.y][u.position.x] === 'visible';

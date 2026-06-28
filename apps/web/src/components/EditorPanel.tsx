@@ -108,7 +108,7 @@ function UnitEditor({ units, onChange }: { units: UnitType[]; onChange: (u: Unit
             <th>DEF</th>
             <th>MOV</th>
             <th>RNG</th>
-            <th>Sight</th>
+            <th>Vis</th>
           </tr>
         </thead>
         <tbody>
@@ -121,7 +121,7 @@ function UnitEditor({ units, onChange }: { units: UnitType[]; onChange: (u: Unit
               <td><input type="number" value={u.defence} onChange={e => updateUnit(i, 'defence', Number(e.target.value))} /></td>
               <td><input type="number" value={u.movement} onChange={e => updateUnit(i, 'movement', Number(e.target.value))} /></td>
               <td><input type="number" value={u.attackRange} onChange={e => updateUnit(i, 'attackRange', Number(e.target.value))} /></td>
-              <td><input type="number" value={u.sightRange} onChange={e => updateUnit(i, 'sightRange', Number(e.target.value))} /></td>
+              <td><input type="number" value={u.visibility} onChange={e => updateUnit(i, 'visibility', Number(e.target.value))} /></td>
             </tr>
           ))}
         </tbody>

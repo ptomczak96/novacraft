@@ -70,8 +70,8 @@ export function UnitSheet() {
           <span className="stat-value">{unitType.attackRange}</span>
         </div>
         <div className="stat-grid-item">
-          <span className="stat-label">Sight</span>
-          <span className="stat-value">{unitType.sightRange}</span>
+          <span className="stat-label">Visibility</span>
+          <span className="stat-value">{unitType.visibility}</span>
         </div>
         <div className="stat-grid-item">
           <span className="stat-label">Cost</span>

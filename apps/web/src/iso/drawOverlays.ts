@@ -4,7 +4,7 @@ import {
   LABEL_FONT, LABEL_COLOR, PLAYER_COLORS,
 } from './constants.js';
 import { tileToScreenShifted } from './projection.js';
-import type { GameMap, CityState } from '@tactica/engine';
+import type { GameMap, CityState, TileVisibility } from '@tactica/engine';
 
 const HW = TILE_W / 2;
 const HH = TILE_H / 2;
@@ -30,6 +30,22 @@ export function drawHighlight(
   ctx.lineTo(sx - HW, sy + HH);
   ctx.closePath();
   ctx.fillStyle = color;
+  ctx.fill();
+}
+
+/**
+ * Cloud (undiscovered / 'hidden') tile: a flat white diamond hiding everything.
+ * Placeholder — Patrick to replace with a painted cloud tile sprite (see overlap.md).
+ */
+export function drawCloud(ctx: CanvasRenderingContext2D, tx: number, ty: number, mapHeight: number) {
+  const { sx, sy } = tileToScreenShifted(tx, ty, mapHeight, 0);
+  ctx.beginPath();
+  ctx.moveTo(sx, sy);
+  ctx.lineTo(sx + HW, sy + HH);
+  ctx.lineTo(sx, sy + TILE_H);
+  ctx.lineTo(sx - HW, sy + HH);
+  ctx.closePath();
+  ctx.fillStyle = '#eef1f5';
   ctx.fill();
 }
 
@@ -184,18 +200,21 @@ export function drawTerritoryBorders(
   map: GameMap,
   mapHeight: number,
   cities: CityState[] = [],
+  visibility?: (TileVisibility | undefined)[][] | null,
 ) {
   const cheb = (ax: number, ay: number, bx: number, by: number) =>
     Math.max(Math.abs(ax - bx), Math.abs(ay - by));
-  // A tile's "region" = the city whose 3x3 territory contains it, so two adjacent
-  // cities (even of the same player) get a line between them instead of fusing.
-  // Falls back to the owner for any owned tile not inside a city.
+  // A tile's "region" = the city whose territory contains it (base 3x3 OR a claimed
+  // extra tile), so two adjacent cities (even same player) get a line between them.
+  // Hidden (cloud) tiles have no region → enemy borders don't leak through fog.
   const regionAt = (x: number, y: number): string | null => {
     if (x < 0 || y < 0 || x >= map.width || y >= map.height) return null;
+    if (visibility && visibility[y]?.[x] === 'hidden') return null;
     const owner = map.tiles[y][x].owner;
     if (owner === null) return null;
     for (const c of cities) {
       if (cheb(c.position.x, c.position.y, x, y) <= 1) return `c${c.id}`;
+      if ((c.extraTerritory ?? []).some(t => t.x === x && t.y === y)) return `c${c.id}`;
     }
     return `o${owner}`;
   };
@@ -207,6 +226,7 @@ export function drawTerritoryBorders(
     for (let x = 0; x < map.width; x++) {
       const owner = map.tiles[y][x].owner;
       if (owner === null) continue;
+      if (visibility && visibility[y]?.[x] === 'hidden') continue; // no borders under cloud
 
       const color = PLAYER_COLORS[owner] ?? PLAYER_COLORS[0];
       const elev = ELEVATION[map.tiles[y][x].terrain] ?? 0;

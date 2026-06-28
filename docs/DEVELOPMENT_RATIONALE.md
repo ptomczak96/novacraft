@@ -360,6 +360,40 @@ and territory expansion as each lands.
 - **Reveal Map** stays disabled ("coming soon") pending fog of war, which is the next
   thing to be built.
 
+### 2026-06-28 — Artisan Ornaments — fog of war + unit "visibility" stat
+
+- **Unit `visibility` stat (renamed from `sightRange`).** Each unit has a `visibility`
+  radius read only when fog is on: **0** = own tile only, **1** = 3×3, **2** = 5×5, …
+  i.e. a **Chebyshev (square)** radius — changed from the old Manhattan/diamond reveal
+  so "a 5×5 square around it" is literally a square. All existing units set to **1**.
+  (Renamed the field rather than adding a second one, to avoid two competing sight
+  concepts.)
+- **Three tile states — the agreed vocabulary (commit-to-rationale):**
+  - **Cloud tile** = never seen (`'hidden'`). Rendered as a white tile (placeholder
+    for Patrick's cloud sprite). Hides everything beneath.
+  - **Fog tile** = seen before but not currently in sight (`'explored'`). Greyed; you
+    still see the **terrain and structures** as last known (enemy cities, REBs) but
+    **NOT enemy units** — those appear only while a tile is currently visible.
+  - **Visible** = currently within the visibility of one of your units or cities.
+- **A city's whole territory is always visible to its owner** (base 3×3 + claimed
+  extra tiles) — "territory of a city" counts as seen.
+- **Persistent discovery.** Added `GameState.explored[playerId][y][x]` (serialized
+  fog memory). `computeVisibility` returns only *current* sight; `getVisibleState`
+  overlays `explored` to decide cloud vs fog. `applyAction` refreshes the acting
+  player's (and, after endTurn, the next player's) explored grid; `createGame` seeds
+  it from each player's opening sight. *Why store it in GameState:* it must persist
+  across turns and survive save/load, and it keeps the engine the single source of
+  truth (the previous `computeVisibility` had a `previousVisibility` param that was
+  never passed, so fog memory didn't actually persist).
+- **Enemy units filtered in `getVisibleState`** — shown only on currently-`visible`
+  tiles, so a fog tile keeps its last-known terrain/buildings but never leaks live
+  enemy unit positions. Territory borders are also suppressed under cloud.
+- **Fog turned ON by default** (`config.json fogOfWar: true`); still toggleable on the
+  setup screen, and sims/tests run with it off.
+- *Known simplification:* fog tiles show **current** buildings/cities, not a true
+  last-seen snapshot (a building added after you left would still show). Acceptable
+  for now; a snapshot is a possible future refinement.
+
 ---
 
 *Deferred ideas (the "we'll tweak this later" items) live in the memory backlog,
