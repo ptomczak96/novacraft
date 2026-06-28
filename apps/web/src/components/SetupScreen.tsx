@@ -122,11 +122,6 @@ export function SetupScreen() {
           <label htmlFor="wc-cities">Win: Capture All Cities</label>
         </div>
         <div className="checkbox-row">
-          <input type="checkbox" id="wc-elim" checked={config.winConditions.eliminateAllUnits}
-            onChange={e => setConfig({ ...config, winConditions: { ...config.winConditions, eliminateAllUnits: e.target.checked } })} />
-          <label htmlFor="wc-elim">Win: Eliminate All Units</label>
-        </div>
-        <div className="checkbox-row">
           <input type="checkbox" id="wc-score" checked={config.winConditions.highestScoreAtLimit}
             onChange={e => setConfig({ ...config, winConditions: { ...config.winConditions, highestScoreAtLimit: e.target.checked } })} />
           <label htmlFor="wc-score">Win: Highest Score at Turn Limit</label>

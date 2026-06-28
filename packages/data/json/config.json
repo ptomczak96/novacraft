@@ -5,7 +5,7 @@
   "turnLimit": 50,
   "winConditions": {
     "captureAllCities": true,
-    "eliminateAllUnits": true,
+    "eliminateAllUnits": false,
     "highestScoreAtLimit": true
   },
   "combatConfig": {

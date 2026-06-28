@@ -418,6 +418,19 @@ live truth:
   per-action cloning), accepted because it's the only way to honour "you don't see
   changes under fog" and it survives save/load deterministically.
 
+### 2026-06-28 — Artisan Ornaments — drop "eliminate all units" win condition
+
+- **Removed the "Win: Eliminate All Units" toggle from the setup menu** and defaulted
+  `config.json winConditions.eliminateAllUnits` to **false**. *Why:* losing your last
+  unit ending the game makes no sense once a side can hold multiple cities and simply
+  recruit more defenders — a momentary unit wipe shouldn't be game over. Termination is
+  covered by **capture-all-cities** (a player with no cities has truly lost) and
+  **highest-score-at-turn-limit**.
+- The engine check (`checkWinConditions`) still honours the flag if anyone sets it in
+  data, so the capability isn't deleted — just off by default and no longer surfaced in
+  the UI. (Also removes the old "elimination win fires when an enemy's only unit dies"
+  foot-gun seen earlier in testing.)
+
 ---
 
 *Deferred ideas (the "we'll tweak this later" items) live in the memory backlog,
