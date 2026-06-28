@@ -30,6 +30,46 @@ export interface CombatResult {
  *   damage       = round((attackForce / totalForce) * attackStat * 4.5)
  *   minimum      = config.minimumDamage (1)
  */
+/**
+ * Canonical Polytopia force computation. Attacker A hits defender D; BOTH the
+ * attack damage and the retaliation (defenseResult) come from ONE force split,
+ * using each side's CURRENT (pre-damage) HP. Rounding (half-up) happens only at
+ * the final step.
+ *
+ *   attackForce   = A.attack  * (A.hp / A.maxHP)
+ *   defenseForce  = D.defense * (D.hp / D.maxHP) * defenseBonus   // bonus on defense only
+ *   total         = attackForce + defenseForce
+ *   attackResult  = round( (attackForce  / total) * A.attack  * 4.5 )   // D loses this
+ *   defenseResult = round( (defenseForce / total) * D.defense * 4.5 )   // A loses this (retaliation)
+ */
+export interface Forces {
+  attackForce: number;
+  defenseForce: number;
+  totalForce: number;
+  attackResult: number;
+  defenseResult: number;
+}
+
+export function computeForces(
+  attackStat: number,
+  attackerHP: number,
+  attackerMaxHP: number,
+  defenceStat: number,
+  defenderHP: number,
+  defenderMaxHP: number,
+  defenseBonus: number,
+): Forces {
+  const attackForce = attackStat * (attackerHP / attackerMaxHP);
+  const defenseForce = defenceStat * (defenderHP / defenderMaxHP) * defenseBonus;
+  const totalForce = attackForce + defenseForce;
+
+  const attackResult = totalForce > 0 ? Math.round((attackForce / totalForce) * attackStat * 4.5) : 0;
+  const defenseResult = totalForce > 0 ? Math.round((defenseForce / totalForce) * defenceStat * 4.5) : 0;
+
+  return { attackForce, defenseForce, totalForce, attackResult, defenseResult };
+}
+
+/** Back-compat: the attack-side result only (D's HP loss from A's hit). */
 export function calculateDamage(
   attackStat: number,
   attackerHP: number,
@@ -40,44 +80,44 @@ export function calculateDamage(
   defenseBonus: number,
   minimumDamage: number,
 ): { damage: number; breakdown: CombatBreakdown } {
-  const attackForce = attackStat * (attackerHP / attackerMaxHP);
-  const defenseForce = defenceStat * (defenderHP / defenderMaxHP) * defenseBonus;
-  const totalForce = attackForce + defenseForce;
-
-  const rawDamage = (attackForce / totalForce) * attackStat * 4.5;
-  const finalDamage = Math.max(minimumDamage, Math.round(rawDamage));
-
+  const f = computeForces(attackStat, attackerHP, attackerMaxHP, defenceStat, defenderHP, defenderMaxHP, defenseBonus);
+  const finalDamage = Math.max(minimumDamage, f.attackResult);
   return {
     damage: finalDamage,
     breakdown: {
-      attackForce,
-      defenseForce,
-      totalForce,
+      attackForce: f.attackForce,
+      defenseForce: f.defenseForce,
+      totalForce: f.totalForce,
       terrainBonus: defenseBonus,
-      terrainName: '', // filled by caller
-      rawDamage,
+      terrainName: '',
+      rawDamage: (f.attackForce / (f.totalForce || 1)) * attackStat * 4.5,
       finalDamage,
     },
   };
 }
 
-// Extra multiplier a Fortify'd city (L3 city reward) grants ON TOP of the base
-// city/terrain ×1.5. So a fortified city = 1.5 × 1.5 = 2.25 to the defender's
-// force. Tune here if a different fortify strength is wanted.
-const FORTIFY_MULTIPLIER = 1.5;
+// A Fortified city acts as "walls" (there is no separate wall-building action):
+// a unit standing in a fortified city gets ×3 to its defense force. This replaces
+// any terrain bonus (it doesn't stack). A normal (un-fortified) city grants NO
+// inherent defense bonus — only its terrain, like any other tile.
+const FORTIFY_DEFENSE_MULTIPLIER = 3.0;
 
-/** Determine the Polytopia defense multiplier for a tile. */
+/**
+ * Defense-force multiplier for the tile a unit defends on:
+ *   ×3.0  fortified city ("walls")
+ *   ×1.5  defensive terrain (forest / mountain / any terrain with defenceBonus > 0)
+ *   ×1.0  otherwise (open ground, plain city tile)
+ */
 function getDefenseMultiplier(tile: Tile, terrain: { defenceBonus: number } | undefined): number {
-  let mult = 1.0;
-  if (tile.isCity) mult = 1.5;
-  else if (terrain && terrain.defenceBonus > 0) mult = 1.5;
-  if (tile.fortified) mult *= FORTIFY_MULTIPLIER; // Fortify stacks on the base city bonus
-  return mult;
+  if (tile.fortified) return FORTIFY_DEFENSE_MULTIPLIER;
+  if (terrain && terrain.defenceBonus > 0) return 1.5;
+  return 1.0;
 }
 
 /** Build a terrain label for the combat breakdown. */
 function getTerrainLabel(tile: Tile, terrain: { name: string } | undefined): string {
   const name = terrain?.name ?? 'Unknown';
+  if (tile.fortified) return `${name} (Fortified)`;
   return tile.isCity ? `${name} (City)` : name;
 }
 
@@ -91,55 +131,56 @@ export function resolveCombat(
   config: CombatConfig,
   prng: PRNGState,
 ): CombatResult {
-  // Defender terrain
+  // Defender's tile gives the defense bonus (applied to defenseForce only).
   const defenderTile = map.tiles[defender.position.y][defender.position.x];
   const defenderTerrain = registry.terrainTypes[defenderTile.terrain];
   const defenderDefenseMultiplier = getDefenseMultiplier(defenderTile, defenderTerrain);
 
-  // Attacker deals damage to defender
-  const { damage: damageToDefender, breakdown: attackBreakdown } = calculateDamage(
-    attackerType.attack,
-    attacker.hp,
-    attackerType.maxHP,
-    defenderType.defence,
-    defender.hp,
-    defenderType.maxHP,
+  // ONE force split yields both the attack damage and the retaliation, from the
+  // sides' current (pre-damage) HP. Canonical Polytopia: retaliation = defenseResult
+  // (driven by the DEFENDER'S DEFENSE stat), not a fresh counter-attack.
+  const f = computeForces(
+    attackerType.attack, attacker.hp, attackerType.maxHP,
+    defenderType.defence, defender.hp, defenderType.maxHP,
     defenderDefenseMultiplier,
-    config.minimumDamage,
   );
-  attackBreakdown.terrainName = getTerrainLabel(defenderTile, defenderTerrain);
+
+  // Attack: apply to the defender. (House rule: floor at config.minimumDamage so a
+  // hit always lands; the spec's only mandated floor-to-skip is on retaliation.)
+  const damageToDefender = Math.max(config.minimumDamage, f.attackResult);
+  const attackBreakdown: CombatBreakdown = {
+    attackForce: f.attackForce,
+    defenseForce: f.defenseForce,
+    totalForce: f.totalForce,
+    terrainBonus: defenderDefenseMultiplier,
+    terrainName: getTerrainLabel(defenderTile, defenderTerrain),
+    rawDamage: (f.attackForce / (f.totalForce || 1)) * attackerType.attack * 4.5,
+    finalDamage: damageToDefender,
+  };
 
   const defenderHPAfter = defender.hp - damageToDefender;
   const defenderKilled = defenderHPAfter <= 0;
 
-  // Retaliation: only if defender survives AND attacker is within defender's attack range
+  // Retaliation = defenseResult, skipped if the defender died, the attacker is
+  // outside the defender's range, or defenseResult rounds to 0.
   let damageToAttacker = 0;
   let retaliationBreakdown: CombatBreakdown | null = null;
 
-  if (!defenderKilled) {
-    const dist = Math.abs(attacker.position.x - defender.position.x) +
-                 Math.abs(attacker.position.y - defender.position.y);
+  const dist = Math.abs(attacker.position.x - defender.position.x) +
+               Math.abs(attacker.position.y - defender.position.y);
+  const attackerInDefenderRange = dist <= defenderType.attackRange;
 
-    if (dist <= defenderType.attackRange) {
-      const attackerTile = map.tiles[attacker.position.y][attacker.position.x];
-      const attackerTerrain = registry.terrainTypes[attackerTile.terrain];
-      const attackerDefenseMultiplier = getDefenseMultiplier(attackerTile, attackerTerrain);
-
-      // Retaliation uses defender's POST-DAMAGE HP (natural Polytopia scaling)
-      const { damage, breakdown } = calculateDamage(
-        defenderType.attack,
-        defenderHPAfter,       // reduced HP
-        defenderType.maxHP,
-        attackerType.defence,
-        attacker.hp,
-        attackerType.maxHP,
-        attackerDefenseMultiplier,
-        config.minimumDamage,
-      );
-      damageToAttacker = damage;
-      retaliationBreakdown = breakdown;
-      retaliationBreakdown.terrainName = getTerrainLabel(attackerTile, attackerTerrain);
-    }
+  if (!defenderKilled && attackerInDefenderRange && f.defenseResult > 0) {
+    damageToAttacker = f.defenseResult;
+    retaliationBreakdown = {
+      attackForce: f.attackForce,
+      defenseForce: f.defenseForce,
+      totalForce: f.totalForce,
+      terrainBonus: defenderDefenseMultiplier,
+      terrainName: getTerrainLabel(defenderTile, defenderTerrain),
+      rawDamage: (f.defenseForce / (f.totalForce || 1)) * defenderType.defence * 4.5,
+      finalDamage: damageToAttacker,
+    };
   }
 
   const attackerHPAfter = attacker.hp - damageToAttacker;

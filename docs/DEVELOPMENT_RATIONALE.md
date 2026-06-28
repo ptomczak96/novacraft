@@ -459,6 +459,37 @@ live truth:
   tests/sim/store/setup were updated. Graphics + unit redesign handed to Patrick via
   `docs/overlap.md`.
 
+### 2026-06-28 — Artisan Ornaments — combat audited against canonical spec
+
+Audited the combat code against a provided Polytopia-style spec and corrected two
+things; *supersedes the earlier Fortify ×2.25 entry.*
+
+- **Retaliation formula fixed to canonical `defenseResult`.** The old code modelled
+  retaliation as a *fresh counter-attack* (defender's ATTACK vs attacker's DEFENSE,
+  using the defender's post-damage HP). The spec (and real Polytopia) instead derives
+  BOTH results from a single force split using pre-damage HP:
+  `attackResult = round((attackForce/total)·A.attack·4.5)`,
+  `defenseResult = round((defenseForce/total)·D.defense·4.5)`. Retaliation is now
+  `defenseResult` — driven by the **defender's DEFENSE**, not its attack. New
+  `computeForces()` returns both; `resolveCombat` applies attack, then retaliation
+  unless the defender died, the attacker is outside the defender's range, **or
+  defenseResult rounds to 0**. Attack damage is unchanged (same formula); retaliation
+  numbers change (generally smaller, defense-based).
+- **Fortify = ×3 ("walls").** Per decision, a unit in a **fortified** city gets ×3
+  defense force (it represents walls — there is no wall-building action). This
+  **replaces** the previous "city ×1.5, fortify stacks to ×2.25" model: a normal city
+  now grants **no** inherent defense bonus (only its terrain), and Fortify is a flat
+  ×3 (not stacked with terrain). `FORTIFY_DEFENSE_MULTIPLIER = 3.0` in combat.ts.
+- **Kept:** deterministic, integer, round-half-up at the final step; HP scaling; melee
+  move-on-kill; ranged-no-retaliation. Attack keeps a `minimumDamage` floor (house
+  rule beyond the spec) so a hit always lands; retaliation honours the spec's
+  rounds-to-0 skip.
+- **Deferred (spec features needing systems we haven't built):** splash, healing
+  action, veteran promotion, BOOST, POISON/PLAGUE (def ×0.7 + forced bonus 1.0), ACID/
+  armor-strip, STIFF/SURPRISE skills, and stealth-based retaliation skip. Also noted:
+  terrain bonus is a flat ×1.5 for any `defenceBonus > 0` (magnitudes unused), and
+  `retaliationMultiplier`/`damageVariance`/`hpScaling` config fields remain inert.
+
 ---
 
 *Deferred ideas (the "we'll tweak this later" items) live in the memory backlog,
