@@ -455,8 +455,9 @@ function applyFoundCity(state: GameState, action: FoundCityAction, registry: Dat
     }
   }
 
+  const newCityId = state.nextCityId++;
   state.cities.push({
-    id: state.nextCityId++,
+    id: newCityId,
     position: { x, y },
     owner: playerId,
     isCapital: false,
@@ -471,8 +472,13 @@ function applyFoundCity(state: GameState, action: FoundCityAction, registry: Dat
   state.players[playerId].ore -= registry.economy.foundCity.cost;
 
   // Founding consumes the unit's turn (mirrors capture), so it can't also move away.
+  // The founder also re-homes to the new city: its pop slot transfers off its old
+  // home city onto the one it just founded.
   const founder = state.units.find(u => u.owner === playerId && u.position.x === x && u.position.y === y);
-  if (founder) founder.hasMoved = true;
+  if (founder) {
+    founder.hasMoved = true;
+    state.unitHomeCity[founder.id] = newCityId;
+  }
 
   recomputeCities(state, registry);
   return checkWinConditions(state, registry);
@@ -506,6 +512,11 @@ function applyCaptureCity(state: GameState, action: CaptureCityAction, registry:
   }
   unit.hasMoved = true;
   unit.hasAttacked = true; // capturing spends the unit's turn
+
+  // The capturing unit re-homes to the captured city: its pop slot transfers off
+  // its old home city onto the one it just took. (Set after the clear loop above so
+  // it isn't wiped — the capturer was homed elsewhere, not at this city.)
+  state.unitHomeCity[unit.id] = city.id;
 
   recomputeCities(state, registry);
   return checkWinConditions(state, registry);

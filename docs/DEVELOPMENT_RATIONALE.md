@@ -431,6 +431,19 @@ live truth:
   the UI. (Also removes the old "elimination win fires when an enemy's only unit dies"
   foot-gun seen earlier in testing.)
 
+### 2026-06-28 — Artisan Ornaments — founder/capturer re-homes to the new city
+
+- **A unit that founds or captures a city becomes homed at that city**, freeing the
+  pop slot at its original home. `applyFoundCity` sets `unitHomeCity[founder] = newCity`;
+  `applyCaptureCity` sets `unitHomeCity[capturer] = capturedCity` (after the loop that
+  releases the *previous* owner's units homed there, so it isn't wiped). *Why:* the
+  unit now lives at/garrisons the new city, so its upkeep-of-pop should count there,
+  not back at the city it was recruited in — otherwise founding/capturing wouldn't free
+  capacity to recruit a replacement at the origin city. Also re-homes a previously
+  stateless unit (e.g. one whose home was captured) onto the city it takes.
+- Consequence for the prior capture test: the captured city now reports **1** unit
+  homed (the capturer) rather than 0; the enemy's released ghost is still gone.
+
 ---
 
 *Deferred ideas (the "we'll tweak this later" items) live in the memory backlog,

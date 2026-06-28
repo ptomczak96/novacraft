@@ -203,7 +203,30 @@ describe('Capture frees the new owner’s slots (Bug 1)', () => {
 
     const captured = cityAt(state, enemyCap.position)!;
     expect(captured.owner).toBe(0);
-    expect(unitsHomedAt(state, captured.id)).toBe(0); // enemy ghosts released
+    expect(state.unitHomeCity[enemyUnit.id]).toBeUndefined(); // enemy ghost released
+    // The capturer re-homes to the captured city (its pop transfers here).
+    expect(state.unitHomeCity[999]).toBe(captured.id);
+    expect(unitsHomedAt(state, captured.id)).toBe(1); // just the capturer now
+  });
+
+  it('a unit re-homes to the city it founds (pop transfers off its old home)', () => {
+    const registry = getRegistry();
+    let state = createGame(getConfig(), registry, ['ironclad', 'sylvan'], 7);
+    const cap = capitalOf(state, 0);
+    const pos = { x: 6, y: 6 };
+    state.map.tiles[pos.y][pos.x].isRuin = true;
+    state.map.tiles[pos.y][pos.x].isCity = false;
+    state.players[0].ore = 50;
+    // A unit homed at the capital, standing on the ruin (already moved last turn).
+    state.units.push({ id: 700, typeId: 'warrior', owner: 0, position: { ...pos }, hp: 15, hasMoved: false, hasAttacked: false, abilityCooldowns: {} });
+    state.unitHomeCity[700] = cap.id;
+    const capHomedBefore = unitsHomedAt(state, cap.id);
+
+    state = applyAction(state, { type: 'foundCity', position: pos }, registry);
+    const founded = cityAt(state, pos)!;
+    expect(state.unitHomeCity[700]).toBe(founded.id);          // re-homed to the new city
+    expect(unitsHomedAt(state, founded.id)).toBe(1);           // counts against the new city
+    expect(unitsHomedAt(state, cap.id)).toBe(capHomedBefore - 1); // freed from the capital
   });
 });
 
