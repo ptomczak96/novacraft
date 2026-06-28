@@ -1,7 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { createGame, getVisibleState } from './index.js';
+import { recordSight } from './fog.js';
 import { buildRegistry, defaultConfig } from '@tactica/data';
-import type { DataRegistry, GameConfig, GameState, Unit } from './types.js';
+import type { DataRegistry, GameConfig, GameState, Unit, Tile } from './types.js';
+
+const blankTile = (): Tile => ({ terrain: 'plains', owner: null, isCity: false, isResourceTile: false });
 
 function getRegistry(): DataRegistry { return buildRegistry(); }
 function fogConfig(o: Partial<GameConfig> = {}): GameConfig {
@@ -45,7 +48,7 @@ describe('Fog of war — explored memory (cloud vs fog)', () => {
     const registry = getRegistry();
     const state = createGame(fogConfig(), registry, ['ironclad', 'sylvan'], 7);
     // Simulate having discovered a far tile, now out of current sight.
-    state.explored[0][9][9] = true;
+    state.memory[0].tiles[9][9] = blankTile();
     const vis = getVisibleState(state, 0, registry).visibility;
     expect(vis[9][9]).toBe('explored'); // remembered terrain/structures
     expect(vis[8][8]).toBe('hidden');   // never seen → cloud
@@ -57,8 +60,8 @@ describe('Fog of war — explored memory (cloud vs fog)', () => {
     const own = unitOf(state, 0);
     own.position = { x: 6, y: 6 };
 
-    // Enemy A on a fog tile (explored but not currently visible) → hidden.
-    state.explored[0][9][9] = true;
+    // Enemy A on a fog tile (remembered but not currently visible) → hidden.
+    state.memory[0].tiles[9][9] = blankTile();
     state.units.push({ id: 900, typeId: 'warrior', owner: 1, position: { x: 9, y: 9 }, hp: 15, hasMoved: false, hasAttacked: false, abilityCooldowns: {} });
     // Enemy B adjacent to our unit (currently visible) → shown.
     state.units.push({ id: 901, typeId: 'warrior', owner: 1, position: { x: 7, y: 6 }, hp: 15, hasMoved: false, hasAttacked: false, abilityCooldowns: {} });
@@ -66,5 +69,35 @@ describe('Fog of war — explored memory (cloud vs fog)', () => {
     const vs = getVisibleState(state, 0, registry);
     expect(vs.units.some(u => u.id === 900)).toBe(false); // hidden on fog
     expect(vs.units.some(u => u.id === 901)).toBe(true);  // visible nearby
+  });
+
+  it('a building seen then destroyed while in fog still shows (last-seen snapshot)', () => {
+    const registry = getRegistry();
+    const state = createGame(fogConfig(), registry, ['ironclad', 'sylvan'], 7);
+    const own = unitOf(state, 0);
+    own.position = { x: 6, y: 6 };
+    // A building on a tile our unit can currently see, then record it into memory.
+    state.buildings.push({ id: 77, kind: 'mine', position: { x: 6, y: 7 }, level: 1, cityId: null });
+    recordSight(state, 0, registry);
+
+    // Unit walks away → (6,7) is no longer visible; the building is "destroyed".
+    own.position = { x: 1, y: 1 };
+    state.buildings = state.buildings.filter(b => b.id !== 77);
+
+    const vs = getVisibleState(state, 0, registry);
+    const tx = 6, ty = 7;
+    expect(vs.visibility[ty][tx]).toBe('explored'); // fog, not cloud
+    expect(vs.buildings.some(b => b.id === 77)).toBe(true); // remembered building persists
+  });
+
+  it('the capital reveals a 5×5 square (radius 2)', () => {
+    const registry = getRegistry();
+    const state = createGame(fogConfig(), registry, ['ironclad', 'sylvan'], 7);
+    const cap = state.cities.find(c => c.isCapital && c.owner === 0)!;
+    const vis = getVisibleState(state, 0, registry).visibility;
+    // A tile 2 out from the capital centre (and on-map) is visible.
+    const { x, y } = cap.position;
+    const probe = { x: x + (x < 6 ? 2 : -2), y: y + (y < 6 ? 2 : -2) };
+    expect(vis[probe.y][probe.x]).toBe('visible');
   });
 });

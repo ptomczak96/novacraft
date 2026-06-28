@@ -23,7 +23,8 @@
     "productionPerLevel": 10,
     "popBase": 2,
     "supplyThresholds": [2, 5, 9, 14, 20],
-    "territoryRadius": 1
+    "territoryRadius": 1,
+    "capitalSightRadius": 2
   },
 
   "buildings": {

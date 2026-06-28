@@ -8,7 +8,7 @@ import { createPRNG } from './prng.js';
 import { generateMap } from './mapgen.js';
 import { getReachableTiles, distance, inRange } from './pathfinding.js';
 import { resolveCombat, previewCombat } from './combat.js';
-import { computeVisibility, updateExplored, makeExploredGrid } from './fog.js';
+import { computeVisibility, recordSight, makePlayerMemory } from './fog.js';
 import {
   settleEconomy, calculateOreIncome, calculatePlasmaIncome, recomputeCities,
   territoryCityAt, cityAt, cityById, cityHasCapacity, getUnitPlasmaCost,
@@ -98,7 +98,7 @@ export function createGame(
     cities,
     buildings: [],
     unitHomeCity,
-    explored: players.map(() => makeExploredGrid(map.width, map.height)),
+    memory: players.map(() => makePlayerMemory(map.width, map.height)),
     currentPlayer: 0,
     turn: 1,
     nextUnitId,
@@ -112,7 +112,7 @@ export function createGame(
   };
 
   // Seed each player's fog memory with what they can see at the start.
-  for (let p = 0; p < players.length; p++) updateExplored(state, p, registry);
+  for (let p = 0; p < players.length; p++) recordSight(state, p, registry);
   return state;
 }
 
@@ -253,10 +253,10 @@ export function applyAction(state: GameState, action: Action, registry: DataRegi
 
   // Refresh fog memory after the action: the acting player (their units may have
   // moved and revealed new tiles) and, after an endTurn, the player now on turn.
-  if (result.config.fogOfWar && result.explored) {
-    updateExplored(result, state.currentPlayer, registry);
+  if (result.config.fogOfWar && result.memory) {
+    recordSight(result, state.currentPlayer, registry);
     if (result.currentPlayer !== state.currentPlayer) {
-      updateExplored(result, result.currentPlayer, registry);
+      recordSight(result, result.currentPlayer, registry);
     }
   }
   return result;
@@ -731,34 +731,62 @@ export function getVisibleState(state: GameState, playerId: PlayerId, registry: 
   }
 
   // Current sight ('visible' / 'hidden'), then overlay persistent fog memory:
-  // a tile that's been seen before but isn't currently visible shows as 'explored'
-  // (fog — terrain & structures as last known, no enemy units); never-seen = cloud.
+  // a tile seen before but not currently visible shows as 'explored' (fog), where
+  // the player sees its LAST-SEEN snapshot (frozen terrain/structures, no enemy
+  // units); a tile never seen is 'hidden' (cloud).
   const current = computeVisibility(state.map, state.units, state.cities, playerId, registry);
-  const explored = state.explored?.[playerId];
+  const mem = state.memory[playerId];
+
   const visibility: TileVisibility[][] = [];
+  const tiles = [];
   for (let y = 0; y < state.map.height; y++) {
     visibility[y] = [];
+    const row = [];
     for (let x = 0; x < state.map.width; x++) {
-      if (current[y][x] === 'visible') visibility[y][x] = 'visible';
-      else if (explored?.[y]?.[x]) visibility[y][x] = 'explored';
-      else visibility[y][x] = 'hidden';
+      if (current[y][x] === 'visible') {
+        visibility[y][x] = 'visible';
+        row.push(clone(state.map.tiles[y][x])); // live truth
+      } else if (mem.tiles[y][x]) {
+        visibility[y][x] = 'explored';
+        row.push(clone(mem.tiles[y][x]!)); // frozen last-seen snapshot
+      } else {
+        visibility[y][x] = 'hidden';
+        row.push(clone(state.map.tiles[y][x])); // covered by cloud, never read
+      }
     }
+    tiles.push(row);
   }
+  const composedMap = { width: state.map.width, height: state.map.height, tiles };
 
-  // Filter units — only show own units and enemy units on currently-visible tiles
-  // (so a fog tile keeps its last-seen terrain/buildings but hides enemy units).
+  const isVisible = (x: number, y: number) => current[y]?.[x] === 'visible';
+
+  // Buildings: live ones on visible tiles, remembered ones on fog tiles.
+  const buildings = [
+    ...state.buildings.filter(b => isVisible(b.position.x, b.position.y)).map(clone),
+    ...mem.buildings.filter(b => !isVisible(b.position.x, b.position.y)).map(clone),
+  ];
+
+  // Cities: live ones on visible tiles, last-seen snapshots on fog tiles (so a
+  // captured/levelled enemy city you can't see still shows as you last saw it).
+  const cities = [
+    ...state.cities.filter(c => isVisible(c.position.x, c.position.y)).map(clone),
+    ...mem.cities.filter(c => !isVisible(c.position.x, c.position.y)).map(clone),
+  ];
+
+  // Units: own units always; enemy units only on currently-visible tiles (never
+  // remembered, so fog never shows stale enemy positions).
   const visibleUnits = state.units.filter(u => {
     if (u.owner === playerId) return true;
-    return visibility[u.position.y][u.position.x] === 'visible';
+    return isVisible(u.position.x, u.position.y);
   });
 
   return {
     config: state.config,
-    map: clone(state.map),
+    map: composedMap,
     units: clone(visibleUnits),
     players: clone(state.players),
-    cities: clone(state.cities),
-    buildings: clone(state.buildings),
+    cities,
+    buildings,
     unitHomeCity: clone(state.unitHomeCity),
     currentPlayer: state.currentPlayer,
     turn: state.turn,

@@ -394,6 +394,30 @@ and territory expansion as each lands.
   last-seen snapshot (a building added after you left would still show). Acceptable
   for now; a snapshot is a possible future refinement.
 
+### 2026-06-28 — Artisan Ornaments — fog shows true last-seen snapshot + capital 5×5
+
+*Supersedes the "known simplification" in the previous fog entry (which showed
+current buildings under fog).* Fog tiles now show a **frozen last-seen snapshot**, not
+live truth:
+
+- **Per-player `GameState.memory`** (replaces the boolean `explored` grid). Each
+  `PlayerMemory` holds the last-seen `tiles[y][x]` (null = never seen → cloud), plus
+  last-seen `buildings` and `cities` by position. `recordSight` snapshots everything
+  currently visible into memory each action; out-of-sight memory is never touched.
+- **`getVisibleState` composes the view**: visible tiles use live truth; fog tiles use
+  the memory snapshot (terrain, resources, buildings, city owner/level as last seen);
+  cloud tiles render nothing. *Result:* a building destroyed, a city captured, or a REB
+  built while you're not looking does **not** update under fog — you see it as you left
+  it. Enemy **units** are still never remembered (shown only while currently visible),
+  so fog never leaks live positions. The renderer is unchanged — it just draws the
+  composed `visibleState`.
+- **Capital reveals 5×5** by default: new `economy.json city.capitalSightRadius = 2`
+  (a normal city still reveals its `territoryRadius`). Wired through schema + type so
+  it stays a data tuning value.
+- *Trade-off:* memory is a full per-player snapshot in `GameState` (more state, more
+  per-action cloning), accepted because it's the only way to honour "you don't see
+  changes under fog" and it survives save/load deterministically.
+
 ---
 
 *Deferred ideas (the "we'll tweak this later" items) live in the memory backlog,

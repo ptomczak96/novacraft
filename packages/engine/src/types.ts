@@ -283,6 +283,16 @@ export interface PlayerState {
   researchedTechs: string[];
 }
 
+/**
+ * A player's remembered view of the world (fog memory). Updated only for tiles
+ * currently in sight; everything else stays frozen at its last-seen snapshot.
+ */
+export interface PlayerMemory {
+  tiles: (Tile | null)[][]; // [y][x] last-seen tile; null = never seen (cloud)
+  buildings: BuildingState[]; // last-seen buildings (snapshots), by position
+  cities: CityState[]; // last-seen city snapshots, by centre position
+}
+
 export interface GameState {
   config: GameConfig;
   map: GameMap;
@@ -291,9 +301,11 @@ export interface GameState {
   cities: CityState[];
   buildings: BuildingState[];
   unitHomeCity: Record<UnitId, CityId>; // unit id -> home city (slot accounting)
-  // Fog memory: explored[playerId][y][x] = has this player ever seen this tile.
-  // Persists "discovered" so a tile out of current sight shows as fog, not cloud.
-  explored: boolean[][][];
+  // Fog memory, one per player. A tile becomes "remembered" the moment it's seen and
+  // is never cleared, so out-of-sight tiles show their LAST-SEEN snapshot (fog), and
+  // never-seen tiles show as cloud. Drives both the cloud/fog distinction and what
+  // structures/terrain are drawn under fog.
+  memory: PlayerMemory[];
   currentPlayer: PlayerId;
   turn: number;
   nextUnitId: UnitId;
@@ -379,6 +391,7 @@ export interface EconomyData {
     popBase: number; // unit capacity at level 1 (pop = popBase + level - 1)
     supplyThresholds: number[]; // total supply to reach level 2, 3, ... maxLevel
     territoryRadius: number; // Chebyshev radius of a city's territory
+    capitalSightRadius: number; // fog: Chebyshev radius a capital reveals (5x5 = 2)
   };
 
   buildings: Record<string, BuildingDef>; // keyed by BuildingKind

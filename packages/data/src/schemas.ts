@@ -123,6 +123,7 @@ export const EconomyDataSchema = z.object({
     popBase: z.number().min(1),
     supplyThresholds: z.array(z.number().min(0)),
     territoryRadius: z.number().min(1),
+    capitalSightRadius: z.number().min(0), // fog: Chebyshev radius a capital reveals (5x5 = 2)
   }),
   buildings: z.record(BuildingDefSchema),
   foundCity: z.object({ cost: z.number().min(0), requiresUnitOnTile: z.boolean() }),

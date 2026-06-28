@@ -1,17 +1,26 @@
-import type { GameMap, GameState, Unit, CityState, PlayerId, TileVisibility, DataRegistry } from './types.js';
+import type {
+  GameMap, GameState, Unit, CityState, PlayerId, PlayerMemory, TileVisibility, DataRegistry,
+} from './types.js';
 
-/** An all-`false` explored grid sized to the map (one per player). */
-export function makeExploredGrid(width: number, height: number): boolean[][] {
-  return Array.from({ length: height }, () => Array.from({ length: width }, () => false));
+const cloneJSON = <T>(o: T): T => JSON.parse(JSON.stringify(o));
+
+/** An empty fog memory sized to the map (one per player). */
+export function makePlayerMemory(width: number, height: number): PlayerMemory {
+  return {
+    tiles: Array.from({ length: height }, () => Array.from({ length: width }, () => null)),
+    buildings: [],
+    cities: [],
+  };
 }
 
 /**
  * Tiles a player can see RIGHT NOW ('visible'); everything else is 'hidden'.
- * Persistent "discovered" memory (fog vs cloud) is layered on separately from the
- * stored `explored` grid — see getVisibleState. Sources of current sight:
+ * Persistent "discovered" memory (fog vs cloud) is layered on separately via the
+ * stored PlayerMemory — see getVisibleState. Sources of current sight:
  *   - each owned unit reveals a square of Chebyshev radius = its `visibility`
  *     (0 = own tile only, 1 = 3×3, 2 = 5×5, …), blocked by sight-blocking terrain;
- *   - each owned city reveals its whole territory (base 3×3 + claimed extra tiles).
+ *   - each owned city reveals a square: a CAPITAL out to `capitalSightRadius`
+ *     (5×5 by default), a normal city its `territoryRadius`; plus claimed extra tiles.
  */
 export function computeVisibility(
   map: GameMap,
@@ -27,22 +36,25 @@ export function computeVisibility(
   }
 
   const inBounds = (x: number, y: number) => x >= 0 && x < map.width && y >= 0 && y < map.height;
-
-  // Owned city territories are always currently visible.
-  const r = registry.economy.city.territoryRadius;
-  for (const c of cities) {
-    if (c.owner !== playerId) continue;
+  const square = (cx: number, cy: number, r: number) => {
     for (let dy = -r; dy <= r; dy++) {
       for (let dx = -r; dx <= r; dx++) {
-        if (inBounds(c.position.x + dx, c.position.y + dy)) visibility[c.position.y + dy][c.position.x + dx] = 'visible';
+        if (inBounds(cx + dx, cy + dy)) visibility[cy + dy][cx + dx] = 'visible';
       }
     }
+  };
+
+  // Owned cities reveal a square around them (capitals see further) + extra territory.
+  const { territoryRadius, capitalSightRadius } = registry.economy.city;
+  for (const c of cities) {
+    if (c.owner !== playerId) continue;
+    square(c.position.x, c.position.y, c.isCapital ? capitalSightRadius : territoryRadius);
     for (const t of c.extraTerritory ?? []) {
       if (inBounds(t.x, t.y)) visibility[t.y][t.x] = 'visible';
     }
   }
 
-  // Each owned unit reveals a square of its visibility radius.
+  // Each owned unit reveals a square of its visibility radius (line-of-sight gated).
   for (const unit of units) {
     if (unit.owner !== playerId) continue;
     const unitType = registry.unitTypes[unit.typeId];
@@ -53,14 +65,27 @@ export function computeVisibility(
   return visibility;
 }
 
-/** OR the player's current sight into their persistent explored grid (mutates state). */
-export function updateExplored(state: GameState, playerId: PlayerId, registry: DataRegistry): void {
+/**
+ * Snapshot everything currently visible to `playerId` into their fog memory
+ * (mutates state). Tiles, buildings and cities in sight are recorded as their
+ * current state; out-of-sight memory is left untouched (frozen last-seen).
+ */
+export function recordSight(state: GameState, playerId: PlayerId, registry: DataRegistry): void {
   const vis = computeVisibility(state.map, state.units, state.cities, playerId, registry);
-  const grid = state.explored?.[playerId];
-  if (!grid) return;
+  const mem = state.memory?.[playerId];
+  if (!mem) return;
   for (let y = 0; y < state.map.height; y++) {
     for (let x = 0; x < state.map.width; x++) {
-      if (vis[y][x] === 'visible') grid[y][x] = true;
+      if (vis[y][x] !== 'visible') continue;
+      mem.tiles[y][x] = cloneJSON(state.map.tiles[y][x]);
+
+      const b = state.buildings.find(bb => bb.position.x === x && bb.position.y === y);
+      mem.buildings = mem.buildings.filter(bb => !(bb.position.x === x && bb.position.y === y));
+      if (b) mem.buildings.push(cloneJSON(b));
+
+      const c = state.cities.find(cc => cc.position.x === x && cc.position.y === y);
+      mem.cities = mem.cities.filter(cc => !(cc.position.x === x && cc.position.y === y));
+      if (c) mem.cities.push(cloneJSON(c));
     }
   }
 }
@@ -95,7 +120,6 @@ function hasLineOfSight(
   y1: number,
   registry: DataRegistry,
 ): boolean {
-  // Origin always visible to itself
   if (x0 === x1 && y0 === y1) return true;
 
   const dx = Math.abs(x1 - x0);
