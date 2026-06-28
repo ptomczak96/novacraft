@@ -35,6 +35,8 @@ export const UnitTypeSchema = z.object({
   movement: z.number().min(0),
   attackRange: z.number().min(1),
   visibility: z.number().min(0), // fog sight radius: 0=own tile, 1=3x3, 2=5x5 …
+  unitClass: z.string().optional(), // e.g. "light" — flavour/grouping, not yet mechanical
+  conditions: z.array(z.string()).optional().default([]), // special conditions (see docs/conditions.md)
   abilities: z.array(AbilityDefSchema),
   traits: z.array(z.string()),
 });

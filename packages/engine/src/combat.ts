@@ -105,11 +105,12 @@ const FORTIFY_DEFENSE_MULTIPLIER = 3.0;
 /**
  * Defense-force multiplier for the tile a unit defends on:
  *   ×3.0  fortified city ("walls")
- *   ×1.5  defensive terrain (forest / mountain / any terrain with defenceBonus > 0)
- *   ×1.0  otherwise (open ground, plain city tile)
+ *   ×1.5  any city tile, OR defensive terrain (forest / mountain / defenceBonus > 0)
+ *   ×1.0  otherwise (open ground)
  */
 function getDefenseMultiplier(tile: Tile, terrain: { defenceBonus: number } | undefined): number {
   if (tile.fortified) return FORTIFY_DEFENSE_MULTIPLIER;
+  if (tile.isCity) return 1.5;
   if (terrain && terrain.defenceBonus > 0) return 1.5;
   return 1.0;
 }

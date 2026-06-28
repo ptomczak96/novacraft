@@ -9,7 +9,7 @@ interface PathNode {
 /** Returns all reachable tiles within movement range, with their costs. */
 export function getReachableTiles(
   unit: Unit,
-  unitType: { movement: number; traits: string[] },
+  unitType: { movement: number; traits: string[]; conditions?: string[] },
   map: GameMap,
   units: Unit[],
   registry: DataRegistry,
@@ -18,6 +18,7 @@ export function getReachableTiles(
   const maxMove = unitType.movement + movementBonus;
   const reachable = new Map<string, number>(); // "x,y" -> cost
   const ignoresTerrain = unitType.traits.includes('ignoresTerrainCost');
+  const mountainRestricted = unitType.conditions?.includes('mountain_restricted') ?? false; // see docs/conditions.md
   const isFlying = unitType.traits.includes('flying');
   const isAquatic = unitType.traits.includes('aquatic');
 
@@ -60,6 +61,9 @@ export function getReachableTiles(
       const tile = map.tiles[ny][nx];
       const terrain = registry.terrainTypes[tile.terrain];
       if (!terrain) continue;
+
+      // Condition: "Mountain restricted" — cannot move onto mountain tiles.
+      if (mountainRestricted && terrain.id === 'mountain') continue;
 
       // Check passability
       if (!isFlying) {

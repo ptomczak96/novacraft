@@ -30,6 +30,8 @@ export interface UnitType {
   movement: number;
   attackRange: number;
   visibility: number; // fog sight radius (Chebyshev): 0=own tile only, 1=3x3, 2=5x5, …
+  unitClass?: string; // e.g. "light" — grouping/flavour, not yet mechanical
+  conditions?: string[]; // special conditions applied to this unit (see docs/conditions.md)
   abilities: AbilityDef[];
   traits: string[]; // e.g. "flying", "aquatic", "ignoresTerrainCost"
 }

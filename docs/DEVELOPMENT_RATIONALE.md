@@ -490,6 +490,28 @@ things; *supersedes the earlier Fortify ×2.25 entry.*
   terrain bonus is a flat ×1.5 for any `defenceBonus > 0` (magnitudes unused), and
   `retaliationMultiplier`/`damageVariance`/`hpScaling` config fields remain inert.
 
+### 2026-06-28 — Artisan Ornaments — Vanguard unit pass + special-conditions system
+
+- **Non-fortified city defense restored to ×1.5.** A plain city tile gives ×1.5
+  again; fortified stays ×3. (Adjusts the prior "no inherent city bonus" decision.)
+- **Vanguard unit stats** (warrior/scout are still shared rosters for now, so these
+  apply to both teams until rosters split): **Warrior** → cost 20, HP 10, atk 2, def 2,
+  mov 1, rng 1, vis 1, class "light". **Scout** → cost 30, HP 10, atk 0.5, def 2,
+  mov 1, rng 1, vis 2, class "light", conditions [mountain_restricted, optics]. New
+  **Lancer** (Vanguard) → cost 50, HP 15, atk 2, def 1, mov 1, rng 2, vis 1, light, no
+  conditions. Stats now allow decimals (atk 0.5); combat already rounds at the end.
+- **New `unitClass` + `conditions` fields** on unit types (both optional). `unitClass`
+  is flavour/grouping ("light"); `conditions` is a list of named special rules.
+- **Special-conditions system** (`docs/conditions.md`): a reusable, documented registry
+  of named conditions a unit opts into via its `conditions` array; the engine applies
+  the effect by id. First two:
+  - **`mountain_restricted`** — can't move onto mountains (enforced in `pathfinding.ts`).
+  - **`optics`** — mountains block the unit's line of sight (sees the mountain, not
+    past it), orthogonally and diagonally (enforced in `fog.ts` via a `mountainsBlock`
+    flag on the bresenham LOS; the endpoint is never the blocker).
+  *Why a separate system from `traits`:* traits are baked-in movement/terrain flags;
+  conditions are the named, documented, designer-facing rules tracked in one file.
+
 ---
 
 *Deferred ideas (the "we'll tweak this later" items) live in the memory backlog,

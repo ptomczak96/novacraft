@@ -42,6 +42,7 @@
 ## Reference docs
 
 - `docs/ECONOMY.md` — current state of the economy system
+- `docs/conditions.md` — unit special-conditions registry (named rules units opt into)
 - `docs/MODULES.md` — module map, shared-core rules, how to avoid merge clashes
 - `docs/DEVELOPMENT_RATIONALE.md` — the *why* behind decisions (see logging rule below)
 - `docs/overlap.md` — cross-module hand-off log (see "commit to overlap" rule below)

@@ -67,6 +67,13 @@ describe('Combat — Polytopia force formula (spec)', () => {
     expect(onForest).toBe(9); // defenseForce 7.5, total 12.5 → round(0.4*5*4.5)=9
   });
 
+  it('a non-fortified city still gives ×1.5 defense', () => {
+    const map = plainsMap();
+    map.tiles[0][1].isCity = true;
+    const r = fight(ut(), ut(), map, unit(0, 20, 0, 0), unit(1, 20, 1, 0));
+    expect(r.attackBreakdown.terrainBonus).toBe(1.5);
+  });
+
   it('a fortified city gives ×3 defense (more than terrain, less damage taken)', () => {
     const map = plainsMap();
     map.tiles[0][1].isCity = true;

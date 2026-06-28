@@ -3,7 +3,7 @@
     "id": "vanguard",
     "name": "Vanguard",
     "color": "#3d7bb5",
-    "unitTypes": ["scout", "warrior", "archer", "defender", "catapult", "ironclad_berserker", "ironclad_siege_tower"]
+    "unitTypes": ["scout", "warrior", "lancer", "archer", "defender", "catapult", "ironclad_berserker", "ironclad_siege_tower"]
   },
   {
     "id": "hive",

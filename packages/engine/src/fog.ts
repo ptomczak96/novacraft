@@ -59,7 +59,9 @@ export function computeVisibility(
     if (unit.owner !== playerId) continue;
     const unitType = registry.unitTypes[unit.typeId];
     if (!unitType) continue;
-    revealSquare(map, visibility, unit.position.x, unit.position.y, unitType.visibility, registry);
+    // Condition "Optics": mountains block this unit's line of sight (see docs/conditions.md).
+    const mountainsBlock = unitType.conditions?.includes('optics') ?? false;
+    revealSquare(map, visibility, unit.position.x, unit.position.y, unitType.visibility, registry, mountainsBlock);
   }
 
   return visibility;
@@ -98,20 +100,25 @@ function revealSquare(
   oy: number,
   range: number,
   registry: DataRegistry,
+  mountainsBlock = false,
 ): void {
   for (let dy = -range; dy <= range; dy++) {
     for (let dx = -range; dx <= range; dx++) {
       const tx = ox + dx;
       const ty = oy + dy;
       if (tx < 0 || tx >= map.width || ty < 0 || ty >= map.height) continue;
-      if (hasLineOfSight(map, ox, oy, tx, ty, registry)) {
+      if (hasLineOfSight(map, ox, oy, tx, ty, registry, mountainsBlock)) {
         visibility[ty][tx] = 'visible';
       }
     }
   }
 }
 
-/** Simple line of sight using bresenham. Blocked by sight-blocking terrain (not the endpoints). */
+/**
+ * Simple line of sight using bresenham. Blocked by sight-blocking terrain (forest),
+ * and — when `mountainsBlock` (the Optics condition) — by mountains too. The target
+ * tile itself is never the blocker (you see the mountain, just not past it).
+ */
 function hasLineOfSight(
   map: GameMap,
   x0: number,
@@ -119,6 +126,7 @@ function hasLineOfSight(
   x1: number,
   y1: number,
   registry: DataRegistry,
+  mountainsBlock = false,
 ): boolean {
   if (x0 === x1 && y0 === y1) return true;
 
@@ -141,5 +149,6 @@ function hasLineOfSight(
     const tile = map.tiles[cy][cx];
     const terrain = registry.terrainTypes[tile.terrain];
     if (terrain && terrain.blocksSight) return false;
+    if (mountainsBlock && tile.terrain === 'mountain') return false; // Optics
   }
 }

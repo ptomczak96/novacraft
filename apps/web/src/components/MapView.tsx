@@ -7,6 +7,7 @@ import { TerritorySelectBar } from './TerritorySelectBar.js';
 const UNIT_ICONS: Record<string, string> = {
   scout: '🏃',
   warrior: '⚔️',
+  lancer: '🔱',
   archer: '🏹',
   defender: '🛡️',
   catapult: '💣',

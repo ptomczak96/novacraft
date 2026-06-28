@@ -21,9 +21,10 @@ Accord with two factions selectable for both players in the setup menu:
   AI, robotics, tanks. Tech/industrial look.
 - **Hive** (`id: "hive"`, colour `#8a4fa0`) — organic / swarm style (Zerg-ish).
 
-**For Patrick:** unit **sprites/portraits per faction** when art is ready. NOTE: the
-rosters are still the *old shared units reused* for both teams (we'll redesign units
-slowly). Unit **ids still carry the old prefixes** (`ironclad_berserker`,
+**For Patrick:** unit **sprites/portraits per faction** when art is ready (incl. the
+new Vanguard **Lancer**, id `lancer`). NOTE: the rosters are still mostly the *old
+shared units reused* for both teams (we'll redesign units slowly). Some units now have
+a `unitClass` ("light") and `conditions` (see `docs/conditions.md`). Unit **ids still carry the old prefixes** (`ironclad_berserker`,
 `ironclad_siege_tower`, `sylvan_ranger`, `sylvan_treant`) — those are just string ids
 for now; renaming them is a later, deliberate step (touches economy.json upkeep keys,
 UNIT_ICONS, etc.). The `faction` field on each unit and the faction `unitTypes` lists

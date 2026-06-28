@@ -73,6 +73,12 @@ export function UnitSheet() {
           <span className="stat-label">Visibility</span>
           <span className="stat-value">{unitType.visibility}</span>
         </div>
+        {unitType.unitClass && (
+          <div className="stat-grid-item">
+            <span className="stat-label">Class</span>
+            <span className="stat-value" style={{ textTransform: 'capitalize' }}>{unitType.unitClass}</span>
+          </div>
+        )}
         <div className="stat-grid-item">
           <span className="stat-label">Cost</span>
           <span className="stat-value">{unitType.cost}g</span>
@@ -86,6 +92,18 @@ export function UnitSheet() {
           <div className="unit-sheet-trait-list">
             {unitType.traits.map(t => (
               <span key={t} className="unit-sheet-trait">{t}</span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Special conditions (see docs/conditions.md) */}
+      {unitType.conditions && unitType.conditions.length > 0 && (
+        <div className="unit-sheet-traits">
+          <span className="stat-label">Conditions</span>
+          <div className="unit-sheet-trait-list">
+            {unitType.conditions.map(c => (
+              <span key={c} className="unit-sheet-trait">{c.replace(/_/g, ' ')}</span>
             ))}
           </div>
         </div>
