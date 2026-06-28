@@ -139,8 +139,8 @@ function main() {
   const registry = buildRegistry();
   const config: GameConfig = { ...defaultConfig, fogOfWar: false };
   const factionIds = Object.keys(registry.factions);
-  const f0 = factionIds[0] || 'ironclad';
-  const f1 = factionIds[1] || 'sylvan';
+  const f0 = factionIds[0] || 'vanguard';
+  const f1 = factionIds[1] || 'hive';
 
   console.log(`\n=== TACTICA SIMULATION ===`);
   console.log(`Games: ${numGames} | Bot A: ${botAType} | Bot B: ${botBType} | Seed: ${baseSeed}`);

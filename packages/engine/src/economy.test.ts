@@ -46,7 +46,7 @@ function makeLandTile(state: GameState, centre: Coord, dx: number, dy: number): 
 describe('createGame economy init', () => {
   it('creates a level-1 capital per player with starting resources', () => {
     const registry = getRegistry();
-    const state = createGame(getConfig(), registry, ['ironclad', 'sylvan'], 42);
+    const state = createGame(getConfig(), registry, ['vanguard', 'hive'], 42);
     expect(state.players[0].ore).toBe(registry.economy.startingOre);
     expect(state.players[0].plasma).toBe(registry.economy.startingPlasma);
     const cap = capitalOf(state, 0);
@@ -88,7 +88,7 @@ describe('City production / pop (capacity) / supply→level', () => {
 describe('REB1 — mines (output + supply)', () => {
   it('a level-1 mine adds +10 ore output and +1 supply; two mines unlock + accept L2', () => {
     const registry = getRegistry();
-    let state = createGame(getConfig(), registry, ['ironclad', 'sylvan'], 7);
+    let state = createGame(getConfig(), registry, ['vanguard', 'hive'], 7);
     const cap = capitalOf(state, 0);
     state.players[0].ore = 200;
     const base = calculateOreIncome(state, 0, registry);
@@ -114,7 +114,7 @@ describe('REB1 — mines (output + supply)', () => {
 
   it('upgrading a mine raises its output to 20 and supply to 2 (level stays 1 until accepted)', () => {
     const registry = getRegistry();
-    let state = createGame(getConfig(), registry, ['ironclad', 'sylvan'], 7);
+    let state = createGame(getConfig(), registry, ['vanguard', 'hive'], 7);
     const cap = capitalOf(state, 0);
     state.players[0].ore = 200;
     const a = makeOreTile(state, cap.position, 1, 0);
@@ -142,7 +142,7 @@ describe('REB1 — mines (output + supply)', () => {
 describe('REB2 — refineries (output + supply per adjacent same-city mine)', () => {
   it('produces +10 ore and +1 supply per adjacent mine', () => {
     const registry = getRegistry();
-    let state = createGame(getConfig(), registry, ['ironclad', 'sylvan'], 7);
+    let state = createGame(getConfig(), registry, ['vanguard', 'hive'], 7);
     const cap = capitalOf(state, 0);
     state.players[0].ore = 400;
 
@@ -168,7 +168,7 @@ describe('REB2 — refineries (output + supply per adjacent same-city mine)', ()
 describe('Unit pop (capacity)', () => {
   it('blocks recruiting at a full city and frees on unit removal', () => {
     const registry = getRegistry();
-    const state = createGame(getConfig(), registry, ['ironclad', 'sylvan'], 7);
+    const state = createGame(getConfig(), registry, ['vanguard', 'hive'], 7);
     const cap = capitalOf(state, 0);
     state.players[0].ore = 100;
     state.units = []; state.unitHomeCity = {};
@@ -189,7 +189,7 @@ describe('Unit pop (capacity)', () => {
 describe('Capture frees the new owner’s slots (Bug 1)', () => {
   it('clears the previous owner’s home-city links when a city is captured', () => {
     const registry = getRegistry();
-    let state = createGame(getConfig(), registry, ['ironclad', 'sylvan'], 7);
+    let state = createGame(getConfig(), registry, ['vanguard', 'hive'], 7);
     const enemyCap = capitalOf(state, 1);
     // Player 1's warrior is homed at the enemy capital.
     expect(unitsHomedAt(state, enemyCap.id)).toBe(1);
@@ -211,7 +211,7 @@ describe('Capture frees the new owner’s slots (Bug 1)', () => {
 
   it('a unit re-homes to the city it founds (pop transfers off its old home)', () => {
     const registry = getRegistry();
-    let state = createGame(getConfig(), registry, ['ironclad', 'sylvan'], 7);
+    let state = createGame(getConfig(), registry, ['vanguard', 'hive'], 7);
     const cap = capitalOf(state, 0);
     const pos = { x: 6, y: 6 };
     state.map.tiles[pos.y][pos.x].isRuin = true;
@@ -234,7 +234,7 @@ describe('Resources & recruiting costs', () => {
   it('recruiting deducts ore and plasma and assigns a home city', () => {
     const registry = getRegistry();
     registry.economy = { ...registry.economy, unitPlasmaCost: { warrior: 3 } };
-    let state = createGame(getConfig(), registry, ['ironclad', 'sylvan'], 7);
+    let state = createGame(getConfig(), registry, ['vanguard', 'hive'], 7);
     const cap = capitalOf(state, 0);
     state.units = []; state.unitHomeCity = {};
     state.players[0].ore = 50;
@@ -252,7 +252,7 @@ describe('Resources & recruiting costs', () => {
   it('hides recruits the player cannot afford in plasma', () => {
     const registry = getRegistry();
     registry.economy = { ...registry.economy, unitPlasmaCost: { warrior: 99 } };
-    const state = createGame(getConfig(), registry, ['ironclad', 'sylvan'], 7);
+    const state = createGame(getConfig(), registry, ['vanguard', 'hive'], 7);
     state.units = []; state.unitHomeCity = {};
     state.players[0].ore = 100; state.players[0].plasma = 0;
     expect(getLegalActions(state, registry, 0).filter(a => a.type === 'recruit' && a.unitTypeId === 'warrior').length).toBe(0);
@@ -262,7 +262,7 @@ describe('Resources & recruiting costs', () => {
 describe('Income split', () => {
   it('ore income = city base + ore buildings; plasma income starts at 0', () => {
     const registry = getRegistry();
-    const state = createGame(getConfig(), registry, ['ironclad', 'sylvan'], 7);
+    const state = createGame(getConfig(), registry, ['vanguard', 'hive'], 7);
     expect(calculateOreIncome(state, 0, registry)).toBe(cityProduction(capitalOf(state, 0), registry));
     expect(calculatePlasmaIncome(state, 0, registry)).toBe(0);
   });
@@ -281,7 +281,7 @@ describe('Determinism with the economy', () => {
       for (const p of s.players) p.ore = 80;
     };
 
-    let state = createGame(config, registry, ['ironclad', 'sylvan'], 314);
+    let state = createGame(config, registry, ['vanguard', 'hive'], 314);
     setup(state);
     const actions: Action[] = [];
     let prng = createPRNG(99);
@@ -295,7 +295,7 @@ describe('Determinism with the economy', () => {
       state = applyAction(state, action, registry);
     }
 
-    let replay = createGame(config, registry, ['ironclad', 'sylvan'], 314);
+    let replay = createGame(config, registry, ['vanguard', 'hive'], 314);
     setup(replay);
     for (const action of actions) replay = applyAction(replay, action, registry);
 
@@ -308,7 +308,7 @@ describe('Determinism with the economy', () => {
 describe('Founding a city', () => {
   it('claims the full 3x3 territory (ownership), not just the centre tile', () => {
     const registry = getRegistry();
-    let state = createGame(getConfig(), registry, ['ironclad', 'sylvan'], 7);
+    let state = createGame(getConfig(), registry, ['vanguard', 'hive'], 7);
     const pos = { x: 6, y: 6 }; // open space, away from the corner capitals
     state.map.tiles[pos.y][pos.x].isRuin = true;
     state.map.tiles[pos.y][pos.x].isCity = false;
@@ -327,7 +327,7 @@ describe('Founding a city', () => {
 
   it('cannot found on the same turn a unit moved onto the ruin (only the turn after)', () => {
     const registry = getRegistry();
-    let state = createGame(getConfig(), registry, ['ironclad', 'sylvan'], 7);
+    let state = createGame(getConfig(), registry, ['vanguard', 'hive'], 7);
     const pos = { x: 6, y: 6 };
     state.map.tiles[pos.y][pos.x].isRuin = true;
     state.map.tiles[pos.y][pos.x].isCity = false;
@@ -363,7 +363,7 @@ describe('City leveling (choice-based)', () => {
 
   it('rejects a choice that is not offered for the target level', () => {
     const registry = getRegistry();
-    let state = createGame(getConfig(), registry, ['ironclad', 'sylvan'], 7);
+    let state = createGame(getConfig(), registry, ['vanguard', 'hive'], 7);
     const cap = capitalOf(state, 0);
     state = buildMines(state, registry, cap, 2); // supply 2 → L2 available (income | pop)
     const city = cityAt(state, cap.position)!;
@@ -374,7 +374,7 @@ describe('City leveling (choice-based)', () => {
 
   it('the +3 supply choice persists and counts toward further leveling', () => {
     const registry = getRegistry();
-    let state = createGame(getConfig(), registry, ['ironclad', 'sylvan'], 7);
+    let state = createGame(getConfig(), registry, ['vanguard', 'hive'], 7);
     const cap = capitalOf(state, 0);
     state = buildMines(state, registry, cap, 5); // 5 mines = 5 supply (≥ L3 threshold 5)
     let city = cityAt(state, cap.position)!;
@@ -392,7 +392,7 @@ describe('City leveling (choice-based)', () => {
 
   it('level-up bonuses survive capture (economic value transfers unchanged)', () => {
     const registry = getRegistry();
-    let state = createGame(getConfig(), registry, ['ironclad', 'sylvan'], 7);
+    let state = createGame(getConfig(), registry, ['vanguard', 'hive'], 7);
     const cap = capitalOf(state, 0);
     state = buildMines(state, registry, cap, 2);
     let city = cityAt(state, cap.position)!;
@@ -413,7 +413,7 @@ describe('Territory expansion (L4 reward, anti-snake rule)', () => {
   // A synthetic L3 city at (6,6) ready to reach L4, on cleared open land.
   function setup() {
     const registry = getRegistry();
-    const state = createGame(getConfig(), registry, ['ironclad', 'sylvan'], 7);
+    const state = createGame(getConfig(), registry, ['vanguard', 'hive'], 7);
     // Clear a 7x7 patch around (6,6) so nothing (ruins/resources) blocks claims.
     for (let y = 3; y <= 9; y++) for (let x = 3; x <= 9; x++) {
       const t = state.map.tiles[y][x];
@@ -473,7 +473,7 @@ describe('Territory expansion (L4 reward, anti-snake rule)', () => {
 describe('Melee advance on kill', () => {
   it('a melee unit moves onto the tile of a unit it kills (ranged does not)', () => {
     const r = getRegistry();
-    let state = createGame(getConfig(), r, ['ironclad', 'sylvan'], 7);
+    let state = createGame(getConfig(), r, ['vanguard', 'hive'], 7);
     state.units = [];
     const aPos = { x: 5, y: 5 }, dPos = { x: 6, y: 5 };
     state.units.push({ id: 1, typeId: 'warrior', owner: 0, position: { ...aPos }, hp: 15, hasMoved: false, hasAttacked: false, abilityCooldowns: {} });
@@ -494,18 +494,18 @@ describe('City capture', () => {
 
   it('capture is offered only when the unit did not move onto the city this turn', () => {
     const r = getRegistry();
-    const moved = createGame(getConfig(), r, ['ironclad', 'sylvan'], 7);
+    const moved = createGame(getConfig(), r, ['vanguard', 'hive'], 7);
     putUnitOnEnemyCap(moved, true);
     expect(getLegalActions(moved, r, 0).some(a => a.type === 'captureCity')).toBe(false);
 
-    const settled = createGame(getConfig(), r, ['ironclad', 'sylvan'], 7);
+    const settled = createGame(getConfig(), r, ['vanguard', 'hive'], 7);
     putUnitOnEnemyCap(settled, false);
     expect(getLegalActions(settled, r, 0).some(a => a.type === 'captureCity' && a.unitId === 700)).toBe(true);
   });
 
   it('capturing transfers the city and its 3x3 territory to the captor', () => {
     const r = getRegistry();
-    let state = createGame(getConfig(), r, ['ironclad', 'sylvan'], 7);
+    let state = createGame(getConfig(), r, ['vanguard', 'hive'], 7);
     const enemyCap = putUnitOnEnemyCap(state, false);
     state = applyAction(state, { type: 'captureCity', unitId: 700 }, r);
     expect(state.cities.find(c => c.id === enemyCap.id)!.owner).toBe(0);
@@ -521,7 +521,7 @@ describe('City capture', () => {
 describe('City capture — full move→endTurn→capture flow', () => {
   it('capture is offered the turn AFTER moving onto an undefended enemy city', () => {
     const r = getRegistry();
-    let state = createGame(getConfig(), r, ['ironclad', 'sylvan'], 7);
+    let state = createGame(getConfig(), r, ['vanguard', 'hive'], 7);
     const enemyCap = state.cities.find(c => c.owner === 1)!;
     // Undefend it (remove the enemy unit on the tile), put a player-0 unit adjacent.
     state.units = state.units.filter(u => !(u.position.x === enemyCap.position.x && u.position.y === enemyCap.position.y));

@@ -4,8 +4,8 @@ import { useGameStore } from '../store/gameStore.js';
 export function SetupScreen() {
   const { config, setConfig, factions, startGame, initMapEditor, loadGame, setBotSetting } = useGameStore();
   const [seed, setSeed] = useState(Math.floor(Math.random() * 100000));
-  const [faction0, setFaction0] = useState(factions[0]?.id || 'ironclad');
-  const [faction1, setFaction1] = useState(factions[1]?.id || 'sylvan');
+  const [faction0, setFaction0] = useState(factions[0]?.id || 'vanguard');
+  const [faction1, setFaction1] = useState(factions[1]?.id || 'hive');
   const [bot0, setBot0] = useState<'human' | 'random' | 'greedy'>('human');
   const [bot1, setBot1] = useState<'human' | 'random' | 'greedy'>('human');
 

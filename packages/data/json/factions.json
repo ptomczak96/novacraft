@@ -1,14 +1,14 @@
 [
   {
-    "id": "ironclad",
-    "name": "Ironclad Dominion",
-    "color": "#c44536",
+    "id": "vanguard",
+    "name": "Vanguard",
+    "color": "#3d7bb5",
     "unitTypes": ["scout", "warrior", "archer", "defender", "catapult", "ironclad_berserker", "ironclad_siege_tower"]
   },
   {
-    "id": "sylvan",
-    "name": "Sylvan Accord",
-    "color": "#3a7d44",
+    "id": "hive",
+    "name": "Hive",
+    "color": "#8a4fa0",
     "unitTypes": ["scout", "warrior", "archer", "defender", "catapult", "sylvan_ranger", "sylvan_treant"]
   }
 ]

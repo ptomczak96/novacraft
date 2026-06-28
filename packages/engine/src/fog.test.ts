@@ -19,7 +19,7 @@ function unitOf(state: GameState, playerId = 0): Unit {
 describe('Fog of war — visibility radius (square / Chebyshev)', () => {
   it('a visibility-1 unit reveals the full 3×3 square incl. diagonals', () => {
     const registry = getRegistry();
-    const state = createGame(fogConfig(), registry, ['ironclad', 'sylvan'], 7);
+    const state = createGame(fogConfig(), registry, ['vanguard', 'hive'], 7);
     // Park the unit centrally on open ground so its 3×3 is on-map and unblocked.
     const u = unitOf(state, 0);
     u.position = { x: 6, y: 6 };
@@ -36,7 +36,7 @@ describe('Fog of war — visibility radius (square / Chebyshev)', () => {
 
   it("an owned city's territory is visible", () => {
     const registry = getRegistry();
-    const state = createGame(fogConfig(), registry, ['ironclad', 'sylvan'], 7);
+    const state = createGame(fogConfig(), registry, ['vanguard', 'hive'], 7);
     const cap = state.cities.find(c => c.isCapital && c.owner === 0)!;
     const vis = getVisibleState(state, 0, registry).visibility;
     expect(vis[cap.position.y][cap.position.x]).toBe('visible');
@@ -46,7 +46,7 @@ describe('Fog of war — visibility radius (square / Chebyshev)', () => {
 describe('Fog of war — explored memory (cloud vs fog)', () => {
   it('a previously-seen tile out of sight shows as explored (fog), not hidden (cloud)', () => {
     const registry = getRegistry();
-    const state = createGame(fogConfig(), registry, ['ironclad', 'sylvan'], 7);
+    const state = createGame(fogConfig(), registry, ['vanguard', 'hive'], 7);
     // Simulate having discovered a far tile, now out of current sight.
     state.memory[0].tiles[9][9] = blankTile();
     const vis = getVisibleState(state, 0, registry).visibility;
@@ -56,7 +56,7 @@ describe('Fog of war — explored memory (cloud vs fog)', () => {
 
   it('hides enemy units on explored (fog) tiles, shows them only when visible', () => {
     const registry = getRegistry();
-    const state = createGame(fogConfig(), registry, ['ironclad', 'sylvan'], 7);
+    const state = createGame(fogConfig(), registry, ['vanguard', 'hive'], 7);
     const own = unitOf(state, 0);
     own.position = { x: 6, y: 6 };
 
@@ -73,7 +73,7 @@ describe('Fog of war — explored memory (cloud vs fog)', () => {
 
   it('a building seen then destroyed while in fog still shows (last-seen snapshot)', () => {
     const registry = getRegistry();
-    const state = createGame(fogConfig(), registry, ['ironclad', 'sylvan'], 7);
+    const state = createGame(fogConfig(), registry, ['vanguard', 'hive'], 7);
     const own = unitOf(state, 0);
     own.position = { x: 6, y: 6 };
     // A building on a tile our unit can currently see, then record it into memory.
@@ -92,7 +92,7 @@ describe('Fog of war — explored memory (cloud vs fog)', () => {
 
   it('the capital reveals a 5×5 square (radius 2)', () => {
     const registry = getRegistry();
-    const state = createGame(fogConfig(), registry, ['ironclad', 'sylvan'], 7);
+    const state = createGame(fogConfig(), registry, ['vanguard', 'hive'], 7);
     const cap = state.cities.find(c => c.isCapital && c.owner === 0)!;
     const vis = getVisibleState(state, 0, registry).visibility;
     // A tile 2 out from the capital centre (and on-map) is visible.

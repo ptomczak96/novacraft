@@ -444,6 +444,21 @@ live truth:
 - Consequence for the prior capture test: the captured city now reports **1** unit
   homed (the capturer) rather than 0; the enemy's released ghost is still gone.
 
+### 2026-06-28 — Artisan Ornaments — two teams: Vanguard & Hive
+
+- **Replaced Ironclad Dominion / Sylvan Accord with Vanguard & Hive.** New faction ids
+  `vanguard` (Terran/industrial, `#3d7bb5`) and `hive` (organic/swarm, `#8a4fa0`),
+  selectable for both players in the setup menu. *Direction:* Vanguard = humans/AI/
+  robotics/tanks; Hive = swarm. Unit **rosters are unchanged for now** — the same
+  shared + ex-Ironclad/ex-Sylvan units are reused under the renamed factions, to be
+  redesigned slowly.
+- **Unit ids kept** (`ironclad_berserker`, etc.) deliberately — they're just string
+  ids; renaming them later avoids a churny multi-file rename (economy upkeep keys,
+  UI icon maps) right now. The unit `faction` fields and faction `unitTypes` lists were
+  repointed to vanguard/hive; all `'ironclad'`/`'sylvan'` faction-id references across
+  tests/sim/store/setup were updated. Graphics + unit redesign handed to Patrick via
+  `docs/overlap.md`.
+
 ---
 
 *Deferred ideas (the "we'll tweak this later" items) live in the memory backlog,

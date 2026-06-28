@@ -289,7 +289,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
   initMapEditor: () => {
     const { config, registry } = get();
-    const state = createGame(config, registry, ['ironclad', 'sylvan'], 1);
+    const state = createGame(config, registry, ['vanguard', 'hive'], 1);
     set({ mapEditorState: state, screen: 'mapEditor' });
   },
 

@@ -39,7 +39,7 @@ describe('Game creation', () => {
   it('creates a valid initial game state', () => {
     const registry = getRegistry();
     const config = getConfig();
-    const state = createGame(config, registry, ['ironclad', 'sylvan'], 42);
+    const state = createGame(config, registry, ['vanguard', 'hive'], 42);
 
     expect(state.phase).toBe('playing');
     expect(state.turn).toBe(1);
@@ -53,8 +53,8 @@ describe('Game creation', () => {
   it('creates deterministic maps with same seed', () => {
     const registry = getRegistry();
     const config = getConfig();
-    const a = createGame(config, registry, ['ironclad', 'sylvan'], 123);
-    const b = createGame(config, registry, ['ironclad', 'sylvan'], 123);
+    const a = createGame(config, registry, ['vanguard', 'hive'], 123);
+    const b = createGame(config, registry, ['vanguard', 'hive'], 123);
     expect(JSON.stringify(a.map)).toBe(JSON.stringify(b.map));
   });
 });
@@ -63,7 +63,7 @@ describe('Legal actions', () => {
   it('always includes endTurn', () => {
     const registry = getRegistry();
     const config = getConfig();
-    const state = createGame(config, registry, ['ironclad', 'sylvan'], 42);
+    const state = createGame(config, registry, ['vanguard', 'hive'], 42);
     const actions = getLegalActions(state, registry, 0);
     expect(actions.some(a => a.type === 'endTurn')).toBe(true);
   });
@@ -71,7 +71,7 @@ describe('Legal actions', () => {
   it('returns no actions for wrong player', () => {
     const registry = getRegistry();
     const config = getConfig();
-    const state = createGame(config, registry, ['ironclad', 'sylvan'], 42);
+    const state = createGame(config, registry, ['vanguard', 'hive'], 42);
     const actions = getLegalActions(state, registry, 1);
     expect(actions).toHaveLength(0);
   });
@@ -79,7 +79,7 @@ describe('Legal actions', () => {
   it('returns move actions for units', () => {
     const registry = getRegistry();
     const config = getConfig();
-    const state = createGame(config, registry, ['ironclad', 'sylvan'], 42);
+    const state = createGame(config, registry, ['vanguard', 'hive'], 42);
     const actions = getLegalActions(state, registry, 0);
     const moveActions = actions.filter(a => a.type === 'move');
     expect(moveActions.length).toBeGreaterThan(0);
@@ -155,7 +155,7 @@ describe('Determinism', () => {
       const config = getConfig({ turnLimit: 20 });
 
       // Play a game with random-ish actions
-      let state = createGame(config, registry, ['ironclad', 'sylvan'], seed);
+      let state = createGame(config, registry, ['vanguard', 'hive'], seed);
       const allActions: Action[] = [];
       let prng = createPRNG(seed + 1000);
 
@@ -172,7 +172,7 @@ describe('Determinism', () => {
       }
 
       // Replay
-      const replayed = replayGame(config, registry, ['ironclad', 'sylvan'], seed, allActions);
+      const replayed = replayGame(config, registry, ['vanguard', 'hive'], seed, allActions);
 
       // Compare final states (excluding action log which is built differently)
       expect(replayed.turn).toBe(state.turn);
@@ -191,7 +191,7 @@ describe('Fuzz test', () => {
     const config = getConfig({ turnLimit: 30 });
 
     for (let game = 0; game < 100; game++) {
-      let state = createGame(config, registry, ['ironclad', 'sylvan'], game);
+      let state = createGame(config, registry, ['vanguard', 'hive'], game);
       let prng = createPRNG(game + 5000);
 
       for (let step = 0; step < 500 && state.phase === 'playing'; step++) {
@@ -224,7 +224,7 @@ describe('Win conditions', () => {
       winConditions: { captureAllCities: false, eliminateAllUnits: true, highestScoreAtLimit: false },
       turnLimit: 100,
     });
-    let state = createGame(config, registry, ['ironclad', 'sylvan'], 42);
+    let state = createGame(config, registry, ['vanguard', 'hive'], 42);
 
     // Kill all player 1's units by removing them (simulate)
     state.units = state.units.filter(u => u.owner !== 1);
@@ -241,7 +241,7 @@ describe('Scoring', () => {
   it('computes scores based on cities, units, and income', () => {
     const registry = getRegistry();
     const config = getConfig();
-    const state = createGame(config, registry, ['ironclad', 'sylvan'], 42);
+    const state = createGame(config, registry, ['vanguard', 'hive'], 42);
     const scores = computeScores(state, registry);
     expect(scores[0]).toBeGreaterThan(0);
     expect(scores[1]).toBeGreaterThan(0);

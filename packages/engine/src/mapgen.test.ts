@@ -21,7 +21,7 @@ function centres(state: GameState): Coord[] {
 describe('Mapgen — ruins & territories', () => {
   it('no two city/ruin territories ever overlap (centres ≥ 3 apart) across many seeds', () => {
     for (let seed = 0; seed < 40; seed++) {
-      const state = createGame(config, registry, ['ironclad', 'sylvan'], seed);
+      const state = createGame(config, registry, ['vanguard', 'hive'], seed);
       const cs = centres(state);
       for (let i = 0; i < cs.length; i++) {
         for (let j = i + 1; j < cs.length; j++) {
@@ -34,14 +34,14 @@ describe('Mapgen — ruins & territories', () => {
   it('generates ruins (foundable city sites)', () => {
     let totalRuins = 0;
     for (let seed = 0; seed < 10; seed++) {
-      const state = createGame(config, registry, ['ironclad', 'sylvan'], seed);
+      const state = createGame(config, registry, ['vanguard', 'hive'], seed);
       totalRuins += centres(state).length - state.cities.length;
     }
     expect(totalRuins).toBeGreaterThan(0); // ruins do get placed
   });
 
   it('every capital has its plasma vent + ore in its territory', () => {
-    const state = createGame(config, registry, ['ironclad', 'sylvan'], 7);
+    const state = createGame(config, registry, ['vanguard', 'hive'], 7);
     for (const cap of state.cities.filter(c => c.isCapital)) {
       let ore = 0, plasma = 0;
       for (let dy = -1; dy <= 1; dy++) {
@@ -57,8 +57,8 @@ describe('Mapgen — ruins & territories', () => {
   });
 
   it('is deterministic — same seed produces an identical map', () => {
-    const a = createGame(config, registry, ['ironclad', 'sylvan'], 314);
-    const b = createGame(config, registry, ['ironclad', 'sylvan'], 314);
+    const a = createGame(config, registry, ['vanguard', 'hive'], 314);
+    const b = createGame(config, registry, ['vanguard', 'hive'], 314);
     expect(JSON.stringify(a.map)).toBe(JSON.stringify(b.map));
   });
 });

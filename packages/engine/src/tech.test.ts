@@ -33,7 +33,7 @@ describe('Tech cost scales with city count', () => {
 describe('Branch-unlock rule', () => {
   it('L2 techs are locked until an L1 in the same branch is researched', () => {
     const r = getRegistry();
-    let state = createGame(getConfig(), r, ['ironclad', 'sylvan'], 7);
+    let state = createGame(getConfig(), r, ['vanguard', 'hive'], 7);
     state.players[0].ore = 200;
 
     expect(isTechAvailable(state, 0, r.techs['drilling'], r)).toBe(true);
@@ -52,12 +52,12 @@ describe('Branch-unlock rule', () => {
 describe('Research deducts the city-scaled cost', () => {
   it('one city: L1 costs 50; two cities: L1 costs 60', () => {
     const r = getRegistry();
-    let s1 = createGame(getConfig(), r, ['ironclad', 'sylvan'], 7);
+    let s1 = createGame(getConfig(), r, ['vanguard', 'hive'], 7);
     s1.players[0].ore = 80;
     s1 = applyAction(s1, { type: 'research', techId: 'drilling' }, r);
     expect(s1.players[0].ore).toBe(30); // 80 - 50
 
-    let s2 = createGame(getConfig(), r, ['ironclad', 'sylvan'], 7);
+    let s2 = createGame(getConfig(), r, ['vanguard', 'hive'], 7);
     s2.players[0].ore = 80;
     s2.cities.push({ id: 999, position: { x: 0, y: 0 }, owner: 0, isCapital: false, level: 1, supply: 0, incomeBonus: 0, popBonus: 0, bonusSupply: 0, fortified: false, extraTerritory: [] });
     s2 = applyAction(s2, { type: 'research', techId: 'drilling' }, r);
@@ -68,7 +68,7 @@ describe('Research deducts the city-scaled cost', () => {
 describe('Slag Wash boosts mine output', () => {
   it('+10% to mine output once researched', () => {
     const r = getRegistry();
-    let state = createGame(getConfig(), r, ['ironclad', 'sylvan'], 7);
+    let state = createGame(getConfig(), r, ['vanguard', 'hive'], 7);
     const cap = capitalOf(state, 0);
     state.players[0].ore = 300;
     const a = makeTile(state, cap.position, 1, 0, 'ore');
@@ -86,7 +86,7 @@ describe('Slag Wash boosts mine output', () => {
 describe('Tech gates on buildings', () => {
   it('extractor is buildable on a plasma vent with no tech (mirrors the mine)', () => {
     const r = getRegistry();
-    let state = createGame(getConfig(), r, ['ironclad', 'sylvan'], 7);
+    let state = createGame(getConfig(), r, ['vanguard', 'hive'], 7);
     const cap = capitalOf(state, 0);
     state.players[0].ore = 300;
     const p = makeTile(state, cap.position, 1, 0, 'plasma');
@@ -96,7 +96,7 @@ describe('Tech gates on buildings', () => {
 
   it('Refineries gates the refinery', () => {
     const r = getRegistry();
-    let state = createGame(getConfig(), r, ['ironclad', 'sylvan'], 7);
+    let state = createGame(getConfig(), r, ['vanguard', 'hive'], 7);
     const cap = capitalOf(state, 0);
     state.players[0].ore = 400;
     const m = makeTile(state, cap.position, 1, 0, 'ore');
@@ -110,7 +110,7 @@ describe('Tech gates on buildings', () => {
 
   it('Drilling gates the mine L2 upgrade', () => {
     const r = getRegistry();
-    let state = createGame(getConfig(), r, ['ironclad', 'sylvan'], 7);
+    let state = createGame(getConfig(), r, ['vanguard', 'hive'], 7);
     const cap = capitalOf(state, 0);
     state.players[0].ore = 400;
     const m = makeTile(state, cap.position, 1, 0, 'ore');
@@ -124,7 +124,7 @@ describe('Tech gates on buildings', () => {
 describe('Armory branch', () => {
   it('L2 Armory techs unlock after any L1 Armory tech', () => {
     const r = getRegistry();
-    let state = createGame(getConfig(), r, ['ironclad', 'sylvan'], 7);
+    let state = createGame(getConfig(), r, ['vanguard', 'hive'], 7);
     state.players[0].ore = 300;
     expect(isTechAvailable(state, 0, r.techs['small_arms'], r)).toBe(true);
     expect(isTechAvailable(state, 0, r.techs['forge'], r)).toBe(false);
@@ -135,7 +135,7 @@ describe('Armory branch', () => {
 
   it('locked L3 techs are never researchable', () => {
     const r = getRegistry();
-    let state = createGame(getConfig(), r, ['ironclad', 'sylvan'], 7);
+    let state = createGame(getConfig(), r, ['vanguard', 'hive'], 7);
     state.players[0].ore = 1000;
     state = applyAction(state, { type: 'research', techId: 'small_arms' }, r);
     state = applyAction(state, { type: 'research', techId: 'forge' }, r); // L2 done → L3 prereq met
@@ -147,7 +147,7 @@ describe('Armory branch', () => {
 
   it('tech-locks units behind unlockUnit techs', () => {
     const r = getRegistry();
-    let state = createGame(getConfig(), r, ['ironclad', 'sylvan'], 7);
+    let state = createGame(getConfig(), r, ['vanguard', 'hive'], 7);
     expect(isUnitUnlocked(state, 0, 'warrior', r)).toBe(true); // not gated by any tech
     expect(isUnitUnlocked(state, 0, 'marksman', r)).toBe(false); // gated by Small Arms
     state.players[0].ore = 100;
