@@ -1,9 +1,30 @@
 import React, { useRef, useEffect, useCallback, useState } from 'react';
 import { useGameStore } from '../store/gameStore.js';
-import { previewCombat } from '@tactica/engine';
+import { previewCombat, isExpansionTileEligible } from '@tactica/engine';
 import type { Coord, Unit, Action } from '@tactica/engine';
 
+import type { GameState, DataRegistry, CityState } from '@tactica/engine';
 import { ELEVATION, BG_COLOR } from './constants.js';
+
+// Greedily keep the picks that still form a valid chain (drops any tile orphaned
+// when an earlier pick it depended on is removed). Order = current pick order.
+function coherentSubset(state: GameState, registry: DataRegistry, city: CityState, picks: Coord[]): Coord[] {
+  const accepted: Coord[] = [];
+  const remaining = [...picks];
+  let progress = true;
+  while (remaining.length && progress) {
+    progress = false;
+    for (let i = 0; i < remaining.length; i++) {
+      if (isExpansionTileEligible(state, registry, city, remaining[i], accepted)) {
+        accepted.push(remaining[i]);
+        remaining.splice(i, 1);
+        progress = true;
+        break;
+      }
+    }
+  }
+  return accepted;
+}
 import { canvasSize, screenToTile } from './projection.js';
 import { drawTile } from './drawTile.js';
 import { drawUnitAt } from './drawUnit.js';
@@ -15,6 +36,7 @@ import {
   drawDamagePreview,
   drawGridLabel,
   drawTerritoryBorders,
+  drawTerritoryPicker,
 } from './drawOverlays.js';
 import {
   drawBuildingLabel, drawResourceLabel, drawActionBox, drawNameBadge, pointInRect,
@@ -59,6 +81,7 @@ export function IsoCanvas({ mode, onPaint }: IsoCanvasProps) {
     gameState, visibleState, registry, config,
     selectedUnitId, hoveredTile, legalActions,
     selectUnit, setSelectedCity, setHoveredTile, executeAction,
+    territorySelect, setTerritorySelect,
     mapEditorState,
   } = useGameStore();
 
@@ -269,6 +292,26 @@ export function IsoCanvas({ mode, onPaint }: IsoCanvasProps) {
     }
     actionBoxesRef.current = boxes;
 
+    // ── Territory-expansion picker overlay (eligible tiles + ticks) ──
+    if (mode === 'game' && territorySelect && gameState) {
+      const city = gameState.cities.find(c => c.id === territorySelect.cityId);
+      if (city) {
+        const picks = territorySelect.picks;
+        const eligible: Coord[] = [];
+        if (picks.length < 3) {
+          for (let yy = 0; yy < map.height; yy++) {
+            for (let xx = 0; xx < map.width; xx++) {
+              if (picks.some(p => p.x === xx && p.y === yy)) continue;
+              if (isExpansionTileEligible(gameState, registry, city, { x: xx, y: yy }, picks)) {
+                eligible.push({ x: xx, y: yy });
+              }
+            }
+          }
+        }
+        drawTerritoryPicker(ctx, map, map.height, eligible, picks);
+      }
+    }
+
     // ── Hover name tooltip (unit / building / resource / ruin) ──
     if (mode === 'game' && hoveredTile) {
       const { x, y } = hoveredTile;
@@ -285,7 +328,7 @@ export function IsoCanvas({ mode, onPaint }: IsoCanvasProps) {
   }, [
     map, visibility, registry, config, units, unitByPos, buildings, buildingByPos, cities,
     selectedUnitId, hoveredTile, legalActions, moveTargets, attackTargets, mode,
-    buildPromptTile, spriteTick, animTick,
+    buildPromptTile, spriteTick, animTick, territorySelect, gameState,
   ]);
 
   // Re-render whenever state changes
@@ -324,6 +367,23 @@ export function IsoCanvas({ mode, onPaint }: IsoCanvasProps) {
     if (mode === 'editor') {
       const t = getTileFromEvent(e);
       if (t) onPaint?.(t.x, t.y);
+      return;
+    }
+
+    // Territory-expansion picker: clicks tick / untick tiles instead of selecting.
+    if (territorySelect && gameState) {
+      const t = getTileFromEvent(e);
+      if (!t) return;
+      const city = gameState.cities.find(c => c.id === territorySelect.cityId);
+      if (!city) return;
+      const picks = territorySelect.picks;
+      const idx = picks.findIndex(p => p.x === t.x && p.y === t.y);
+      if (idx >= 0) {
+        const remaining = picks.filter((_, i) => i !== idx);
+        setTerritorySelect({ cityId: city.id, picks: coherentSubset(gameState, registry, city, remaining) });
+      } else if (picks.length < 3 && isExpansionTileEligible(gameState, registry, city, t, picks)) {
+        setTerritorySelect({ cityId: city.id, picks: [...picks, { x: t.x, y: t.y }] });
+      }
       return;
     }
 
@@ -385,6 +445,7 @@ export function IsoCanvas({ mode, onPaint }: IsoCanvasProps) {
   }, [
     mode, getTileFromEvent, map, unitByPos, selectedUnitId, currentPlayer,
     moveTargets, attackTargets, legalActions, executeAction, selectUnit, setSelectedCity, onPaint,
+    territorySelect, setTerritorySelect, gameState, registry,
   ]);
 
   // ── Hover handler ──

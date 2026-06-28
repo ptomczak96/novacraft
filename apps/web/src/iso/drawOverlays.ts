@@ -34,6 +34,49 @@ export function drawHighlight(
 }
 
 /**
+ * Territory-expansion picker overlay: faint green diamonds on eligible tiles and
+ * a solid green diamond + check-mark on each ticked tile.
+ */
+export function drawTerritoryPicker(
+  ctx: CanvasRenderingContext2D,
+  map: GameMap,
+  mapHeight: number,
+  eligible: { x: number; y: number }[],
+  picks: { x: number; y: number }[],
+) {
+  for (const t of eligible) {
+    const terrain = map.tiles[t.y]?.[t.x]?.terrain ?? 'plains';
+    drawHighlight(ctx, t.x, t.y, mapHeight, terrain, 'rgba(64, 220, 120, 0.28)');
+  }
+  for (const t of picks) {
+    const elev = ELEVATION[map.tiles[t.y]?.[t.x]?.terrain ?? 'plains'] ?? 0;
+    const { sx, sy } = tileToScreenShifted(t.x, t.y, mapHeight, elev);
+    // Solid diamond
+    ctx.beginPath();
+    ctx.moveTo(sx, sy);
+    ctx.lineTo(sx + HW, sy + HH);
+    ctx.lineTo(sx, sy + TILE_H);
+    ctx.lineTo(sx - HW, sy + HH);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(48, 200, 100, 0.5)';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(40, 255, 120, 0.95)';
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+    // Check mark
+    const cy = sy + HH;
+    ctx.strokeStyle = '#eafff0';
+    ctx.lineWidth = 3.5;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(sx - 9, cy);
+    ctx.lineTo(sx - 2, cy + 7);
+    ctx.lineTo(sx + 11, cy - 8);
+    ctx.stroke();
+  }
+}
+
+/**
  * Draw move highlight on a tile.
  */
 export function drawMoveHighlight(

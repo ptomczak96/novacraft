@@ -47,6 +47,10 @@ interface GameStore {
   hoveredTile: Coord | null;
   legalActions: Action[];
 
+  // Territory-expansion picker (L4 reward): active while the player ticks tiles.
+  territorySelect: { cityId: number; picks: Coord[] } | null;
+  setTerritorySelect: (v: { cityId: number; picks: Coord[] } | null) => void;
+
   // Bot settings
   botSettings: [BotSetting, BotSetting];
   setBotSetting: (player: 0 | 1, setting: BotSetting) => void;
@@ -117,6 +121,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   stateHistory: [],
   selectedUnitId: null,
   selectedCity: null,
+  territorySelect: null,
   hoveredTile: null,
   legalActions: [],
 
@@ -161,6 +166,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   selectUnit: (unitId) => set({ selectedUnitId: unitId, selectedCity: null }),
   setSelectedCity: (c) => set({ selectedCity: c, selectedUnitId: null }),
   setHoveredTile: (c) => set({ hoveredTile: c }),
+  setTerritorySelect: (v) => set({ territorySelect: v, selectedUnitId: null, selectedCity: null }),
 
   executeAction: (action) => {
     const { gameState, registry, config } = get();
@@ -219,6 +225,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       legalActions: legal,
       stateHistory: [...get().stateHistory, gameState],
       selectedUnitId: null,
+      territorySelect: null,
       showInterstitial,
       lastCombatResult: combatLogEntry ?? get().lastCombatResult,
     });

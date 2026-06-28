@@ -44,11 +44,21 @@ with the city and never reset when an enemy takes it):
 |---|---|---|
 | **L2** | City income **+30** ore/turn (`incomeBonus`) | **+1 pop** (`popBonus`) |
 | **L3** | **Fortify** (`fortified` → ×1.5 def inside, *combat module*) | **Reveal map** *(needs fog — deferred)* |
-| **L4** | **+3 supply** (`bonusSupply`, counts toward leveling) | **Expand territory** *(needs tile-picker — deferred)* |
+| **L4** | **+3 supply** (`bonusSupply`, counts toward leveling) | **Expand territory** (claim 3 tiles — see below) |
+
+**Expand territory** (L4 option B) opens a tile-picker: the player ticks **3** open
+tiles to add to the city's territory (irregular shapes allowed; claimed tiles are
+full territory — buildable, owned, inside the border). Each pick must be **claimable**
+(in-bounds, not a city/ruin, not already in any city's territory) and satisfy the
+**anti-snake rule**: ≥2 of its 8 neighbours must already be owned by the city
+(base 3×3 + earlier expansions + tiles ticked so far). This blocks single-tile
+tendrils snaking out to grab distant resources. Confirming dispatches
+`expandTerritory`, which *is* the L4 level-up (levels to 4 **and** claims the tiles).
+Expanded tiles transfer with the city on capture, like everything else.
 
 > **Cap:** cities currently stop at **L4** (`LEVEL_CHOICE_MAX`) — L5/L6 rewards are
-> not designed yet (backlog). The deferred options (reveal, territory) appear in the
-> modal but disabled until their groups land.
+> not designed yet (backlog). **Reveal map** still appears disabled in the modal until
+> fog of war lands.
 
 **Ore production** per turn by level (plus any `incomeBonus`):
 - Capital: `20 + 10×(level-1)` → 20 / 30 / 40 / 50 / 60 / 70

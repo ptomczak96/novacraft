@@ -13,11 +13,11 @@ const CHOICE_META: Record<string, { label: string; desc: string; icon: string; r
   fortify:   { label: 'Fortify',          desc: 'Units defending inside this city gain a ×1.5 defence bonus.', icon: '🛡️', ready: true },
   reveal:    { label: 'Reveal Map',       desc: 'Reveal fog toward the nearest enemy city.', icon: '🔭', ready: false },
   supply:    { label: '+3 Supply',        desc: 'Permanently add 3 supply toward this city’s future levels.', icon: '🏭', ready: true },
-  territory: { label: 'Expand Territory', desc: 'Claim 3 new tiles for this city’s territory.', icon: '🗺️', ready: false },
+  territory: { label: 'Expand Territory', desc: 'Claim 3 new tiles for this city’s territory.', icon: '🗺️', ready: true },
 };
 
 export function LevelUpModal() {
-  const { gameState, legalActions, executeAction, botSettings } = useGameStore();
+  const { gameState, legalActions, executeAction, botSettings, territorySelect, setTerritorySelect } = useGameStore();
   const [dismissed, setDismissed] = useState<number[]>([]);
 
   const turn = gameState?.turn;
@@ -27,6 +27,7 @@ export function LevelUpModal() {
 
   if (!gameState || cur == null) return null;
   if (botSettings[cur] !== 'human') return null; // never interrupt a bot turn
+  if (territorySelect) return null; // hidden while the territory picker is open
 
   const levelUps = legalActions.filter((a): a is LevelUpAction => a.type === 'levelUpCity');
   if (levelUps.length === 0) return null;
@@ -57,7 +58,13 @@ export function LevelUpModal() {
                 key={action.choice}
                 className="levelup-option"
                 disabled={!meta.ready}
-                onClick={() => meta.ready && executeAction(action)}
+                onClick={() => {
+                  if (!meta.ready) return;
+                  // Territory routes into the tile picker (it commits the level-up
+                  // on confirm); every other reward applies immediately.
+                  if (action.choice === 'territory') setTerritorySelect({ cityId, picks: [] });
+                  else executeAction(action);
+                }}
               >
                 <div className="levelup-opt-icon" aria-hidden>{meta.icon}</div>
                 <div className="levelup-opt-label">{meta.label}</div>

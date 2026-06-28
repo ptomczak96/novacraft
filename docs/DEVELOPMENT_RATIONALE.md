@@ -322,6 +322,28 @@ and territory expansion as each lands.
   is cumulative — see the prior 2026-06-28 city-info-card entry; the same helper now
   also bounds at the L4 cap.
 
+### 2026-06-28 — Artisan Ornaments — territory expansion (L4 reward) + anti-snake rule
+
+- **The L4 "Expand territory" reward is now live.** Choosing it opens a tile-picker:
+  the player ticks 3 open tiles, and **Confirm** dispatches the new `expandTerritory`
+  action which both levels the city to 4 and claims the tiles. Routing it through its
+  own action (rather than `levelUpCity('territory')`) means cancelling the picker
+  leaves the city un-levelled, so the player can still pick a different reward. Claimed
+  tiles are **full territory** (buildable, owned, inside the border) — chosen over
+  ownership-only so "borders expand" actually opens new build sites.
+- **Anti-snake rule.** A candidate tile is eligible only if **≥2 of its 8 neighbours
+  are already owned** by the city (base 3×3 + previous expansions + tiles ticked so
+  far this turn). *Why:* without it, players could lay a single-tile-wide "pole" of
+  territory snaking across the map to grab a distant resource — the ≥2 rule forces
+  growth to stay blob-like and contiguous. Validation (`validateExpansion`) is
+  order-independent: it greedily checks that *some* placement order exists, so the UI
+  can accept ticks in any sequence. Expanded tiles are stored on `city.extraTerritory`
+  and are capture-invariant; `territoryCityAt`/border rendering consult them.
+- **Future faction idea logged** (per request): one faction could be allowed to expand
+  in a **snakelike pattern** (bypassing the ≥2 rule) as a late-game economic
+  powerhouse identity — see the economy backlog. It's an intentional asymmetry idea,
+  not yet a decision.
+
 ---
 
 *Deferred ideas (the "we'll tweak this later" items) live in the memory backlog,

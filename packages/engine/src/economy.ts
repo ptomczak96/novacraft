@@ -44,10 +44,16 @@ export function cityById(state: GameState, id: CityId | null): CityState | undef
   return state.cities.find(c => c.id === id);
 }
 
+/** Whether `pos` belongs to `city`'s territory — its base 3×3 OR a claimed extra tile. */
+export function cityOwnsTile(city: CityState, registry: DataRegistry, pos: Coord): boolean {
+  const r = registry.economy.city.territoryRadius;
+  if (chebyshev(city.position, pos) <= r) return true;
+  return (city.extraTerritory ?? []).some(t => t.x === pos.x && t.y === pos.y);
+}
+
 /** The (at most one) city whose territory contains `pos`. Territories never overlap. */
 export function territoryCityAt(state: GameState, registry: DataRegistry, pos: Coord): CityState | undefined {
-  const r = registry.economy.city.territoryRadius;
-  return state.cities.find(c => chebyshev(c.position, pos) <= r);
+  return state.cities.find(c => cityOwnsTile(c, registry, pos));
 }
 
 function buildingAt(state: GameState, pos: Coord): BuildingState | undefined {
@@ -177,6 +183,78 @@ export function citySupplyForLevel(level: number, registry: DataRegistry): numbe
 export function cityCanLevelUp(city: CityState, registry: DataRegistry): boolean {
   if (city.level >= LEVEL_CHOICE_MAX) return false; // L5/L6 bonuses not designed yet
   return city.supply >= citySupplyForLevel(city.level + 1, registry);
+}
+
+// ── Territory expansion (L4 "Expand territory" reward) ──
+
+/** Is `pos` claimable as new territory at all (in-bounds, not a city/ruin, unclaimed)? */
+export function isTileClaimable(state: GameState, registry: DataRegistry, pos: Coord): boolean {
+  const tile = state.map.tiles[pos.y]?.[pos.x];
+  if (!tile) return false; // off-map
+  if (tile.isCity || tile.isRuin) return false; // can't claim a settlement/ruin site
+  if (territoryCityAt(state, registry, pos)) return false; // already in some city's territory
+  return true;
+}
+
+/**
+ * Anti-snake rule: a candidate tile is eligible only if ≥2 of its 8 neighbours are
+ * already "owned" by the city — where owned = base 3×3 + previously-claimed extras
+ * (via cityOwnsTile) + any tiles in `accepted` (the picks committed so far this turn).
+ * This prevents single-tile-wide tendrils snaking out toward resources.
+ */
+export function isExpansionTileEligible(
+  state: GameState,
+  registry: DataRegistry,
+  city: CityState,
+  pos: Coord,
+  accepted: Coord[],
+): boolean {
+  if (!isTileClaimable(state, registry, pos)) return false;
+  if (accepted.some(t => t.x === pos.x && t.y === pos.y)) return false; // already picked
+  let owned = 0;
+  for (let dy = -1; dy <= 1; dy++) {
+    for (let dx = -1; dx <= 1; dx++) {
+      if (dx === 0 && dy === 0) continue;
+      const n = { x: pos.x + dx, y: pos.y + dy };
+      if (cityOwnsTile(city, registry, n) || accepted.some(t => t.x === n.x && t.y === n.y)) owned++;
+    }
+  }
+  return owned >= 2;
+}
+
+/**
+ * Validate a full set of expansion `tiles` for `city`: there must exist an order in
+ * which each tile is eligible given the ones accepted before it (greedy topo check).
+ * Returns true only if every tile can be placed. Order in the array doesn't matter.
+ */
+export function validateExpansion(
+  state: GameState,
+  registry: DataRegistry,
+  city: CityState,
+  tiles: Coord[],
+): boolean {
+  if (tiles.length === 0) return false;
+  // No duplicates.
+  for (let i = 0; i < tiles.length; i++) {
+    for (let j = i + 1; j < tiles.length; j++) {
+      if (tiles[i].x === tiles[j].x && tiles[i].y === tiles[j].y) return false;
+    }
+  }
+  const remaining = [...tiles];
+  const accepted: Coord[] = [];
+  let progress = true;
+  while (remaining.length > 0 && progress) {
+    progress = false;
+    for (let i = 0; i < remaining.length; i++) {
+      if (isExpansionTileEligible(state, registry, city, remaining[i], accepted)) {
+        accepted.push(remaining[i]);
+        remaining.splice(i, 1);
+        progress = true;
+        break;
+      }
+    }
+  }
+  return remaining.length === 0;
 }
 
 /** The two reward options offered when a city reaches `targetLevel` (the new level). */

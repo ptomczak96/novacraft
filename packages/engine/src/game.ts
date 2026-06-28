@@ -1,7 +1,7 @@
 import type {
   GameState, GameConfig, GameResult, Action, MoveAction, AttackAction,
   RecruitAction, ResearchAction, BuildAction, UpgradeBuildingAction, FoundCityAction,
-  CaptureCityAction, LevelUpCityAction, EndTurnAction, Unit, PlayerId, CityState,
+  CaptureCityAction, LevelUpCityAction, ExpandTerritoryAction, EndTurnAction, Unit, PlayerId, CityState,
   VisibleState, DataRegistry, Coord, PlayerState, TileVisibility,
 } from './types.js';
 import { createPRNG } from './prng.js';
@@ -13,7 +13,7 @@ import {
   settleEconomy, calculateOreIncome, calculatePlasmaIncome, recomputeCities,
   territoryCityAt, cityAt, cityById, cityHasCapacity, getUnitPlasmaCost,
   canBuild, canUpgradeBuilding, upgradeCostFor, buildingCost, canFoundCity,
-  cityCanLevelUp, levelUpChoices,
+  cityCanLevelUp, levelUpChoices, validateExpansion,
 } from './economy.js';
 import { getModifier, isTechAvailable, techCostForPlayer, isUnitUnlocked } from './tech.js';
 
@@ -64,6 +64,7 @@ export function createGame(
         popBonus: 0,
         bonusSupply: 0,
         fortified: false,
+        extraTerritory: [],
       });
     }
   }
@@ -262,6 +263,8 @@ export function applyAction(state: GameState, action: Action, registry: DataRegi
       return applyCaptureCity(newState, action, registry);
     case 'levelUpCity':
       return applyLevelUpCity(newState, action, registry);
+    case 'expandTerritory':
+      return applyExpandTerritory(newState, action, registry);
     case 'endTurn':
       return applyEndTurn(newState, registry);
     default:
@@ -444,6 +447,7 @@ function applyFoundCity(state: GameState, action: FoundCityAction, registry: Dat
     popBonus: 0,
     bonusSupply: 0,
     fortified: false,
+    extraTerritory: [],
   });
   state.players[playerId].ore -= registry.economy.foundCity.cost;
 
@@ -476,6 +480,11 @@ function applyCaptureCity(state: GameState, action: CaptureCityAction, registry:
       if (t) t.owner = state.currentPlayer;
     }
   }
+  // Expanded territory transfers with the city too (it stays on city.extraTerritory).
+  for (const et of city.extraTerritory ?? []) {
+    const t = state.map.tiles[et.y]?.[et.x];
+    if (t) t.owner = state.currentPlayer;
+  }
   unit.hasMoved = true;
   unit.hasAttacked = true; // capturing spends the unit's turn
 
@@ -492,18 +501,39 @@ function applyLevelUpCity(state: GameState, action: LevelUpCityAction, registry:
   const choices = levelUpChoices(targetLevel);
   if (!choices || (action.choice !== choices.a && action.choice !== choices.b)) return state;
 
+  // 'territory' is granted via the expandTerritory action (it carries the tiles);
+  // 'reveal' needs fog (deferred). Neither levels the city through this path.
+  if (action.choice === 'territory' || action.choice === 'reveal') return state;
+
   city.level = targetLevel;
   switch (action.choice) {
     case 'income': city.incomeBonus += 30; break;   // perpetual +30 ore/turn (capture-invariant)
     case 'pop': city.popBonus += 1; break;          // +1 unit capacity, stacks on the per-level pop
     case 'fortify': city.fortified = true; break;   // combat module applies the ×1.5 defence
     case 'supply': city.bonusSupply += 3; break;    // permanent supply toward further leveling
-    // 'reveal' (needs fog) and 'territory' (needs the tile-picker) land in later
-    // groups; selecting them still levels the city, effect wired up then.
     default: break;
   }
 
   recomputeCities(state, registry); // fold bonusSupply (if any) back into city.supply
+  return checkWinConditions(state, registry);
+}
+
+function applyExpandTerritory(state: GameState, action: ExpandTerritoryAction, registry: DataRegistry): GameState {
+  const city = cityById(state, action.cityId);
+  if (!city || city.owner !== state.currentPlayer) return state;
+  // This reward IS the L4 level-up: the city must be ready to reach level 4.
+  if (city.level + 1 !== 4 || !cityCanLevelUp(city, registry)) return state;
+  if (action.tiles.length !== 3) return state;
+  if (!validateExpansion(state, registry, city, action.tiles)) return state;
+
+  city.level = 4;
+  for (const t of action.tiles) {
+    city.extraTerritory.push({ x: t.x, y: t.y });
+    const tile = state.map.tiles[t.y]?.[t.x];
+    if (tile) tile.owner = state.currentPlayer; // claimed land flips to the owner's colour/border
+  }
+
+  recomputeCities(state, registry);
   return checkWinConditions(state, registry);
 }
 

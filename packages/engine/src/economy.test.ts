@@ -3,6 +3,7 @@ import {
   createGame, applyAction, getLegalActions,
   calculateOreIncome, calculatePlasmaIncome, cityProduction, cityPop, cityLevelForSupply,
   cityAt, canBuild, unitsHomedAt, cityCanLevelUp,
+  validateExpansion, isExpansionTileEligible, territoryCityAt,
   createPRNG, nextRandom,
 } from './index.js';
 import { buildRegistry, defaultConfig } from '@tactica/data';
@@ -57,8 +58,8 @@ describe('createGame economy init', () => {
 describe('City production / pop (capacity) / supply→level', () => {
   it('capital produces 20 at L1 (+10/level); founded city produces 10', () => {
     const registry = getRegistry();
-    const cap: CityState = { id: 1, position: { x: 0, y: 0 }, owner: 0, isCapital: true, level: 1, supply: 0, incomeBonus: 0, popBonus: 0, bonusSupply: 0, fortified: false };
-    const city: CityState = { id: 2, position: { x: 0, y: 0 }, owner: 0, isCapital: false, level: 1, supply: 0, incomeBonus: 0, popBonus: 0, bonusSupply: 0, fortified: false };
+    const cap: CityState = { id: 1, position: { x: 0, y: 0 }, owner: 0, isCapital: true, level: 1, supply: 0, incomeBonus: 0, popBonus: 0, bonusSupply: 0, fortified: false, extraTerritory: [] };
+    const city: CityState = { id: 2, position: { x: 0, y: 0 }, owner: 0, isCapital: false, level: 1, supply: 0, incomeBonus: 0, popBonus: 0, bonusSupply: 0, fortified: false, extraTerritory: [] };
     expect(cityProduction(cap, registry)).toBe(20);
     expect(cityProduction(city, registry)).toBe(10);
     cap.level = 3;
@@ -67,7 +68,7 @@ describe('City production / pop (capacity) / supply→level', () => {
 
   it('pop (unit capacity) = level + 1', () => {
     const registry = getRegistry();
-    const city: CityState = { id: 1, position: { x: 0, y: 0 }, owner: 0, isCapital: false, level: 1, supply: 0, incomeBonus: 0, popBonus: 0, bonusSupply: 0, fortified: false };
+    const city: CityState = { id: 1, position: { x: 0, y: 0 }, owner: 0, isCapital: false, level: 1, supply: 0, incomeBonus: 0, popBonus: 0, bonusSupply: 0, fortified: false, extraTerritory: [] };
     expect(cityPop(city, registry)).toBe(2);
     city.level = 3;
     expect(cityPop(city, registry)).toBe(4);
@@ -382,6 +383,67 @@ describe('City leveling (choice-based)', () => {
     expect(after.level).toBe(2);
     expect(after.incomeBonus).toBe(30); // bonus stays with the city
     expect(cityProduction(after, registry)).toBe(20 + 10 + 30); // capital base + level + bonus
+  });
+});
+
+describe('Territory expansion (L4 reward, anti-snake rule)', () => {
+  // A synthetic L3 city at (6,6) ready to reach L4, on cleared open land.
+  function setup() {
+    const registry = getRegistry();
+    const state = createGame(getConfig(), registry, ['ironclad', 'sylvan'], 7);
+    // Clear a 7x7 patch around (6,6) so nothing (ruins/resources) blocks claims.
+    for (let y = 3; y <= 9; y++) for (let x = 3; x <= 9; x++) {
+      const t = state.map.tiles[y][x];
+      t.terrain = 'plains'; t.isCity = false; t.isRuin = false;
+      t.isResourceTile = false; t.resourceKind = null; t.owner = null;
+    }
+    const city: CityState = {
+      id: 50, position: { x: 6, y: 6 }, owner: 0, isCapital: false,
+      level: 3, supply: 9, incomeBonus: 0, popBonus: 0, bonusSupply: 9,
+      fortified: false, extraTerritory: [],
+    };
+    state.cities.push(city);
+    return { registry, state, city };
+  }
+
+  it('a straight 3-tile line is rejected (no single-tile tendrils)', () => {
+    const { registry, state, city } = setup();
+    // (8,6)-(9,6)-(10,6): only the first touches the base 3x3 by ≥2.
+    expect(validateExpansion(state, registry, city, [{ x: 8, y: 6 }, { x: 9, y: 6 }, { x: 10, y: 6 }])).toBe(false);
+  });
+
+  it('an L-shaped set passes (each tile has ≥2 owned neighbours in some order)', () => {
+    const { registry, state, city } = setup();
+    // (8,6) touches (7,5/6/7); (8,7) touches (7,6),(7,7),(8,6); (9,6) touches (8,6),(8,7).
+    const tiles = [{ x: 9, y: 6 }, { x: 8, y: 7 }, { x: 8, y: 6 }]; // deliberately out of order
+    expect(validateExpansion(state, registry, city, tiles)).toBe(true);
+  });
+
+  it('a tile with only one owned neighbour is ineligible', () => {
+    const { registry, state, city } = setup();
+    expect(isExpansionTileEligible(state, registry, city, { x: 8, y: 6 }, [])).toBe(true);  // 3 base neighbours
+    expect(isExpansionTileEligible(state, registry, city, { x: 9, y: 6 }, [])).toBe(false); // 0 owned neighbours
+  });
+
+  it('expandTerritory levels to 4 and claims the 3 tiles as real territory', () => {
+    const { registry, state, city } = setup();
+    const tiles = [{ x: 8, y: 6 }, { x: 8, y: 7 }, { x: 9, y: 6 }];
+    const next = applyAction(state, { type: 'expandTerritory', cityId: city.id, tiles }, registry);
+    const c = next.cities.find(cc => cc.id === city.id)!;
+    expect(c.level).toBe(4);
+    expect(c.extraTerritory.length).toBe(3);
+    // A claimed tile now belongs to this city's territory and flips ownership.
+    expect(territoryCityAt(next, registry, { x: 9, y: 6 })?.id).toBe(city.id);
+    expect(next.map.tiles[6][9].owner).toBe(0);
+  });
+
+  it('rejects an invalid expansion (no level-up, no claim)', () => {
+    const { registry, state, city } = setup();
+    const tiles = [{ x: 8, y: 6 }, { x: 9, y: 6 }, { x: 10, y: 6 }]; // a line → invalid
+    const next = applyAction(state, { type: 'expandTerritory', cityId: city.id, tiles }, registry);
+    const c = next.cities.find(cc => cc.id === city.id)!;
+    expect(c.level).toBe(3);
+    expect(c.extraTerritory.length).toBe(0);
   });
 });
 

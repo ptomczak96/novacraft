@@ -162,6 +162,7 @@ export type Action =
   | FoundCityAction
   | CaptureCityAction
   | LevelUpCityAction
+  | ExpandTerritoryAction
   | EndTurnAction;
 
 export interface MoveAction {
@@ -224,6 +225,17 @@ export interface LevelUpCityAction {
   choice: LevelUpChoice;
 }
 
+/**
+ * The L4 "Expand territory" reward: levels the city to 4 AND claims `tiles`
+ * (exactly 3) into its territory. The tiles must each be unclaimed and pass the
+ * anti-snake adjacency rule (≥2 already-owned neighbours, counting earlier picks).
+ */
+export interface ExpandTerritoryAction {
+  type: 'expandTerritory';
+  cityId: CityId;
+  tiles: Coord[];
+}
+
 export interface EndTurnAction {
   type: 'endTurn';
 }
@@ -250,6 +262,7 @@ export interface CityState {
   popBonus: number; // extra unit capacity from "+1 pop" choices
   bonusSupply: number; // permanent supply from "+3 supply" choices (counts toward leveling)
   fortified: boolean; // "Fortify" chosen → units inside get a defensive bonus (combat module reads this)
+  extraTerritory: Coord[]; // tiles claimed beyond the base 3×3 via "Expand territory" (L4 reward)
 }
 
 export interface BuildingState {
