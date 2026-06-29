@@ -65,23 +65,28 @@ describe('Combat — Polytopia force formula (spec)', () => {
     expect(r.retaliationBreakdown).toBeNull();
   });
 
-  it('defensive terrain (forest ×1.5) reduces damage to the defender', () => {
+  it('forest (×1.2) reduces damage to a LIGHT defender', () => {
     const plains = plainsMap();
     const forest = plainsMap();
     forest.tiles[0][1].terrain = 'forest';
-    const onPlains = fight(ut(), ut(), plains, unit(0, 20, 0, 0), unit(1, 20, 1, 0)).attackerDamage;
-    const onForest = fight(ut(), ut(), forest, unit(0, 20, 0, 0), unit(1, 20, 1, 0)).attackerDamage;
+    const onPlains = fight(ut(), ut({ unitClass: 'light' }), plains, unit(0, 20, 0, 0), unit(1, 20, 1, 0)).attackerDamage;
+    const onForest = fight(ut(), ut({ unitClass: 'light' }), forest, unit(0, 20, 0, 0), unit(1, 20, 1, 0)).attackerDamage;
     expect(onForest).toBeLessThan(onPlains);
-    expect(onForest).toBe(9); // defenseForce 7.5, total 12.5 → round(0.4*5*4.5)=9
+    expect(onForest).toBe(10); // defenseForce 6, total 11 → round((5/11)*5*4.5)=10
   });
 
-  it('forest gives LIGHT units only ×1.2 cover (heavier units still ×1.5)', () => {
+  it('forest gives LIGHT units ×1.2 cover; heavier units (and all on mountains) get none', () => {
     const map = plainsMap();
     map.tiles[0][1].terrain = 'forest';
     const light = fight(ut(), ut({ unitClass: 'light' }), map, unit(0, 20, 0, 0), unit(1, 20, 1, 0));
     expect(light.attackBreakdown.terrainBonus).toBe(1.2);
     const heavy = fight(ut(), ut({ unitClass: 'heavy' }), map, unit(0, 20, 0, 0), unit(1, 20, 1, 0));
-    expect(heavy.attackBreakdown.terrainBonus).toBe(1.5);
+    expect(heavy.attackBreakdown.terrainBonus).toBe(1.0); // no forest cover
+
+    const mtn = plainsMap();
+    mtn.tiles[0][1].terrain = 'mountain';
+    const onMtn = fight(ut(), ut({ unitClass: 'light' }), mtn, unit(0, 20, 0, 0), unit(1, 20, 1, 0));
+    expect(onMtn.attackBreakdown.terrainBonus).toBe(1.0); // mountains give no defensive bonus
   });
 
   it('the corrosive status cuts the defender’s effective defence (−20%)', () => {

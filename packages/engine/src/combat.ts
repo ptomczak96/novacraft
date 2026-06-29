@@ -105,9 +105,9 @@ const FORTIFY_DEFENSE_MULTIPLIER = 3.0;
 /**
  * Defense-force multiplier for the tile a unit defends on:
  *   ×3.0  fortified city ("walls")
- *   ×1.5  any city tile, OR defensive terrain (mountain / defenceBonus > 0)
- *   ×1.2  forest — but only for LIGHT units (heavier units still get ×1.5)
- *   ×1.0  otherwise (open ground)
+ *   ×1.5  any city tile
+ *   ×1.2  forest — but ONLY for LIGHT units (heavier units get no forest cover)
+ *   ×1.0  everything else, incl. mountains and open ground
  */
 function getDefenseMultiplier(
   tile: Tile,
@@ -116,10 +116,8 @@ function getDefenseMultiplier(
 ): number {
   if (tile.fortified) return FORTIFY_DEFENSE_MULTIPLIER;
   if (tile.isCity) return 1.5;
-  if (terrain && terrain.defenceBonus > 0) {
-    if (terrain.id === 'forest' && unitClass === 'light') return 1.2; // light units get less forest cover
-    return 1.5;
-  }
+  // Forest is the only terrain that grants cover, and only to light units.
+  if (terrain?.id === 'forest' && unitClass === 'light') return 1.2;
   return 1.0;
 }
 

@@ -589,6 +589,8 @@ things; *supersedes the earlier Fortify ×2.25 entry.*
 - **Light units get only ×1.2 forest cover** (heavier units keep ×1.5). `combat.ts`
   `getDefenseMultiplier` now takes the defender's `unitClass`; only `forest` is reduced
   (mountain/city/fortify unchanged). All current units are "light", so forest = ×1.2 now.
+  *(Superseded same day — see below: mountains now give no cover, and heavy units get no
+  forest cover either.)*
 - **Turn-flow default changed:** a unit may move-then-attack, and **can't move/act after
   attacking** (previously a unit that attacked without moving could still move). Move
   legality is now `!hasMoved && !hasAttacked`.
@@ -603,6 +605,14 @@ things; *supersedes the earlier Fortify ×2.25 entry.*
   **Scab** (cost 50 / 10HP / 2atk / 1def / mv1 / rng2 / vis2 / corrosive). **Removed the
   Archer from the Hive roster.** Placeholder icons: scuttling 🐛, lancer 🪖, reaper 🦅,
   scab ⚗️ (Patrick to replace — see overlap).
+
+### 2026-06-29 — Artisan Ornaments — mountains give no cover; forest cover light-only
+
+- **Mountains no longer grant a defensive bonus** (×1.0). Zeroed `mountain.defenceBonus`
+  in `terrain.json` and simplified `getDefenseMultiplier`: the only terrain cover left is
+  **forest, and only for LIGHT units (×1.2)**. Heavy/other units get **no forest cover**
+  (×1.0). City still ×1.5, fortified ×3. (`defenceBonus` is now effectively informational
+  — combat keys off the forest tile id + unit class.)
 
 ### 2026-06-29 — Artisan Ornaments — scout HP back to 15, Hive starts with scuttlings
 

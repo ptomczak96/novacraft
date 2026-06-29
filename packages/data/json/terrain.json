@@ -25,7 +25,7 @@
     "id": "mountain",
     "name": "Mountain",
     "movementCost": 2,
-    "defenceBonus": 0.25,
+    "defenceBonus": 0,
     "blocksSight": false,
     "passable": true,
     "resourceYield": 0,
