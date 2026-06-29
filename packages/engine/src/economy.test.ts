@@ -425,6 +425,21 @@ describe('City leveling (choice-based)', () => {
     expect(after.incomeBonus).toBe(20); // bonus stays with the city
     expect(cityProduction(after, registry)).toBe(20 + 10 + 20); // capital base + level + bonus
   });
+
+  it('L2→3 "reveal" levels the city to 3 and discovers fog toward the enemy', () => {
+    const registry = getRegistry();
+    let state = createGame(getConfig({ fogOfWar: true }), registry, ['vanguard', 'hive'], 7);
+    const cap = capitalOf(state, 0);
+    cap.level = 2; cap.supply = 5; // ready to reach L3 (threshold 5)
+    state.currentPlayer = 0;
+
+    const countMem = (s: typeof state) => s.memory[0].tiles.reduce((n, row) => n + row.filter(Boolean).length, 0);
+    const before = countMem(state);
+
+    state = applyAction(state, { type: 'levelUpCity', cityId: cap.id, choice: 'reveal' }, registry);
+    expect(cityAt(state, cap.position)!.level).toBe(3);
+    expect(countMem(state)).toBeGreaterThan(before); // newly discovered (fog) tiles
+  });
 });
 
 describe('Territory expansion (L4 reward, anti-snake rule)', () => {

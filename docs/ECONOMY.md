@@ -43,7 +43,7 @@ with the city and never reset when an enemy takes it):
 | Reaching | Option A | Option B |
 |---|---|---|
 | **L2** | City income **+20** ore/turn (`incomeBonus`) | **+1 pop** (`popBonus`) |
-| **L3** | **Fortify** (`fortified` → ×3 defense for units in the city — "walls") | **Reveal map** *(needs fog — deferred)* |
+| **L3** | **Fortify** (`fortified` → ×3 defense for units in the city — "walls") | **Reveal map** (discover ~33% of currently-visible tiles as fog toward the nearest enemy) |
 | **L4** | **+3 supply** (`bonusSupply`, counts toward leveling) | **Expand territory** (claim 3 tiles — see below) |
 
 **Expand territory** (L4 option B) opens a tile-picker: the player ticks **3** open
@@ -57,8 +57,7 @@ tendrils snaking out to grab distant resources. Confirming dispatches
 Expanded tiles transfer with the city on capture, like everything else.
 
 > **Cap:** cities currently stop at **L4** (`LEVEL_CHOICE_MAX`) — L5/L6 rewards are
-> not designed yet (backlog). **Reveal map** still appears disabled in the modal until
-> fog of war lands.
+> not designed yet (backlog). All L2–L4 rewards are now live (Reveal map included).
 
 **Ore production** per turn by level (plus any `incomeBonus`):
 - Capital: `20 + 10×(level-1)` → 20 / 30 / 40 / 50 / 60 / 70

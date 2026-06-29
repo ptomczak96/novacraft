@@ -111,6 +111,78 @@ export function recordSight(state: GameState, playerId: PlayerId, registry: Data
   }
 }
 
+const NEIGHBORS8 = [[-1, -1], [0, -1], [1, -1], [-1, 0], [1, 0], [-1, 1], [0, 1], [1, 1]];
+
+/**
+ * "Reveal map" (L2→3 reward): discover up to `count` undiscovered (cloud) tiles in a
+ * connected blob growing from the player's seen frontier TOWARD the nearest enemy city
+ * (so the cluster's far edge points at the enemy — a rough "hill" toward them). Revealed
+ * tiles enter fog memory (terrain + buildings + cities, but not live units), so they show
+ * as fog afterward. Deterministic.
+ */
+export function revealTowardEnemy(
+  state: GameState,
+  playerId: PlayerId,
+  fromPos: { x: number; y: number },
+  count: number,
+  registry: DataRegistry,
+): void {
+  const mem = state.memory?.[playerId];
+  if (!mem || count <= 0) return;
+  const { width, height } = state.map;
+  const vis = computeVisibility(state.map, state.units, state.cities, playerId, registry);
+
+  // Nearest enemy city centre to aim at.
+  let target: { x: number; y: number } | null = null;
+  let bestD = Infinity;
+  for (const c of state.cities) {
+    if (c.owner === null || c.owner === playerId) continue;
+    const d = Math.max(Math.abs(c.position.x - fromPos.x), Math.abs(c.position.y - fromPos.y));
+    if (d < bestD) { bestD = d; target = { x: c.position.x, y: c.position.y }; }
+  }
+  if (!target) return; // no enemy city to reveal toward
+
+  const inB = (x: number, y: number) => x >= 0 && y >= 0 && x < width && y < height;
+  const isCloud = (x: number, y: number) => inB(x, y) && vis[y][x] === 'hidden' && !mem.tiles[y][x];
+  const key = (x: number, y: number) => `${x},${y}`;
+
+  const queued = new Set<string>();
+  const frontier: { x: number; y: number }[] = [];
+  const add = (x: number, y: number) => {
+    if (isCloud(x, y) && !queued.has(key(x, y))) { queued.add(key(x, y)); frontier.push({ x, y }); }
+  };
+  // Seed the frontier from cloud tiles bordering the player's seen (visible/remembered) area.
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      if (isCloud(x, y)) continue; // a seen tile
+      for (const [dx, dy] of NEIGHBORS8) add(x + dx, y + dy);
+    }
+  }
+
+  let revealed = 0;
+  while (revealed < count && frontier.length > 0) {
+    // Pick the frontier cloud tile nearest the enemy (deterministic tiebreak).
+    let bi = 0, bs = Infinity;
+    for (let i = 0; i < frontier.length; i++) {
+      const f = frontier[i];
+      const d = Math.max(Math.abs(f.x - target.x), Math.abs(f.y - target.y));
+      const score = d * (width * height) + f.y * width + f.x;
+      if (score < bs) { bs = score; bi = i; }
+    }
+    const f = frontier.splice(bi, 1)[0];
+    queued.delete(key(f.x, f.y));
+    if (!isCloud(f.x, f.y)) continue;
+
+    mem.tiles[f.y][f.x] = cloneJSON(state.map.tiles[f.y][f.x]);
+    const b = state.buildings.find(bb => bb.position.x === f.x && bb.position.y === f.y);
+    if (b) { mem.buildings = mem.buildings.filter(bb => !(bb.position.x === f.x && bb.position.y === f.y)); mem.buildings.push(cloneJSON(b)); }
+    const c = state.cities.find(cc => cc.position.x === f.x && cc.position.y === f.y);
+    if (c) { mem.cities = mem.cities.filter(cc => !(cc.position.x === f.x && cc.position.y === f.y)); mem.cities.push(cloneJSON(c)); }
+    revealed++;
+    for (const [dx, dy] of NEIGHBORS8) add(f.x + dx, f.y + dy);
+  }
+}
+
 /**
  * Reveal a Chebyshev-radius square around (ox,oy) to `level` ('visible' or fog
  * 'explored'), each tile gated by line of sight. Only ever raises a tile's level,

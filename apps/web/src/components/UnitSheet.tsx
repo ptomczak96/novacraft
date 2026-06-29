@@ -47,9 +47,13 @@ export function UnitSheet() {
   const faction = registry.factions[visibleState.players[unit.owner]?.factionId];
 
   // Actual defensive multiplier for THIS unit on THIS tile (matches combat exactly).
+  // Inside a city the city/walls bonus applies and terrain (e.g. forest) is ignored.
   const defMult = getDefenseMultiplier(tile, terrain, unitType);
-  const tileNote = tile.fortified ? ' (Fortified)' : tile.isCity ? ' (City)' : '';
-  const defenseLabel = `${terrain?.name ?? 'Unknown'}${tileNote} — ${defMult}×`;
+  const defenseLabel = tile.fortified
+    ? `Fortified City — ${defMult}×`
+    : tile.isCity
+      ? `City — ${defMult}×`
+      : `${terrain?.name ?? 'Unknown'} — ${defMult}×`;
 
   const statuses = unit.statuses ?? [];
 

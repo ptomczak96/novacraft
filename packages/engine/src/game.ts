@@ -8,7 +8,7 @@ import { createPRNG, nextInt } from './prng.js';
 import { generateMap } from './mapgen.js';
 import { getReachableTiles, distance, inRange } from './pathfinding.js';
 import { resolveCombat, previewCombat } from './combat.js';
-import { computeVisibility, recordSight, makePlayerMemory } from './fog.js';
+import { computeVisibility, recordSight, makePlayerMemory, revealTowardEnemy } from './fog.js';
 import {
   settleEconomy, calculateOreIncome, calculatePlasmaIncome, recomputeCities,
   territoryCityAt, cityAt, cityById, cityHasCapacity, cityHasCapacityFor, cityOwnsTile, getUnitPlasmaCost,
@@ -676,21 +676,32 @@ function applyLevelUpCity(state: GameState, action: LevelUpCityAction, registry:
   const choices = levelUpChoices(targetLevel);
   if (!choices || (action.choice !== choices.a && action.choice !== choices.b)) return state;
 
-  // 'territory' is granted via the expandTerritory action (it carries the tiles);
-  // 'reveal' needs fog (deferred). Neither levels the city through this path.
-  if (action.choice === 'territory' || action.choice === 'reveal') return state;
+  // 'territory' is granted via the expandTerritory action (it carries the tiles).
+  if (action.choice === 'territory') return state;
 
   city.level = targetLevel;
   switch (action.choice) {
     case 'income': city.incomeBonus += 20; break;   // perpetual +20 ore/turn (capture-invariant)
     case 'pop': city.popBonus += 1; break;          // +1 unit capacity, stacks on the per-level pop
-    case 'fortify': {                               // combat applies the extra ×1.5 defence
+    case 'fortify': {                               // combat applies the city-walls ×3 defence
       city.fortified = true;
       const ct = state.map.tiles[city.position.y]?.[city.position.x];
       if (ct) ct.fortified = true;                  // mirror onto the tile so combat (tile-based) reads it
       break;
     }
     case 'supply': city.bonusSupply += 3; break;    // permanent supply toward further leveling
+    case 'reveal': {                                // discover fog toward the nearest enemy city
+      if (state.config.fogOfWar) {
+        const player = city.owner ?? state.currentPlayer;
+        const vis = computeVisibility(state.map, state.units, state.cities, player, registry);
+        let visibleCount = 0;
+        for (let y = 0; y < state.map.height; y++) {
+          for (let x = 0; x < state.map.width; x++) if (vis[y][x] === 'visible') visibleCount++;
+        }
+        revealTowardEnemy(state, player, city.position, Math.floor(visibleCount * 0.33), registry);
+      }
+      break;
+    }
     default: break;
   }
 

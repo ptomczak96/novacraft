@@ -122,6 +122,14 @@ describe('Combat — Polytopia force formula (spec)', () => {
     expect(r.attackBreakdown.terrainBonus).toBe(1.5);
   });
 
+  it('a city tile overrides terrain cover — only the city bonus applies', () => {
+    const map = plainsMap();
+    map.tiles[0][1].terrain = 'forest';
+    map.tiles[0][1].isCity = true; // a city built on a forest tile
+    const r = fight(ut(), ut({ unitClass: 'light' }), map, unit(0, 20, 0, 0), unit(1, 20, 1, 0));
+    expect(r.attackBreakdown.terrainBonus).toBe(1.5); // city ×1.5, NOT forest ×1.2
+  });
+
   it('a fortified city gives ×3 defense (more than terrain, less damage taken)', () => {
     const map = plainsMap();
     map.tiles[0][1].isCity = true;

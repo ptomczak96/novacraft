@@ -612,6 +612,20 @@ things; *supersedes the earlier Fortify ×2.25 entry.*
   influence**, its movement is capped at **1** (base 2). Enforced in `pathfinding.ts`
   (`getReachableTiles` caps `maxMove`). *(AOI definition revised below.)*
 
+### 2026-06-29 — Artisan Ornaments — Reveal Map reward implemented; city-vs-forest display
+
+- **Reveal Map (L2→3 reward) is now live** (was deferred pending fog). Picking it levels
+  the city to 3 and discovers **~33% of the player's currently-visible tile count** as a
+  connected blob of cloud tiles growing from the player's seen frontier toward the
+  **nearest enemy city** (`fog.ts revealTowardEnemy`, frontier-growth biased to the
+  enemy → rough "hill"). Revealed tiles enter fog memory (terrain + structures, not live
+  units) so they show as fog afterward. Deterministic. Modal `reveal` set `ready: true`.
+- **Confirmed city > terrain in combat** (already correct: `getDefenseMultiplier` checks
+  fortified/city before forest, so a city tile is ×1.5 / fortified ×3 regardless of the
+  forest underneath). The confusing part was the **UnitSheet label**, which now reads
+  "City — 1.5×" / "Fortified City — 3×" instead of "Forest (City) — …". Added a test
+  locking city-over-forest. Also corrected the Fortify modal text (×1.5 → ×3 "walls").
+
 ### 2026-06-29 — Artisan Ornaments — "Double Resources" testing toggle
 
 - Setup-screen checkbox **"Double Resources (For testing)"** (below the win conditions),

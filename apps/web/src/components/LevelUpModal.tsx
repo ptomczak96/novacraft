@@ -10,8 +10,8 @@ type LevelUpAction = Extract<Action, { type: 'levelUpCity' }>;
 const CHOICE_META: Record<string, { label: string; desc: string; icon: string; ready: boolean }> = {
   income:    { label: 'City Income +20', desc: '+20 ore every turn, permanently — kept even if the city is captured.', icon: '💰', ready: true },
   pop:       { label: '+1 Population',    desc: '+1 unit capacity here, stacking on top of the normal per-level gain.', icon: '🧍', ready: true },
-  fortify:   { label: 'Fortify',          desc: 'Units defending inside this city gain a ×1.5 defence bonus.', icon: '🛡️', ready: true },
-  reveal:    { label: 'Reveal Map',       desc: 'Reveal fog toward the nearest enemy city.', icon: '🔭', ready: false },
+  fortify:   { label: 'Fortify',          desc: 'City walls: units defending inside gain ×3 defence (vs ×1.5 in a normal city).', icon: '🛡️', ready: true },
+  reveal:    { label: 'Reveal Map',       desc: 'Reveal a swath of fog toward the nearest enemy city (~33% of what you can currently see).', icon: '🔭', ready: true },
   supply:    { label: '+3 Supply',        desc: 'Permanently add 3 supply toward this city’s future levels.', icon: '🏭', ready: true },
   territory: { label: 'Expand Territory', desc: 'Claim 3 new tiles for this city’s territory.', icon: '🗺️', ready: true },
 };
