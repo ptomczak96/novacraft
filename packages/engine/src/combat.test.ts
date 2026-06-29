@@ -89,6 +89,24 @@ describe('Combat — Polytopia force formula (spec)', () => {
     expect(onMtn.attackBreakdown.terrainBonus).toBe(1.0); // mountains give no defensive bonus
   });
 
+  it('mountain_defense gives ×1.2 on a mountain (normal units get nothing there)', () => {
+    const map = plainsMap();
+    map.tiles[0][1].terrain = 'mountain';
+    const climber = fight(ut(), ut({ conditions: ['mountain_defense'] }), map, unit(0, 20, 0, 0), unit(1, 20, 1, 0));
+    expect(climber.attackBreakdown.terrainBonus).toBe(1.2);
+    const normal = fight(ut(), ut(), map, unit(0, 20, 0, 0), unit(1, 20, 1, 0));
+    expect(normal.attackBreakdown.terrainBonus).toBe(1.0);
+  });
+
+  it('mountain_shooter gives +20% attack while on a mountain', () => {
+    const map = plainsMap();
+    map.tiles[0][0].terrain = 'mountain'; // the attacker's tile
+    const tough = ut({ defence: 8 });
+    const shooter = fight(ut({ conditions: ['mountain_shooter'] }), tough, map, unit(0, 20, 0, 0), unit(1, 20, 1, 0)).attackerDamage;
+    const normal = fight(ut(), tough, map, unit(0, 20, 0, 0), unit(1, 20, 1, 0)).attackerDamage;
+    expect(shooter).toBeGreaterThan(normal);
+  });
+
   it('the corrosive status cuts the defender’s effective defence (−20%)', () => {
     const map = plainsMap();
     const tough = ut({ defence: 10 }); // high def so the 20% cut survives rounding

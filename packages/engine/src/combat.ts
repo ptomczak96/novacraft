@@ -112,12 +112,13 @@ const FORTIFY_DEFENSE_MULTIPLIER = 3.0;
 export function getDefenseMultiplier(
   tile: Tile,
   terrain: { id: string; defenceBonus: number } | undefined,
-  unitClass: string | undefined,
+  defenderType: { unitClass?: string; conditions?: string[] } | undefined,
 ): number {
   if (tile.fortified) return FORTIFY_DEFENSE_MULTIPLIER;
   if (tile.isCity) return 1.5;
-  // Forest is the only terrain that grants cover, and only to light units.
-  if (terrain?.id === 'forest' && unitClass === 'light') return 1.2;
+  // Forest cover — light units only. Mountain cover — only "mountain_defense" units.
+  if (terrain?.id === 'forest' && defenderType?.unitClass === 'light') return 1.2;
+  if (terrain?.id === 'mountain' && defenderType?.conditions?.includes('mountain_defense')) return 1.2;
   return 1.0;
 }
 
@@ -141,17 +142,22 @@ export function resolveCombat(
   // Defender's tile gives the defense bonus (applied to defenseForce only).
   const defenderTile = map.tiles[defender.position.y][defender.position.x];
   const defenderTerrain = registry.terrainTypes[defenderTile.terrain];
-  const defenderDefenseMultiplier = getDefenseMultiplier(defenderTile, defenderTerrain, defenderType.unitClass);
+  const defenderDefenseMultiplier = getDefenseMultiplier(defenderTile, defenderTerrain, defenderType);
 
   // "Corrosive" status on the defender: −20% to its defence stat (see docs/conditions.md).
   const corroded = defender.statuses?.includes('corrosive') ?? false;
   const effectiveDefence = defenderType.defence * (corroded ? 0.8 : 1);
 
+  // "Mountain shooter": +20% attack while the attacker stands on a mountain.
+  const attackerTile = map.tiles[attacker.position.y]?.[attacker.position.x];
+  const mountainShooter = attackerTile?.terrain === 'mountain' && (attackerType.conditions?.includes('mountain_shooter') ?? false);
+  const effectiveAttack = attackerType.attack * (mountainShooter ? 1.2 : 1);
+
   // ONE force split yields both the attack damage and the retaliation, from the
   // sides' current (pre-damage) HP. Canonical Polytopia: retaliation = defenseResult
   // (driven by the DEFENDER'S DEFENSE stat), not a fresh counter-attack.
   const f = computeForces(
-    attackerType.attack, attacker.hp, attackerType.maxHP,
+    effectiveAttack, attacker.hp, attackerType.maxHP,
     effectiveDefence, defender.hp, defenderType.maxHP,
     defenderDefenseMultiplier,
   );
@@ -165,7 +171,7 @@ export function resolveCombat(
     totalForce: f.totalForce,
     terrainBonus: defenderDefenseMultiplier,
     terrainName: getTerrainLabel(defenderTile, defenderTerrain),
-    rawDamage: (f.attackForce / (f.totalForce || 1)) * attackerType.attack * 4.5,
+    rawDamage: (f.attackForce / (f.totalForce || 1)) * effectiveAttack * 4.5,
     finalDamage: damageToDefender,
   };
 

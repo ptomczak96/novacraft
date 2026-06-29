@@ -72,7 +72,10 @@ export function computeVisibility(
     } else {
       // Normal sight. "Low Horizons" makes mountains block this unit's line of sight.
       const mountainsBlock = conds.includes('low_horizons');
-      revealSquareLevel(map, visibility, ox, oy, Math.floor(unitType.visibility), registry, 'visible', mountainsBlock);
+      let radius = Math.floor(unitType.visibility);
+      // "Mountain sight": visibility becomes 2 while standing on a mountain.
+      if (conds.includes('mountain_sight') && map.tiles[oy]?.[ox]?.terrain === 'mountain') radius = 2;
+      revealSquareLevel(map, visibility, ox, oy, radius, registry, 'visible', mountainsBlock);
     }
   }
 

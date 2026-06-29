@@ -4,7 +4,10 @@ import { useGameStore } from '../store/gameStore.js';
 
 // Friendly names + explanations for special conditions (hover tooltips).
 const CONDITION_INFO: Record<string, { name: string; desc: string }> = {
-  mountain_restricted: { name: 'Mountain Restricted', desc: 'Cannot move onto mountain tiles.' },
+  mountain_restricted: { name: 'Mountain Restricted', desc: 'Cannot move onto mountain tiles (this is the default for all units).' },
+  mountain_defense: { name: 'Mountain Defense', desc: 'Can move onto mountains; gains ×1.2 defence while standing on one.' },
+  mountain_shooter: { name: 'Mountain Shooter', desc: 'Can move onto mountains; gains ×1.2 attack while standing on one.' },
+  mountain_sight: { name: 'Mountain Sight', desc: 'Can move onto mountains; its visibility becomes 2 while standing on one.' },
   low_horizons: { name: 'Low Horizons', desc: 'Mountains block its line of sight — it sees the mountain but nothing beyond it.' },
   impotent_founder: { name: 'Impotent Founder', desc: 'Cannot found cities.' },
   sacrificial_founder: { name: 'Sacrificial Founder', desc: 'Dies when it founds a city.' },
@@ -43,7 +46,7 @@ export function UnitSheet() {
   const faction = registry.factions[visibleState.players[unit.owner]?.factionId];
 
   // Actual defensive multiplier for THIS unit on THIS tile (matches combat exactly).
-  const defMult = getDefenseMultiplier(tile, terrain, unitType.unitClass);
+  const defMult = getDefenseMultiplier(tile, terrain, unitType);
   const tileNote = tile.fortified ? ' (Fortified)' : tile.isCity ? ' (City)' : '';
   const defenseLabel = `${terrain?.name ?? 'Unknown'}${tileNote} — ${defMult}×`;
 
@@ -92,8 +95,9 @@ export function UnitSheet() {
             {statuses.map(s => {
               const info = STATUS_INFO[s];
               return (
-                <span key={s} className="unit-sheet-status" title={info?.desc ?? s}>
+                <span key={s} className="unit-sheet-status">
                   {info ? `${info.name} (${info.effect})` : s}
+                  <span className="cond-tip">{info?.desc ?? s}</span>
                 </span>
               );
             })}
@@ -109,8 +113,9 @@ export function UnitSheet() {
             {unitType.conditions.map(c => {
               const info = conditionInfo(c);
               return (
-                <span key={c} className="unit-sheet-trait unit-sheet-condition" title={info.desc}>
+                <span key={c} className="unit-sheet-trait unit-sheet-condition">
                   {info.name}
+                  {info.desc && <span className="cond-tip">{info.desc}</span>}
                 </span>
               );
             })}

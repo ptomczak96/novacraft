@@ -4,13 +4,13 @@
     "name": "Vanguard",
     "color": "#3d7bb5",
     "startingUnits": [{ "unit": "warrior", "count": 1 }],
-    "unitTypes": ["scout", "warrior", "lancer", "archer", "defender", "catapult", "ironclad_berserker", "ironclad_siege_tower"]
+    "unitTypes": ["scout", "warrior", "lancer", "archer", "defender"]
   },
   {
     "id": "hive",
     "name": "Hive",
     "color": "#8a4fa0",
     "startingUnits": [{ "unit": "scuttling", "count": 2 }],
-    "unitTypes": ["scuttling", "hive_scout", "reaper", "scab", "defender", "catapult", "sylvan_ranger", "sylvan_treant"]
+    "unitTypes": ["scuttling", "hive_scout", "reaper", "scab"]
   }
 ]

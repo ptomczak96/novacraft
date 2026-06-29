@@ -19,7 +19,10 @@ export function getReachableTiles(
   const maxMove = unitType.movement + movementBonus;
   const reachable = new Map<string, number>(); // "x,y" -> cost
   const ignoresTerrain = unitType.traits.includes('ignoresTerrainCost');
-  const mountainRestricted = unitType.conditions?.includes('mountain_restricted') ?? false; // see docs/conditions.md
+  // By DEFAULT no unit may move onto mountains; only units with a mountain-access
+  // condition can (mountain_defense / mountain_shooter / mountain_sight). See docs/conditions.md.
+  const conds = unitType.conditions ?? [];
+  const canClimbMountains = conds.includes('mountain_defense') || conds.includes('mountain_shooter') || conds.includes('mountain_sight');
   const isFlying = unitType.traits.includes('flying');
   const isAquatic = unitType.traits.includes('aquatic');
 
@@ -63,8 +66,8 @@ export function getReachableTiles(
       const terrain = registry.terrainTypes[tile.terrain];
       if (!terrain) continue;
 
-      // Condition: "Mountain restricted" — cannot move onto mountain tiles.
-      if (mountainRestricted && terrain.id === 'mountain') continue;
+      // Mountains are impassable unless the unit has a mountain-access condition.
+      if (terrain.id === 'mountain' && !canClimbMountains) continue;
 
       // Check passability
       if (!isFlying) {

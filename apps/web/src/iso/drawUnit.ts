@@ -165,6 +165,7 @@ const UNIT_DRAWERS: Record<string, UnitDrawFn> = {
   scab: drawScab,
   reaper: drawReaper,
   lancer: drawLancer,
+  hive_scout: drawHiveScout,
 };
 
 // ═══════════════════════════════════════
@@ -1193,6 +1194,38 @@ function drawLancer(
   outlined(ctx, METAL_MID, () => { ctx.arc(cx, by - 18, 3, 0, Math.PI * 2); });
   filled(ctx, dark, () => { ctx.fillRect(cx - 3, by - 20.5, 6, 1.5); });
   filled(ctx, '#66ccff', () => { ctx.fillRect(cx - 2, by - 19, 4, 1.5); });
+}
+
+// ═══════════════════════════════════════
+// HIVE SCOUT — small crawler dominated by one big eye
+// ═══════════════════════════════════════
+function drawHiveScout(
+  ctx: CanvasRenderingContext2D,
+  cx: number, cy: number,
+  color: string, dark: string, _light: string,
+) {
+  const by = cy + FOOT_Y;
+
+  // Little tentacle legs
+  ctx.strokeStyle = dark; ctx.lineWidth = 1.2; ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(cx - 3, by - 4); ctx.lineTo(cx - 5, by);
+  ctx.moveTo(cx, by - 4); ctx.lineTo(cx - 1, by);
+  ctx.moveTo(cx + 3, by - 4); ctx.lineTo(cx + 5, by);
+  ctx.stroke();
+
+  // Low organic body
+  outlined(ctx, dark, () => { ctx.ellipse(cx, by - 5, 5, 3, 0, 0, Math.PI * 2); });
+
+  // Eye stalk
+  ctx.strokeStyle = dark; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(cx, by - 7); ctx.lineTo(cx, by - 11); ctx.stroke();
+
+  // Big eyeball
+  outlined(ctx, '#f0f0f0', () => { ctx.arc(cx, by - 15, 5, 0, Math.PI * 2); }, 1.5);
+  filled(ctx, color, () => { ctx.arc(cx, by - 15, 3, 0, Math.PI * 2); }); // iris (team colour)
+  filled(ctx, OUTLINE, () => { ctx.arc(cx, by - 15, 1.4, 0, Math.PI * 2); }); // pupil
+  filled(ctx, '#ffffff', () => { ctx.arc(cx - 1.3, by - 16.3, 0.8, 0, Math.PI * 2); }); // glint
 }
 
 // ═══════════════════════════════════════

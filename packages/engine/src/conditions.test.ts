@@ -20,6 +20,32 @@ describe('Condition: mountain_restricted', () => {
   });
 });
 
+describe('Mountains: default impassable; only mountain-condition units climb', () => {
+  const reachFor = (state: ReturnType<typeof createGame>, typeId: string) => {
+    const u = { id: 1, typeId, owner: 0, position: { x: 5, y: 5 }, hp: 10, hasMoved: false, hasAttacked: false, abilityCooldowns: {} };
+    return getReachableTiles(u, registry.unitTypes[typeId], state.map, [u], registry, 0);
+  };
+  it('warriors can’t climb; Bulwark/Lancer/Scab can', () => {
+    const state = createGame({ ...defaultConfig, fogOfWar: false }, registry, ['vanguard', 'hive'], 7);
+    for (let y = 4; y <= 6; y++) for (let x = 4; x <= 6; x++) state.map.tiles[y][x].terrain = 'plains';
+    state.map.tiles[5][6].terrain = 'mountain'; // adjacent, east
+    expect(reachFor(state, 'warrior').has('6,5')).toBe(false); // default: can't climb
+    expect(reachFor(state, 'defender').has('6,5')).toBe(true); // Bulwark — mountain_defense
+    expect(reachFor(state, 'lancer').has('6,5')).toBe(true); // mountain_shooter
+    expect(reachFor(state, 'scab').has('6,5')).toBe(true); // mountain_sight
+  });
+
+  it('mountain_sight: the Scab sees radius 2 while on a mountain', () => {
+    const state = createGame(cfg(), registry, ['vanguard', 'hive'], 7);
+    state.units = state.units.filter(u => u.owner !== 1);
+    state.units.push({ id: 1, typeId: 'scab', owner: 1, position: { x: 5, y: 5 }, hp: 10, hasMoved: false, hasAttacked: false, abilityCooldowns: {} });
+    for (let y = 3; y <= 7; y++) for (let x = 3; x <= 7; x++) state.map.tiles[y][x].terrain = 'plains';
+    state.map.tiles[5][5].terrain = 'mountain'; // the Scab's own tile
+    const vis = getVisibleState(state, 1, registry).visibility;
+    expect(vis[5][7]).toBe('visible'); // distance 2 — only visible because vis becomes 2 on a mountain
+  });
+});
+
 describe('Condition: impotent_founder', () => {
   it('a scout cannot found a city, but a warrior on the same ruin can', () => {
     const state = createGame({ ...defaultConfig, fogOfWar: false }, registry, ['vanguard', 'hive'], 7);

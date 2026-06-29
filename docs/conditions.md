@@ -19,6 +19,13 @@ opts in by listing the condition id in its `conditions` array in
 | `squinting_eyes_2` | Squinting eyes (L2) | 3×3 fully visible; the surrounding 5×5 ring as **fog** (≈ visibility 1.5). |
 | `dash_N` | Dash N | After attacking, the unit may move up to **N** tiles (default: no move after attacking). |
 | `corrosive` | Corrosive | The unit's attack also applies the **corrosive status** (−20% defence) to the target. |
+| `mountain_defense` | Mountain Defense | Can climb mountains; gains **×1.2 defence** while on a mountain. |
+| `mountain_shooter` | Mountain Shooter | Can climb mountains; gains **×1.2 attack** while on a mountain. |
+| `mountain_sight` | Mountain Sight | Can climb mountains; its **visibility becomes 2** while on a mountain. |
+
+> **Mountains are impassable by default** — no unit may move onto a mountain tile unless
+> it has one of the three `mountain_*` conditions above. (`mountain_restricted` is now
+> equivalent to the default and effectively redundant.)
 
 > **Default turn flow:** a unit may **move, then attack**, and **cannot move or act after attacking** — unless it has a `dash_N` condition.
 
@@ -111,12 +118,23 @@ affected unit's **defence by 20%** in all future combat until removed.
 (`resolveCombat` multiplies the defender's defence by 0.8 if `statuses` includes
 `corrosive`).
 
+## `mountain_defense` / `mountain_shooter` / `mountain_sight`
+**Rule:** each grants the ability to **move onto mountains** (the default is no unit can),
+plus a bonus while standing on one: `mountain_defense` → ×1.2 defence; `mountain_shooter`
+→ ×1.2 attack; `mountain_sight` → visibility 2.
+
+**Enforced in:** `pathfinding.ts` (mountain access), `combat.ts` `getDefenseMultiplier`
+(mountain_defense) and `resolveCombat` (mountain_shooter attack ×1.2), `fog.ts`
+(mountain_sight visibility).
+
 ## Current assignments
-- **Scout** (`scout`, Vanguard/shared): `mountain_restricted`, `low_horizons`, `impotent_founder`.
+- **Scout** (`scout`, Vanguard): `mountain_restricted` (redundant), `low_horizons`, `impotent_founder`.
+- **Bulwark** (`defender`, Vanguard): `mountain_defense`.
+- **Lancer** (`lancer`, Vanguard): `mountain_shooter`.
 - **Scuttling** (`scuttling`, Hive): `sacrificial_founder`, `blind`.
 - **Scout** (`hive_scout`, Hive): `squinting_eyes_2`, `impotent_founder`.
 - **Reaper** (`reaper`, Hive): `dash_1`.
-- **Scab** (`scab`, Hive): `corrosive`.
+- **Scab** (`scab`, Hive): `corrosive`, `mountain_sight`.
 
 *(Conditions are independent of `traits` — traits like `flying`/`aquatic`/
 `ignoresTerrainCost` are movement/terrain flags baked into pathfinding; conditions are

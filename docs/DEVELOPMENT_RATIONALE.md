@@ -606,6 +606,25 @@ things; *supersedes the earlier Fortify ×2.25 entry.*
   Archer from the Hive roster.** Placeholder icons: scuttling 🐛, lancer 🪖, reaper 🦅,
   scab ⚗️ (Patrick to replace — see overlap).
 
+### 2026-06-29 — Artisan Ornaments — mountain conditions, roster trim, Bulwark, UI fixes
+
+- **Mountains are impassable by default** — no unit may climb a mountain unless it has a
+  `mountain_*` condition. Three new conditions, each granting access plus a bonus on a
+  mountain: **`mountain_defense`** (×1.2 def — *Bulwark*), **`mountain_shooter`** (×1.2
+  atk — *Lancer*), **`mountain_sight`** (visibility 2 — *Scab*). Enforced in pathfinding
+  (access), combat (`getDefenseMultiplier` now takes the full unit type for conditions;
+  `resolveCombat` scales attack), and fog. `mountain_restricted` is now redundant.
+- **Defender → "Bulwark"** (Vanguard): cost 60, 20HP, 1atk, 3def, light, `mountain_defense`.
+  **Scab** visibility 2→1 (range still 2) + `mountain_sight`. **Lancer** + `mountain_shooter`.
+- **Roster trim.** Hive = {scuttling, hive_scout, reaper, scab} (removed defender, catapult,
+  ranger, treant). Vanguard = {scout, warrior, lancer, archer, defender/Bulwark} (removed
+  catapult, berserker, siege tower). Unused unit *definitions* left in units.json (just
+  off the rosters, so unbuildable).
+- **UI:** condition tooltips replaced the unreliable native `title` (which only showed a
+  `?`) with a custom hover box that actually explains each condition. **Hive Scout** got a
+  big-eye sprite (was a generic circle). UnitSheet terrain-def line now uses the engine's
+  real multiplier per unit (already fixed earlier).
+
 ### 2026-06-29 — Artisan Ornaments — mountains give no cover; forest cover light-only
 
 - **Mountains no longer grant a defensive bonus** (×1.0). Zeroed `mountain.defenceBonus`

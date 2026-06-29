@@ -873,7 +873,33 @@ label {
   gap: 4px;
   flex-wrap: wrap;
   margin-top: 4px;
+  position: relative; /* anchor condition/status tooltips */
 }
+
+/* Hover tooltip for a condition/status — appears below the chip list, panel-width. */
+.cond-tip {
+  display: none;
+  position: absolute;
+  left: 0;
+  top: calc(100% + 4px);
+  width: 100%;
+  box-sizing: border-box;
+  background: rgba(10, 12, 22, 0.98);
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  padding: 7px 9px;
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.4;
+  color: var(--text);
+  text-align: left;
+  white-space: normal;
+  z-index: 60;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.55);
+  pointer-events: none;
+}
+.unit-sheet-condition:hover .cond-tip,
+.unit-sheet-status:hover .cond-tip { display: block; }
 
 .unit-sheet-trait {
   font-size: 10px;
