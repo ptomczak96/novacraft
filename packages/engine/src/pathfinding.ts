@@ -16,9 +16,23 @@ export function getReachableTiles(
   movementBonus: number = 0,
   bumpEnemies: boolean = false, // blind units may target enemy tiles (to "bump"/reveal)
 ): Map<string, number> {
-  const maxMove = unitType.movement + movementBonus;
-  const reachable = new Map<string, number>(); // "x,y" -> cost
+  let maxMove = unitType.movement + movementBonus;
   const ignoresTerrain = unitType.traits.includes('ignoresTerrainCost');
+
+  // "Frazzled": while standing inside an enemy's area of influence (within any enemy's
+  // attack range), this unit's movement is capped at 1. See docs/conditions.md.
+  if (unitType.conditions?.includes('frazzled')) {
+    const inEnemyAOI = units.some(u => {
+      if (u.owner === unit.owner) return false;
+      const et = registry.unitTypes[u.typeId];
+      if (!et) return false;
+      const d = Math.max(Math.abs(u.position.x - unit.position.x), Math.abs(u.position.y - unit.position.y));
+      return d <= et.attackRange;
+    });
+    if (inEnemyAOI) maxMove = Math.min(maxMove, 1);
+  }
+
+  const reachable = new Map<string, number>(); // "x,y" -> cost
   // By DEFAULT no unit may move onto mountains; only units with a mountain-access
   // condition can (mountain_defense / mountain_shooter / mountain_sight). See docs/conditions.md.
   const conds = unitType.conditions ?? [];

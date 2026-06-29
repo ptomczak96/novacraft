@@ -606,6 +606,14 @@ things; *supersedes the earlier Fortify ×2.25 entry.*
   Archer from the Hive roster.** Placeholder icons: scuttling 🐛, lancer 🪖, reaper 🦅,
   scab ⚗️ (Patrick to replace — see overlap).
 
+### 2026-06-29 — Artisan Ornaments — condition: Frazzled (Hive Scout)
+
+- New condition **`frazzled`** on the Hive Scout: while inside an **enemy's area of
+  influence**, its movement is capped at **1** (base 2). *AOI defined as within an enemy
+  unit's attack range* (Chebyshev ≤ enemy `attackRange`); counts all enemies incl. unseen
+  — flagged in `docs/conditions.md` as the one spot to change if AOI should mean something
+  else. Enforced in `pathfinding.ts` (`getReachableTiles` caps `maxMove`).
+
 ### 2026-06-29 — Artisan Ornaments — drop Vanguard archer; L2 income reward +30→+20
 
 - **Removed the Archer from the Vanguard roster** (Vanguard = scout, warrior, lancer,

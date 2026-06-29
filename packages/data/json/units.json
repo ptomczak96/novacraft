@@ -76,7 +76,7 @@
     "movement": 2,
     "attackRange": 1,
     "visibility": 1.5,
-    "conditions": ["squinting_eyes_2", "impotent_founder"],
+    "conditions": ["squinting_eyes_2", "impotent_founder", "frazzled"],
     "abilities": [],
     "traits": []
   },

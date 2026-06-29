@@ -19,6 +19,7 @@ opts in by listing the condition id in its `conditions` array in
 | `squinting_eyes_2` | Squinting eyes (L2) | 3×3 fully visible; the surrounding 5×5 ring as **fog** (≈ visibility 1.5). |
 | `dash_N` | Dash N | After attacking, the unit may move up to **N** tiles (default: no move after attacking). |
 | `corrosive` | Corrosive | The unit's attack also applies the **corrosive status** (−20% defence) to the target. |
+| `frazzled` | Frazzled | While inside an enemy's **area of influence**, its movement is capped at **1**. |
 | `mountain_defense` | Mountain Defense | Can climb mountains; gains **×1.2 defence** while on a mountain. |
 | `mountain_shooter` | Mountain Shooter | Can climb mountains; gains **×1.2 attack** while on a mountain. |
 | `mountain_sight` | Mountain Sight | Can climb mountains; its **visibility becomes 2** while on a mountain. |
@@ -118,6 +119,19 @@ affected unit's **defence by 20%** in all future combat until removed.
 (`resolveCombat` multiplies the defender's defence by 0.8 if `statuses` includes
 `corrosive`).
 
+## `frazzled` — Frazzled
+**Rule:** while this unit is standing inside an **enemy's area of influence**, its
+movement is capped at **1** (regardless of its base movement or movement bonuses).
+
+**Area of influence** is currently defined as **within an enemy unit's attack range**
+(Chebyshev distance ≤ that enemy's `attackRange`) — e.g. adjacent to a melee enemy, or
+within 2 tiles of a range-2 enemy. Counts all enemies (even unseen ones — the influence
+is real). *If "AOI" should mean something else (a fixed radius, vision, etc.), this is
+the one spot to change.*
+
+**Enforced in:** `pathfinding.ts` (`getReachableTiles`) — caps `maxMove` to 1 when the
+unit has this condition and stands in an enemy AOI.
+
 ## `mountain_defense` / `mountain_shooter` / `mountain_sight`
 **Rule:** each grants the ability to **move onto mountains** (the default is no unit can),
 plus a bonus while standing on one: `mountain_defense` → ×1.2 defence; `mountain_shooter`
@@ -132,7 +146,7 @@ plus a bonus while standing on one: `mountain_defense` → ×1.2 defence; `mount
 - **Bulwark** (`defender`, Vanguard): `mountain_defense`.
 - **Lancer** (`lancer`, Vanguard): `mountain_shooter`.
 - **Scuttling** (`scuttling`, Hive): `sacrificial_founder`, `blind`.
-- **Scout** (`hive_scout`, Hive): `squinting_eyes_2`, `impotent_founder`.
+- **Scout** (`hive_scout`, Hive): `squinting_eyes_2`, `impotent_founder`, `frazzled`.
 - **Reaper** (`reaper`, Hive): `dash_1`.
 - **Scab** (`scab`, Hive): `corrosive`, `mountain_sight`.
 

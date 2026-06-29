@@ -46,6 +46,24 @@ describe('Mountains: default impassable; only mountain-condition units climb', (
   });
 });
 
+describe('Condition: frazzled', () => {
+  it('caps movement at 1 when inside an enemy’s attack range', () => {
+    const state = createGame({ ...defaultConfig, fogOfWar: false }, registry, ['vanguard', 'hive'], 7);
+    for (let y = 2; y <= 8; y++) for (let x = 2; x <= 8; x++) state.map.tiles[y][x].terrain = 'plains';
+    const scout = { id: 1, typeId: 'hive_scout', owner: 1, position: { x: 5, y: 5 }, hp: 10, hasMoved: false, hasAttacked: false, abilityCooldowns: {} };
+
+    // No enemy nearby → full movement (2) reaches a tile 2 away.
+    const far = getReachableTiles(scout, registry.unitTypes['hive_scout'], state.map, [scout], registry, 0);
+    expect(far.has('7,5')).toBe(true);
+
+    // A melee enemy adjacent → frazzled → movement 1 (can't reach 2 away).
+    const enemy = { id: 2, typeId: 'warrior', owner: 0, position: { x: 6, y: 5 }, hp: 10, hasMoved: false, hasAttacked: false, abilityCooldowns: {} };
+    const near = getReachableTiles(scout, registry.unitTypes['hive_scout'], state.map, [scout, enemy], registry, 0);
+    expect(near.has('3,5')).toBe(false); // 2 tiles west — out of reach now
+    expect(near.has('4,5')).toBe(true);  // 1 tile west — still reachable
+  });
+});
+
 describe('Condition: impotent_founder', () => {
   it('a scout cannot found a city, but a warrior on the same ruin can', () => {
     const state = createGame({ ...defaultConfig, fogOfWar: false }, registry, ['vanguard', 'hive'], 7);
