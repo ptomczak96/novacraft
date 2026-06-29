@@ -541,6 +541,13 @@ things; *supersedes the earlier Fortify ×2.25 entry.*
 - **City defense ×1.5 for a plain (un-fortified) city restored** earlier this session
   stands; nothing changed here.
 
+### 2026-06-29 — Artisan Ornaments — condition: Impotent Founder
+
+- New condition **`impotent_founder`** — the unit cannot found cities (`canFoundCity`
+  returns false when the unit on the ruin has it). Assigned to **both teams' scouts**
+  (`scout`, `hive_scout`) so recon units can't also settle. Documented in
+  `docs/conditions.md`.
+
 ---
 
 *Deferred ideas (the "we'll tweak this later" items) live in the memory backlog,

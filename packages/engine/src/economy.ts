@@ -413,6 +413,8 @@ export function canFoundCity(state: GameState, registry: DataRegistry, playerId:
     // (like capturing) is only available the turn AFTER moving onto the ruin.
     const unit = state.units.find(u => u.owner === playerId && u.position.x === pos.x && u.position.y === pos.y);
     if (!unit || unit.hasMoved) return false;
+    // Condition "Impotent founder": this unit type can't found cities (see docs/conditions.md).
+    if (registry.unitTypes[unit.typeId]?.conditions?.includes('impotent_founder')) return false;
   }
   return state.players[playerId].ore >= cost;
 }

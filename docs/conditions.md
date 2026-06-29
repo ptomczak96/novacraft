@@ -13,6 +13,7 @@ opts in by listing the condition id in its `conditions` array in
 | `mountain_restricted` | Mountain restricted | Cannot move onto mountain tiles. |
 | `optics` | Optics | Mountains block this unit's line of sight (it sees the mountain, not past it). |
 | `sacrificial_founder` | Sacrificial Founder | The unit dies when it founds a city. |
+| `impotent_founder` | Impotent Founder | The unit cannot found cities at all. |
 | `blind` | Blind | Visibility 0 (sees only its own tile); may still move into cloud/fog tiles. |
 | `squinting_eyes_1` | Squinting eyes (L1) | Sees its 3×3 as **fog** only (terrain, not units). |
 | `squinting_eyes_2` | Squinting eyes (L2) | 3×3 fully visible; the surrounding 5×5 ring as **fog** (≈ visibility 1.5). |
@@ -52,6 +53,13 @@ of re-homing to the new city. Used by Hive **Scuttlings**.
 **Enforced in:** `game.ts` (`applyFoundCity`) — the founder is removed and its home
 link cleared; the city is still founded with 0 units homed.
 
+## `impotent_founder` — Impotent Founder
+**Rule:** this unit **cannot found cities** — the "Found City" action is never offered
+while it stands on a ruin (other eligible units still can).
+
+**Enforced in:** `economy.ts` (`canFoundCity`) — returns false if the unit on the ruin
+has this condition.
+
 ## `blind` — Blind
 **Rule:** the unit has **visibility 0** (reveals only the tile it stands on), so it
 discovers nothing around it. It may, however, **move into cloud/fog tiles** (movement
@@ -79,9 +87,9 @@ some rings as `'explored'` (fog) rather than `'visible'`; `recordSight` snapshot
 tiles too, and enemy units are only shown on currently-`'visible'` tiles.
 
 ## Current assignments
-- **Scout** (`scout`, Vanguard/shared): `mountain_restricted`, `optics`.
+- **Scout** (`scout`, Vanguard/shared): `mountain_restricted`, `optics`, `impotent_founder`.
 - **Scuttling** (`scuttling`, Hive): `sacrificial_founder`, `blind`.
-- **Scout** (`hive_scout`, Hive): `squinting_eyes_2`.
+- **Scout** (`hive_scout`, Hive): `squinting_eyes_2`, `impotent_founder`.
 
 *(Conditions are independent of `traits` — traits like `flying`/`aquatic`/
 `ignoresTerrainCost` are movement/terrain flags baked into pathfinding; conditions are

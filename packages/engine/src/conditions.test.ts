@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { createGame, getVisibleState, getReachableTiles } from './index.js';
+import { createGame, getVisibleState, getReachableTiles, getLegalActions } from './index.js';
 import { buildRegistry, defaultConfig } from '@tactica/data';
 import type { GameConfig, Unit } from './types.js';
 
@@ -17,6 +17,23 @@ describe('Condition: mountain_restricted', () => {
     const reach = getReachableTiles(u, registry.unitTypes['scout'], state.map, [u], registry, 0);
     expect(reach.has('6,5')).toBe(false); // mountain → restricted
     expect(reach.has('4,5')).toBe(true);  // plains → fine
+  });
+});
+
+describe('Condition: impotent_founder', () => {
+  it('a scout cannot found a city, but a warrior on the same ruin can', () => {
+    const state = createGame({ ...defaultConfig, fogOfWar: false }, registry, ['vanguard', 'hive'], 7);
+    const pos = { x: 6, y: 6 };
+    state.map.tiles[pos.y][pos.x].isRuin = true;
+    state.map.tiles[pos.y][pos.x].isCity = false;
+    state.players[0].ore = 50;
+
+    state.units.push({ id: 600, typeId: 'scout', owner: 0, position: { ...pos }, hp: 10, hasMoved: false, hasAttacked: false, abilityCooldowns: {} });
+    expect(getLegalActions(state, registry, 0).some(a => a.type === 'foundCity')).toBe(false);
+
+    state.units = state.units.filter(u => u.id !== 600);
+    state.units.push({ id: 601, typeId: 'warrior', owner: 0, position: { ...pos }, hp: 10, hasMoved: false, hasAttacked: false, abilityCooldowns: {} });
+    expect(getLegalActions(state, registry, 0).some(a => a.type === 'foundCity')).toBe(true);
   });
 });
 
