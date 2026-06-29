@@ -136,9 +136,11 @@ function revealSquareLevel(
 }
 
 /**
- * Simple line of sight using bresenham. Blocked by sight-blocking terrain (forest),
- * and — when `mountainsBlock` (the Optics condition) — by mountains too. The target
- * tile itself is never the blocker (you see the mountain, just not past it).
+ * Line of sight (bresenham). Vision is a clean square by default — nothing blocks it —
+ * EXCEPT when `mountainsBlock` (the Optics condition), where a mountain between the
+ * unit and the target hides everything beyond it. The target tile itself is never the
+ * blocker (you see the mountain, just not past it). `registry` is unused now but kept
+ * for signature stability / future terrain-based rules.
  */
 function hasLineOfSight(
   map: GameMap,
@@ -146,10 +148,11 @@ function hasLineOfSight(
   y0: number,
   x1: number,
   y1: number,
-  registry: DataRegistry,
+  _registry: DataRegistry,
   mountainsBlock = false,
 ): boolean {
   if (x0 === x1 && y0 === y1) return true;
+  if (!mountainsBlock) return true; // no blockers → full square
 
   const dx = Math.abs(x1 - x0);
   const dy = Math.abs(y1 - y0);
@@ -165,11 +168,7 @@ function hasLineOfSight(
     if (e2 < dx) { err += dx; cy += sy; }
 
     if (cx === x1 && cy === y1) return true;
-
     if (cx < 0 || cx >= map.width || cy < 0 || cy >= map.height) return false;
-    const tile = map.tiles[cy][cx];
-    const terrain = registry.terrainTypes[tile.terrain];
-    if (terrain && terrain.blocksSight) return false;
-    if (mountainsBlock && tile.terrain === 'mountain') return false; // Optics
+    if (map.tiles[cy][cx].terrain === 'mountain') return false; // Optics: mountains block
   }
 }

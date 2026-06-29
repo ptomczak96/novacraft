@@ -548,7 +548,15 @@ things; *supersedes the earlier Fortify ×2.25 entry.*
   (`scout`, `hive_scout`) so recon units can't also settle. Documented in
   `docs/conditions.md`.
 
----
+### 2026-06-29 — Artisan Ornaments — fog/LOS, bump highlight, combat-log stats
 
-*Deferred ideas (the "we'll tweak this later" items) live in the memory backlog,
-surfaced on request — they are design intentions, not yet decisions.*
+- **Vision is now a clean square; only Optics-mountains block.** Removed the general
+  `blocksSight` (forest) line-of-sight blocking that was randomly hiding tiles inside a
+  scout's 5×5. `hasLineOfSight` returns true immediately unless `mountainsBlock`
+  (Optics), in which case only **mountains** block (forests no longer do).
+- **Bump move highlight** on cloud tiles now draws flat (elevation 0) so the blue
+  diamond sits on the white cloud instead of floating at the hidden terrain's height.
+  (The bump action itself was already correct — its engine test passes; the in-browser
+  symptom was a stale dev bundle + the misaligned highlight.)
+- **Combat log** gained an attacker-vs-defender **stats block** (⚔ attack / 🛡 defence /
+  ♥ HP for both) above the existing force/damage breakdown.

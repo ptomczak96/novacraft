@@ -50,4 +50,14 @@ describe('Condition: optics', () => {
     expect(vis[5][7]).toBe('hidden');  // tile beyond the mountain — blocked
     expect(vis[5][3]).toBe('visible'); // open ground the other way, within radius 2
   });
+
+  it('only mountains block (forests do NOT) — fixes the scout 5×5 gaps', () => {
+    const state = createGame(cfg(), registry, ['vanguard', 'hive'], 7);
+    state.units = state.units.filter(u => u.owner !== 0);
+    state.units.push(scout(502, 5, 5));
+    for (let y = 3; y <= 7; y++) for (let x = 3; x <= 7; x++) state.map.tiles[y][x].terrain = 'plains';
+    state.map.tiles[5][6].terrain = 'forest'; // a forest between the scout and (5,7)
+    const vis = getVisibleState(state, 0, registry).visibility;
+    expect(vis[5][7]).toBe('visible'); // forest does not block — tile beyond is still seen
+  });
 });

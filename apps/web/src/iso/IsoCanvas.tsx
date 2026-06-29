@@ -204,7 +204,8 @@ export function IsoCanvas({ mode, onPaint }: IsoCanvasProps) {
         // unit still shows its move targets (blue) on the cloud so it can advance.
         if (vis === 'hidden') {
           drawCloud(ctx, x, y, map.height);
-          if (selectedUnitBlind && moveTargets.has(key)) drawMoveHighlight(ctx, x, y, map.height, tile.terrain);
+          // 'plains' → flat (elevation 0), so the blue diamond sits on the flat cloud.
+          if (selectedUnitBlind && moveTargets.has(key)) drawMoveHighlight(ctx, x, y, map.height, 'plains');
           continue;
         }
 

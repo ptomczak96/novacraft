@@ -117,6 +117,21 @@ export function CombatLog() {
         <span className="combat-log-unit">{defender.name}</span>
       </div>
 
+      {/* Attacker vs defender stats */}
+      <div className="combat-log-stats">
+        <div className="cls-col">
+          <div className="cls-name">{attacker.name} <span className="cls-role">(attacker)</span></div>
+          <div className="cls-line">⚔ {attacker.attack} &nbsp; 🛡 {attacker.defence}</div>
+          <div className="cls-line">♥ {attacker.hpBefore}/{attacker.maxHP}</div>
+        </div>
+        <div className="cls-vs">vs</div>
+        <div className="cls-col">
+          <div className="cls-name">{defender.name} <span className="cls-role">(defender)</span></div>
+          <div className="cls-line">⚔ {defender.attack} &nbsp; 🛡 {defender.defence}</div>
+          <div className="cls-line">♥ {defender.hpBefore}/{defender.maxHP}</div>
+        </div>
+      </div>
+
       {/* Attack breakdown */}
       <BreakdownSection
         label={`${attacker.name} attacks`}
