@@ -39,6 +39,14 @@ describe('Combat — Polytopia force formula (spec)', () => {
     expect(r.retaliationBreakdown).not.toBeNull();
   });
 
+  it('a diagonal melee attack still triggers retaliation (Chebyshev, matches attack range)', () => {
+    const map = plainsMap();
+    // Attacker (0,0) and defender (1,1) are diagonally adjacent — Chebyshev distance 1.
+    const r = fight(ut(), ut(), map, unit(0, 20, 0, 0), unit(1, 20, 1, 1));
+    expect(r.defenderRetaliation).toBeGreaterThan(0);
+    expect(r.retaliationBreakdown).not.toBeNull();
+  });
+
   it('retaliation is driven by the defender’s DEFENSE, not its attack', () => {
     const map = plainsMap();
     // Defender has huge attack but tiny defense → retaliation must be tiny.

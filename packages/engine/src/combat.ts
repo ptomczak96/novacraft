@@ -167,8 +167,12 @@ export function resolveCombat(
   let damageToAttacker = 0;
   let retaliationBreakdown: CombatBreakdown | null = null;
 
-  const dist = Math.abs(attacker.position.x - defender.position.x) +
-               Math.abs(attacker.position.y - defender.position.y);
+  // Chebyshev distance — MUST match attack legality (pathfinding `inRange`), else a
+  // diagonal melee attack (range 1) would wrongly skip retaliation.
+  const dist = Math.max(
+    Math.abs(attacker.position.x - defender.position.x),
+    Math.abs(attacker.position.y - defender.position.y),
+  );
   const attackerInDefenderRange = dist <= defenderType.attackRange;
 
   if (!defenderKilled && attackerInDefenderRange && f.defenseResult > 0) {

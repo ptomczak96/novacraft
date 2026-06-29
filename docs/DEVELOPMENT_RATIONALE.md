@@ -567,3 +567,19 @@ things; *supersedes the earlier Fortify ×2.25 entry.*
   effect (mountains block the unit's line of sight). Updated the unit data, the `fog.ts`
   check, tests, and `docs/conditions.md`. (Earlier entries still say "optics" — that was
   the prior name; this supersedes the label.)
+
+### 2026-06-29 — Artisan Ornaments — fix diagonal retaliation + scuttling/scout tuning
+
+- **Retaliation bug fixed.** Attack legality uses Chebyshev distance (`inRange`), but
+  `resolveCombat` checked retaliation with **Manhattan** distance — so a *diagonal*
+  melee attack (Chebyshev 1, Manhattan 2) wrongly skipped the counter, and since units
+  move 8-directionally most fights are diagonal. Result: attackers took no damage back.
+  Combat now uses **Chebyshev** for the retaliation range check too, restoring the
+  Polytopia mechanic (warrior vs warrior on plains: both lose 5; the counter-attack
+  then kills). Added a diagonal-retaliation test.
+- **Scuttling → glass cannon:** HP 10→**5**, attack 2→**3**, defence 0. Now hits hard
+  (8 to a warrior) but is **one-shot by any real combat unit** (a warrior does 9). Deals
+  no defensive counter (def 0). 
+- **Scouts → squishy:** Vanguard scout HP 10→**8**, defence 2→**1**; Hive scout HP
+  15→**8**. They were too resistant; a warrior now removes ~6 of 8 HP in one hit.
+  (Attack stays 0.5 — recon units, not fighters.)
