@@ -191,13 +191,16 @@ describe('Capture frees the new owner’s slots (Bug 1)', () => {
     const registry = getRegistry();
     let state = createGame(getConfig(), registry, ['vanguard', 'hive'], 7);
     const enemyCap = capitalOf(state, 1);
-    // Player 1's warrior is homed at the enemy capital.
+    // Reset the enemy's units to a single controlled defender homed at the capital
+    // (the city centre tile is left free for the capturer).
+    for (const u of state.units.filter(u => u.owner === 1)) delete state.unitHomeCity[u.id];
+    state.units = state.units.filter(u => u.owner !== 1);
+    const enemyUnit: Unit = { id: 888, typeId: 'warrior', owner: 1, position: { x: enemyCap.position.x, y: enemyCap.position.y - 1 }, hp: 15, hasMoved: false, hasAttacked: false, abilityCooldowns: {} };
+    state.units.push(enemyUnit);
+    state.unitHomeCity[888] = enemyCap.id;
     expect(unitsHomedAt(state, enemyCap.id)).toBe(1);
 
-    // Move the enemy's unit off the city tile (still homed there), put a player-0
-    // unit on the city, and capture it (capture is now an explicit action).
-    const enemyUnit = state.units.find(u => state.unitHomeCity[u.id] === enemyCap.id)!;
-    enemyUnit.position = { x: enemyCap.position.x, y: enemyCap.position.y - 1 };
+    // Put a player-0 unit on the (now empty) city tile and capture it.
     state.units.push({ id: 999, typeId: 'warrior', owner: 0, position: { ...enemyCap.position }, hp: 15, hasMoved: false, hasAttacked: false, abilityCooldowns: {} });
     state = applyAction(state, { type: 'captureCity', unitId: 999 }, registry);
 

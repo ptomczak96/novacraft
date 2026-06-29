@@ -69,25 +69,42 @@ export function createGame(
     }
   }
 
-  // Place starting units — one warrior per player at their capital.
+  // Place each faction's starting units at/around their capital (default: 1 warrior;
+  // e.g. Hive starts with 2 scuttlings). Multiple units fill the capital tile then
+  // free passable neighbours, deterministically.
   const units: Unit[] = [];
   const unitHomeCity: Record<number, number> = {};
   let nextUnitId = 1;
+  const spawnOrder = [[0, 0], [1, 0], [0, 1], [-1, 0], [0, -1], [1, 1], [-1, 1], [1, -1], [-1, -1]];
   for (let i = 0; i < playerCount; i++) {
     const pos = cityPositions[i];
-    const id = nextUnitId++;
-    units.push({
-      id,
-      typeId: 'warrior',
-      owner: i,
-      position: { x: pos.x, y: pos.y },
-      hp: registry.unitTypes['warrior'].maxHP,
-      hasMoved: false,
-      hasAttacked: false,
-      abilityCooldowns: {},
-    });
     const capital = cities.find(c => c.position.x === pos.x && c.position.y === pos.y);
-    if (capital) unitHomeCity[id] = capital.id;
+    const faction = registry.factions[factionIds[i]];
+    const spec = faction?.startingUnits ?? [{ unit: 'warrior', count: 1 }];
+    const toSpawn = spec.flatMap(s => Array.from({ length: s.count }, () => s.unit));
+
+    let slot = 0;
+    for (const typeId of toSpawn) {
+      const ut = registry.unitTypes[typeId];
+      if (!ut) continue;
+      // Find the next free spawn tile (centre always ok; neighbours must be passable).
+      let placed: Coord | null = null;
+      for (; slot < spawnOrder.length; slot++) {
+        const [dx, dy] = spawnOrder[slot];
+        const tx = pos.x + dx, ty = pos.y + dy;
+        const tile = map.tiles[ty]?.[tx];
+        if (!tile) continue;
+        if ((dx !== 0 || dy !== 0) && !registry.terrainTypes[tile.terrain]?.passable) continue;
+        if (units.some(u => u.position.x === tx && u.position.y === ty)) continue;
+        placed = { x: tx, y: ty };
+        slot++;
+        break;
+      }
+      if (!placed) break; // no room left in the territory
+      const id = nextUnitId++;
+      units.push({ id, typeId, owner: i, position: placed, hp: ut.maxHP, hasMoved: false, hasAttacked: false, abilityCooldowns: {} });
+      if (capital) unitHomeCity[id] = capital.id;
+    }
   }
 
   const state: GameState = {

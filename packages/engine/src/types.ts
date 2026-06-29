@@ -55,6 +55,7 @@ export interface FactionDef {
   id: string;
   name: string;
   color: string;
+  startingUnits?: { unit: string; count: number }[]; // units spawned at game start (default: 1 warrior)
   unitTypes: string[]; // ids of units this faction can build (including shared)
 }
 

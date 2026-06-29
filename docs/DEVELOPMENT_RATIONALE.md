@@ -583,3 +583,16 @@ things; *supersedes the earlier Fortify ×2.25 entry.*
 - **Scouts → squishy:** Vanguard scout HP 10→**8**, defence 2→**1**; Hive scout HP
   15→**8**. They were too resistant; a warrior now removes ~6 of 8 HP in one hit.
   (Attack stays 0.5 — recon units, not fighters.)
+
+### 2026-06-29 — Artisan Ornaments — scout HP back to 15, Hive starts with scuttlings
+
+- **HP kept in multiples of 5.** Reverted the scout HP tweak: Vanguard scout and Hive
+  scout both back to **HP 15** (def is the durability lever instead). Vanguard scout
+  **def 1**, **Hive scout def 0** (takes full damage — a warrior does 9). Scuttling
+  stays HP 5 / atk 3 / def 0.
+- **Faction starting units are now data-driven** (`factions.json startingUnits`).
+  **Hive starts with 2 Scuttlings** (1 pop) instead of a warrior, and warrior was
+  already off the Hive build roster — so Hive can't field warriors at all. Vanguard
+  still starts with 1 warrior. `createGame` places multiple starting units on the
+  capital tile then free passable neighbours (deterministic). Capture test rewritten
+  to set up its own defender (no longer assumes player 1 starts with one warrior).

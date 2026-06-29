@@ -47,6 +47,8 @@ export const FactionDefSchema = z.object({
   id: z.string(),
   name: z.string(),
   color: z.string(),
+  // Units this faction spawns with at game start (default: one warrior).
+  startingUnits: z.array(z.object({ unit: z.string(), count: z.number().int().min(1) })).optional(),
   unitTypes: z.array(z.string()),
 });
 

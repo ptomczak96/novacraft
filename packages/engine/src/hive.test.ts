@@ -11,6 +11,23 @@ function clearPlayer1(state: GameState) {
   state.units = state.units.filter(u => u.owner !== 1);
 }
 
+describe('Hive: starting units', () => {
+  it('Hive starts with 2 scuttlings (no warrior) and cannot build warriors', () => {
+    const state = createGame(cfg(), registry, ['vanguard', 'hive'], 7);
+    const p1 = state.units.filter(u => u.owner === 1);
+    expect(p1.length).toBe(2);
+    expect(p1.every(u => u.typeId === 'scuttling')).toBe(true);
+    const cap = hiveCap(state);
+    expect(p1.every(u => state.unitHomeCity[u.id] === cap.id)).toBe(true); // both homed at the capital
+    expect(cityPopUsed(state, cap.id, registry)).toBe(1); // pair = 1 pop
+    expect(registry.factions['hive'].unitTypes.includes('warrior')).toBe(false); // can't build warriors
+    // Vanguard still starts with a single warrior.
+    const p0 = state.units.filter(u => u.owner === 0);
+    expect(p0.length).toBe(1);
+    expect(p0[0].typeId).toBe('warrior');
+  });
+});
+
 describe('Hive: Scuttlings (paired, 0.5 pop)', () => {
   it('recruiting spawns a PAIR on territory (not the centre), counting 1 pop total', () => {
     let state = createGame(cfg(), registry, ['vanguard', 'hive'], 7);
