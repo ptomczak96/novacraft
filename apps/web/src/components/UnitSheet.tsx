@@ -1,5 +1,28 @@
 import React from 'react';
+import { getDefenseMultiplier } from '@tactica/engine';
 import { useGameStore } from '../store/gameStore.js';
+
+// Friendly names + explanations for special conditions (hover tooltips).
+const CONDITION_INFO: Record<string, { name: string; desc: string }> = {
+  mountain_restricted: { name: 'Mountain Restricted', desc: 'Cannot move onto mountain tiles.' },
+  low_horizons: { name: 'Low Horizons', desc: 'Mountains block its line of sight — it sees the mountain but nothing beyond it.' },
+  impotent_founder: { name: 'Impotent Founder', desc: 'Cannot found cities.' },
+  sacrificial_founder: { name: 'Sacrificial Founder', desc: 'Dies when it founds a city.' },
+  blind: { name: 'Blind', desc: 'Sees only its own tile; can move into clouds and bumps into hidden enemies to reveal them.' },
+  squinting_eyes_1: { name: 'Squinting Eyes I', desc: 'Sees its 3×3 as fog only (terrain, not units).' },
+  squinting_eyes_2: { name: 'Squinting Eyes II', desc: '3×3 fully visible; the surrounding 5×5 ring shown as fog.' },
+  corrosive: { name: 'Corrosive', desc: 'Its attack also applies the Corrosive status (−20% defence) to the target.' },
+};
+function conditionInfo(id: string): { name: string; desc: string } {
+  const dash = /^dash_(\d+)$/.exec(id);
+  if (dash) return { name: `Dash ${dash[1]}`, desc: `After attacking, may move up to ${dash[1]} tile${dash[1] === '1' ? '' : 's'} (units normally can't move after attacking).` };
+  return CONDITION_INFO[id] ?? { name: id.replace(/_/g, ' '), desc: '' };
+}
+
+// Active status effects (applied during play, stored on unit.statuses).
+const STATUS_INFO: Record<string, { name: string; effect: string; desc: string }> = {
+  corrosive: { name: 'Corrosive', effect: '−20% DEF', desc: 'Defence reduced by 20% (from a corrosive attack).' },
+};
 
 export function UnitSheet() {
   const { visibleState, selectedUnitId, registry } = useGameStore();
@@ -19,17 +42,17 @@ export function UnitSheet() {
   const playerColor = unit.owner === 0 ? 'var(--p0-color)' : 'var(--p1-color)';
   const faction = registry.factions[visibleState.players[unit.owner]?.factionId];
 
-  const defenseLabel = terrain
-    ? (terrain.defenceBonus > 0 || tile.isCity)
-      ? `${terrain.name}${tile.isCity ? ' (City)' : ''} — 1.5x`
-      : `${terrain.name} — 1.0x`
-    : 'Unknown';
+  // Actual defensive multiplier for THIS unit on THIS tile (matches combat exactly).
+  const defMult = getDefenseMultiplier(tile, terrain, unitType.unitClass);
+  const tileNote = tile.fortified ? ' (Fortified)' : tile.isCity ? ' (City)' : '';
+  const defenseLabel = `${terrain?.name ?? 'Unknown'}${tileNote} — ${defMult}×`;
+
+  const statuses = unit.statuses ?? [];
 
   return (
     <div className="side-panel unit-sheet">
       <h3>Unit Info</h3>
 
-      {/* Header */}
       <div className="unit-sheet-header">
         <span className="unit-sheet-name">{unitType.name}</span>
         <span className="unit-sheet-owner" style={{ color: playerColor }}>
@@ -37,85 +60,78 @@ export function UnitSheet() {
         </span>
       </div>
 
-      {/* HP Bar */}
+      {/* HP */}
       <div className="unit-sheet-hp-section">
         <div className="hp-label">
           <span>HP</span>
           <span>{unit.hp} / {unitType.maxHP}</span>
         </div>
         <div className="hp-bar-track">
-          <div
-            className="hp-bar-fill"
-            style={{ width: `${hpPercent}%`, background: hpColor }}
-          />
+          <div className="hp-bar-fill" style={{ width: `${hpPercent}%`, background: hpColor }} />
         </div>
       </div>
 
-      {/* Stats Grid */}
+      {/* Stats */}
       <div className="stat-grid">
-        <div className="stat-grid-item">
-          <span className="stat-label">Attack</span>
-          <span className="stat-value">{unitType.attack}</span>
-        </div>
-        <div className="stat-grid-item">
-          <span className="stat-label">Defence</span>
-          <span className="stat-value">{unitType.defence}</span>
-        </div>
-        <div className="stat-grid-item">
-          <span className="stat-label">Movement</span>
-          <span className="stat-value">{unitType.movement}</span>
-        </div>
-        <div className="stat-grid-item">
-          <span className="stat-label">Range</span>
-          <span className="stat-value">{unitType.attackRange}</span>
-        </div>
-        <div className="stat-grid-item">
-          <span className="stat-label">Visibility</span>
-          <span className="stat-value">{unitType.visibility}</span>
-        </div>
+        <div className="stat-grid-item"><span className="stat-label">Attack</span><span className="stat-value">{unitType.attack}</span></div>
+        <div className="stat-grid-item"><span className="stat-label">Defence</span><span className="stat-value">{unitType.defence}</span></div>
+        <div className="stat-grid-item"><span className="stat-label">Movement</span><span className="stat-value">{unitType.movement}</span></div>
+        <div className="stat-grid-item"><span className="stat-label">Range</span><span className="stat-value">{unitType.attackRange}</span></div>
+        <div className="stat-grid-item"><span className="stat-label">Visibility</span><span className="stat-value">{unitType.visibility}</span></div>
         {unitType.unitClass && (
-          <div className="stat-grid-item">
-            <span className="stat-label">Class</span>
-            <span className="stat-value" style={{ textTransform: 'capitalize' }}>{unitType.unitClass}</span>
-          </div>
+          <div className="stat-grid-item"><span className="stat-label">Class</span><span className="stat-value" style={{ textTransform: 'capitalize' }}>{unitType.unitClass}</span></div>
         )}
-        <div className="stat-grid-item">
-          <span className="stat-label">Cost</span>
-          <span className="stat-value">{unitType.cost}g</span>
-        </div>
+        <div className="stat-grid-item"><span className="stat-label">Cost</span><span className="stat-value">{unitType.cost}g</span></div>
       </div>
+
+      {/* Active status effects */}
+      {statuses.length > 0 && (
+        <div className="unit-sheet-traits">
+          <span className="stat-label">Status</span>
+          <div className="unit-sheet-trait-list">
+            {statuses.map(s => {
+              const info = STATUS_INFO[s];
+              return (
+                <span key={s} className="unit-sheet-status" title={info?.desc ?? s}>
+                  {info ? `${info.name} (${info.effect})` : s}
+                </span>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Special conditions — hover for an explanation */}
+      {unitType.conditions && unitType.conditions.length > 0 && (
+        <div className="unit-sheet-traits">
+          <span className="stat-label">Special Conditions</span>
+          <div className="unit-sheet-trait-list">
+            {unitType.conditions.map(c => {
+              const info = conditionInfo(c);
+              return (
+                <span key={c} className="unit-sheet-trait unit-sheet-condition" title={info.desc}>
+                  {info.name}
+                </span>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Traits */}
       {unitType.traits.length > 0 && (
         <div className="unit-sheet-traits">
           <span className="stat-label">Traits</span>
           <div className="unit-sheet-trait-list">
-            {unitType.traits.map(t => (
-              <span key={t} className="unit-sheet-trait">{t}</span>
-            ))}
+            {unitType.traits.map(t => <span key={t} className="unit-sheet-trait">{t}</span>)}
           </div>
         </div>
       )}
 
-      {/* Special conditions (see docs/conditions.md) */}
-      {unitType.conditions && unitType.conditions.length > 0 && (
-        <div className="unit-sheet-traits">
-          <span className="stat-label">Conditions</span>
-          <div className="unit-sheet-trait-list">
-            {unitType.conditions.map(c => (
-              <span key={c} className="unit-sheet-trait">{c.replace(/_/g, ' ')}</span>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Terrain */}
       <div className="unit-sheet-terrain">
-        <span className="stat-label">Terrain</span>
+        <span className="stat-label">Terrain (def)</span>
         <span className="stat-value">{defenseLabel}</span>
       </div>
-
-      {/* Position */}
       <div className="unit-sheet-terrain">
         <span className="stat-label">Position</span>
         <span className="stat-value">({unit.position.x}, {unit.position.y})</span>

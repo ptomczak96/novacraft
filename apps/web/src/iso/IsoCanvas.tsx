@@ -434,7 +434,9 @@ export function IsoCanvas({ mode, onPaint }: IsoCanvasProps) {
       setBuildPromptTile(null);
       return;
     }
-    if (unit && unit.owner === currentPlayer) {
+    if (unit) {
+      // Select any visible unit (own or enemy) to inspect it. Own units also get
+      // their move/attack highlights; enemy selection is inspection-only.
       selectUnit(unit.id === selectedUnitId ? null : unit.id);
       setBuildPromptTile(null);
       return;

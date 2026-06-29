@@ -109,7 +109,7 @@ const FORTIFY_DEFENSE_MULTIPLIER = 3.0;
  *   ×1.2  forest — but ONLY for LIGHT units (heavier units get no forest cover)
  *   ×1.0  everything else, incl. mountains and open ground
  */
-function getDefenseMultiplier(
+export function getDefenseMultiplier(
   tile: Tile,
   terrain: { id: string; defenceBonus: number } | undefined,
   unitClass: string | undefined,

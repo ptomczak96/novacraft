@@ -885,6 +885,24 @@ label {
   font-weight: 600;
 }
 
+/* Conditions are hoverable (native title tooltip) — hint with a help cursor. */
+.unit-sheet-condition {
+  cursor: help;
+  border-style: dashed;
+}
+
+/* Active status effects (e.g. corrosive) — tinted as a debuff. */
+.unit-sheet-status {
+  font-size: 10px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-weight: 700;
+  cursor: help;
+  color: #ff8a8a;
+  background: rgba(150, 40, 40, 0.18);
+  border: 1px solid rgba(214, 69, 69, 0.6);
+}
+
 /* Terrain info */
 .unit-sheet-terrain {
   display: flex;
