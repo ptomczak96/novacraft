@@ -682,7 +682,7 @@ function applyLevelUpCity(state: GameState, action: LevelUpCityAction, registry:
 
   city.level = targetLevel;
   switch (action.choice) {
-    case 'income': city.incomeBonus += 30; break;   // perpetual +30 ore/turn (capture-invariant)
+    case 'income': city.incomeBonus += 20; break;   // perpetual +20 ore/turn (capture-invariant)
     case 'pop': city.popBonus += 1; break;          // +1 unit capacity, stacks on the per-level pop
     case 'fortify': {                               // combat applies the extra ×1.5 defence
       city.fortified = true;

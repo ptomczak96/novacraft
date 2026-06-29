@@ -42,7 +42,7 @@ with the city and never reset when an enemy takes it):
 
 | Reaching | Option A | Option B |
 |---|---|---|
-| **L2** | City income **+30** ore/turn (`incomeBonus`) | **+1 pop** (`popBonus`) |
+| **L2** | City income **+20** ore/turn (`incomeBonus`) | **+1 pop** (`popBonus`) |
 | **L3** | **Fortify** (`fortified` → ×3 defense for units in the city — "walls") | **Reveal map** *(needs fog — deferred)* |
 | **L4** | **+3 supply** (`bonusSupply`, counts toward leveling) | **Expand territory** (claim 3 tiles — see below) |
 

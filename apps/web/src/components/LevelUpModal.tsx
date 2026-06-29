@@ -8,7 +8,7 @@ type LevelUpAction = Extract<Action, { type: 'levelUpCity' }>;
 // effect lands in a later group (reveal → fog, territory → tile picker); they
 // show disabled so the player can't pick an inert reward.
 const CHOICE_META: Record<string, { label: string; desc: string; icon: string; ready: boolean }> = {
-  income:    { label: 'City Income +30', desc: '+30 ore every turn, permanently — kept even if the city is captured.', icon: '💰', ready: true },
+  income:    { label: 'City Income +20', desc: '+20 ore every turn, permanently — kept even if the city is captured.', icon: '💰', ready: true },
   pop:       { label: '+1 Population',    desc: '+1 unit capacity here, stacking on top of the normal per-level gain.', icon: '🧍', ready: true },
   fortify:   { label: 'Fortify',          desc: 'Units defending inside this city gain a ×1.5 defence bonus.', icon: '🛡️', ready: true },
   reveal:    { label: 'Reveal Map',       desc: 'Reveal fog toward the nearest enemy city.', icon: '🔭', ready: false },

@@ -134,8 +134,8 @@ describe('REB1 — mines (output + supply)', () => {
     state = applyAction(state, { type: 'levelUpCity', cityId: city.id, choice: 'income' }, registry);
     const leveled = cityAt(state, cap.position)!;
     expect(leveled.level).toBe(2);
-    // +10 base (20→30) AND +30 income bonus, on top of the mine's +10.
-    expect(calculateOreIncome(state, 0, registry)).toBe(before + 10 + 10 + 30);
+    // +10 base (20→30) AND +20 income bonus, on top of the mine's +10.
+    expect(calculateOreIncome(state, 0, registry)).toBe(before + 10 + 10 + 20);
   });
 });
 
@@ -416,14 +416,14 @@ describe('City leveling (choice-based)', () => {
     let city = cityAt(state, cap.position)!;
     state = applyAction(state, { type: 'levelUpCity', cityId: city.id, choice: 'income' }, registry);
     city = cityAt(state, cap.position)!;
-    expect(city.incomeBonus).toBe(30);
+    expect(city.incomeBonus).toBe(20);
 
     // Simulate capture by flipping owner (capture path only changes owner).
     city.owner = 1;
     const after = cityAt(state, cap.position)!;
     expect(after.level).toBe(2);
-    expect(after.incomeBonus).toBe(30); // bonus stays with the city
-    expect(cityProduction(after, registry)).toBe(20 + 10 + 30); // capital base + level + bonus
+    expect(after.incomeBonus).toBe(20); // bonus stays with the city
+    expect(cityProduction(after, registry)).toBe(20 + 10 + 20); // capital base + level + bonus
   });
 });
 

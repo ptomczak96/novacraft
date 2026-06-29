@@ -606,6 +606,13 @@ things; *supersedes the earlier Fortify ×2.25 entry.*
   Archer from the Hive roster.** Placeholder icons: scuttling 🐛, lancer 🪖, reaper 🦅,
   scab ⚗️ (Patrick to replace — see overlap).
 
+### 2026-06-29 — Artisan Ornaments — drop Vanguard archer; L2 income reward +30→+20
+
+- **Removed the Archer from the Vanguard roster** (Vanguard = scout, warrior, lancer,
+  defender/Bulwark). Archer definition left in units.json, just unbuildable.
+- **L1→L2 city-income reward lowered +30 → +20** (`applyLevelUpCity` 'income') for both
+  teams. UI label + ECONOMY.md + tests updated.
+
 ### 2026-06-29 — Artisan Ornaments — mountain conditions, roster trim, Bulwark, UI fixes
 
 - **Mountains are impassable by default** — no unit may climb a mountain unless it has a

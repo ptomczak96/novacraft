@@ -4,7 +4,7 @@
     "name": "Vanguard",
     "color": "#3d7bb5",
     "startingUnits": [{ "unit": "warrior", "count": 1 }],
-    "unitTypes": ["scout", "warrior", "lancer", "archer", "defender"]
+    "unitTypes": ["scout", "warrior", "lancer", "defender"]
   },
   {
     "id": "hive",
