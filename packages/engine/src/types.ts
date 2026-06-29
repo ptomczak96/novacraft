@@ -31,6 +31,8 @@ export interface UnitType {
   attackRange: number;
   visibility: number; // fog sight radius (Chebyshev): 0=own tile only, 1=3x3, 2=5x5, …
   unitClass?: string; // e.g. "light" — grouping/flavour, not yet mechanical
+  popCost?: number; // pop weight (default 1); scuttling = 0.5 (a pair = 1 pop)
+  recruitCount?: number; // units spawned per recruit (default 1); scuttling = 2 (paired)
   conditions?: string[]; // special conditions applied to this unit (see docs/conditions.md)
   abilities: AbilityDef[];
   traits: string[]; // e.g. "flying", "aquatic", "ignoresTerrainCost"

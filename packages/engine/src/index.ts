@@ -11,7 +11,8 @@ export {
   cityProduction, cityPop, cityLevelForSupply, citySupplyProgress, cityAt, cityById, territoryCityAt,
   cityOwnsTile, citySupplyForLevel, cityCanLevelUp, levelUpChoices, LEVEL_CHOICE_MAX,
   isTileClaimable, isExpansionTileEligible, validateExpansion,
-  unitsHomedAt, cityHasCapacity, recomputeCities, buildingOutput, buildingSupply,
+  unitsHomedAt, cityHasCapacity, cityHasCapacityFor, cityPopUsed, cityPopRaw,
+  recomputeCities, buildingOutput, buildingSupply,
   getUnitPlasmaCost, canBuild, canUpgradeBuilding, upgradeCostFor, buildingCost, canFoundCity,
   resourceKindAt,
 } from './economy.js';

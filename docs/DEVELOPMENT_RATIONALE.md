@@ -512,6 +512,29 @@ things; *supersedes the earlier Fortify ×2.25 entry.*
   *Why a separate system from `traits`:* traits are baked-in movement/terrain flags;
   conditions are the named, documented, designer-facing rules tracked in one file.
 
+### 2026-06-29 — Artisan Ornaments — Hive units: Scuttling + Hive Scout
+
+- **Hive roster:** dropped Warrior and the shared Scout; added **Scuttling** and a
+  Hive-specific **Scout** (`hive_scout`). Vanguard keeps the shared warrior/scout.
+- **Scuttling** (cost 20, HP 10, atk 2, def 0, mov 1, rng 1, vis 0, light) is **created
+  in pairs** and counts **0.5 pop each** (a pair = 1 pop; a lone survivor rounds up to
+  1). New unit fields `recruitCount` (2) and `popCost` (0.5). Pairs spawn on **random
+  passable territory tiles** (not the centre), picked via the game PRNG so it stays
+  deterministic. Pop accounting is now weighted: `cityPopRaw` (Σ popCost) and
+  `cityPopUsed` = `ceil(raw)`; capacity checks use `cityHasCapacityFor(addedPop)`.
+  Conditions: **`sacrificial_founder`** (dies when founding a city) and **`blind`**.
+- **`blind`** (vis 0): reveals only its own tile but may move into cloud/fog; the UI
+  highlights a selected blind unit's move targets on cloud tiles. The "bump into a
+  hidden enemy" interaction is **deferred** (needs temporary per-turn reveal state) —
+  staged as the next step.
+- **Hive Scout** (cost 20, HP 15, atk 0.5, def 1, mov 2, rng 1, light) has
+  **`squinting_eyes_2`**: 3×3 fully visible, the surrounding 5×5 ring as **fog**
+  (terrain/buildings, no enemy units) — the "1.5 visibility". Implemented by giving
+  fog reveals a *level* (`visible` vs `explored`) with precedence; `recordSight` now
+  snapshots fog tiles too, so squint-fog shows structures but never live enemy units.
+- **City defense ×1.5 for a plain (un-fortified) city restored** earlier this session
+  stands; nothing changed here.
+
 ---
 
 *Deferred ideas (the "we'll tweak this later" items) live in the memory backlog,

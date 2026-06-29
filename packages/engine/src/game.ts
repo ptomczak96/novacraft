@@ -4,14 +4,14 @@ import type {
   CaptureCityAction, LevelUpCityAction, ExpandTerritoryAction, EndTurnAction, Unit, PlayerId, CityState,
   VisibleState, DataRegistry, Coord, PlayerState, TileVisibility,
 } from './types.js';
-import { createPRNG } from './prng.js';
+import { createPRNG, nextInt } from './prng.js';
 import { generateMap } from './mapgen.js';
 import { getReachableTiles, distance, inRange } from './pathfinding.js';
 import { resolveCombat, previewCombat } from './combat.js';
 import { computeVisibility, recordSight, makePlayerMemory } from './fog.js';
 import {
   settleEconomy, calculateOreIncome, calculatePlasmaIncome, recomputeCities,
-  territoryCityAt, cityAt, cityById, cityHasCapacity, getUnitPlasmaCost,
+  territoryCityAt, cityAt, cityById, cityHasCapacity, cityHasCapacityFor, cityOwnsTile, getUnitPlasmaCost,
   canBuild, canUpgradeBuilding, upgradeCostFor, buildingCost, canFoundCity,
   cityCanLevelUp, levelUpChoices, validateExpansion,
 } from './economy.js';
@@ -186,16 +186,18 @@ export function getLegalActions(state: GameState, registry: DataRegistry, player
     for (const city of state.cities) {
       if (city.owner !== playerId) continue;
       const { x, y } = city.position;
-      // Need an empty city tile and a free slot in that city.
+      // Need an empty city tile to recruit at.
       const occupied = state.units.some(u => u.position.x === x && u.position.y === y);
       if (occupied) continue;
-      if (!cityHasCapacity(state, city, registry)) continue;
       for (const unitTypeId of faction.unitTypes) {
         const ut = registry.unitTypes[unitTypeId];
         if (!ut) continue;
         if (!isUnitUnlocked(state, playerId, unitTypeId, registry)) continue;
         if (ut.cost > player.ore) continue;
         if (getUnitPlasmaCost(unitTypeId, registry) > player.plasma) continue;
+        // Pop this recruit adds (paired/half-pop units: e.g. a scuttling pair = 1).
+        const addedPop = (ut.popCost ?? 1) * (ut.recruitCount ?? 1);
+        if (!cityHasCapacityFor(state, city, registry, addedPop)) continue;
         actions.push({ type: 'recruit', unitTypeId, cityPosition: { x, y } });
       }
     }
@@ -355,23 +357,57 @@ function applyRecruit(state: GameState, action: RecruitAction, registry: DataReg
 
   const city = cityAt(state, action.cityPosition);
   if (!city || city.owner !== state.currentPlayer) return state;
-  if (!cityHasCapacity(state, city, registry)) return state;
+
+  const count = unitType.recruitCount ?? 1;
+  const addedPop = (unitType.popCost ?? 1) * count;
+  if (!cityHasCapacityFor(state, city, registry, addedPop)) return state;
+
+  // Spawn positions: a single unit appears on the city tile; multi-unit recruits
+  // (e.g. a scuttling pair) appear on random empty passable tiles in the territory.
+  const spawnTiles: Coord[] = [];
+  if (count <= 1) {
+    spawnTiles.push({ ...action.cityPosition });
+  } else {
+    const candidates: Coord[] = [];
+    for (let y = 0; y < state.map.height; y++) {
+      for (let x = 0; x < state.map.width; x++) {
+        const pos = { x, y };
+        if (pos.x === city.position.x && pos.y === city.position.y) continue; // not the centre
+        if (!cityOwnsTile(city, registry, pos)) continue;
+        const terrain = registry.terrainTypes[state.map.tiles[y][x].terrain];
+        if (!terrain || !terrain.passable) continue;
+        if (state.units.some(u => u.position.x === x && u.position.y === y)) continue; // occupied
+        candidates.push(pos);
+      }
+    }
+    // Deterministic random pick from the territory candidates.
+    let p = state.prng;
+    for (let i = 0; i < count && candidates.length > 0; i++) {
+      const [idx, np] = nextInt(p, 0, candidates.length - 1);
+      p = np;
+      spawnTiles.push(candidates.splice(idx, 1)[0]);
+    }
+    state.prng = p;
+    if (spawnTiles.length === 0) return state; // nowhere to place them
+  }
 
   player.ore -= unitType.cost;
   player.plasma -= getUnitPlasmaCost(action.unitTypeId, registry);
 
-  const id = state.nextUnitId++;
-  state.units.push({
-    id,
-    typeId: action.unitTypeId,
-    owner: state.currentPlayer,
-    position: { ...action.cityPosition },
-    hp: unitType.maxHP,
-    hasMoved: true, // newly recruited units can't act this turn
-    hasAttacked: true,
-    abilityCooldowns: {},
-  });
-  state.unitHomeCity[id] = city.id; // unit counts against this city's slots
+  for (const pos of spawnTiles) {
+    const id = state.nextUnitId++;
+    state.units.push({
+      id,
+      typeId: action.unitTypeId,
+      owner: state.currentPlayer,
+      position: { ...pos },
+      hp: unitType.maxHP,
+      hasMoved: true, // newly recruited units can't act this turn
+      hasAttacked: true,
+      abilityCooldowns: {},
+    });
+    state.unitHomeCity[id] = city.id; // counts against this city's pop
+  }
 
   return state;
 }
@@ -471,13 +507,18 @@ function applyFoundCity(state: GameState, action: FoundCityAction, registry: Dat
   });
   state.players[playerId].ore -= registry.economy.foundCity.cost;
 
-  // Founding consumes the unit's turn (mirrors capture), so it can't also move away.
-  // The founder also re-homes to the new city: its pop slot transfers off its old
-  // home city onto the one it just founded.
+  // The founder. Normally it re-homes to the new city (its pop transfers here);
+  // but a unit with the "Sacrificial Founder" condition DIES founding it instead.
   const founder = state.units.find(u => u.owner === playerId && u.position.x === x && u.position.y === y);
   if (founder) {
-    founder.hasMoved = true;
-    state.unitHomeCity[founder.id] = newCityId;
+    const ft = registry.unitTypes[founder.typeId];
+    if (ft?.conditions?.includes('sacrificial_founder')) {
+      state.units = state.units.filter(u => u.id !== founder.id); // consumed by the founding
+      delete state.unitHomeCity[founder.id];
+    } else {
+      founder.hasMoved = true; // founding spends the turn (mirrors capture)
+      state.unitHomeCity[founder.id] = newCityId;
+    }
   }
 
   recomputeCities(state, registry);
@@ -757,9 +798,10 @@ export function getVisibleState(state: GameState, playerId: PlayerId, registry: 
       if (current[y][x] === 'visible') {
         visibility[y][x] = 'visible';
         row.push(clone(state.map.tiles[y][x])); // live truth
-      } else if (mem.tiles[y][x]) {
+      } else if (current[y][x] === 'explored' || mem.tiles[y][x]) {
+        // Fog: a remembered tile, OR one currently seen only as fog ("squinting eyes").
         visibility[y][x] = 'explored';
-        row.push(clone(mem.tiles[y][x]!)); // frozen last-seen snapshot
+        row.push(clone(mem.tiles[y][x] ?? state.map.tiles[y][x])); // snapshot if we have it
       } else {
         visibility[y][x] = 'hidden';
         row.push(clone(state.map.tiles[y][x])); // covered by cloud, never read

@@ -9,6 +9,6 @@
     "id": "hive",
     "name": "Hive",
     "color": "#8a4fa0",
-    "unitTypes": ["scout", "warrior", "archer", "defender", "catapult", "sylvan_ranger", "sylvan_treant"]
+    "unitTypes": ["scuttling", "hive_scout", "archer", "defender", "catapult", "sylvan_ranger", "sylvan_treant"]
   }
 ]

@@ -54,18 +54,34 @@ export function computeVisibility(
     }
   }
 
-  // Each owned unit reveals a square of its visibility radius (line-of-sight gated).
+  // Each owned unit reveals a square. Most reveal 'visible'; "Squinting eyes" units
+  // reveal (part of) their range only as fog ('explored' — terrain seen, units not).
   for (const unit of units) {
     if (unit.owner !== playerId) continue;
     const unitType = registry.unitTypes[unit.typeId];
     if (!unitType) continue;
-    // Condition "Optics": mountains block this unit's line of sight (see docs/conditions.md).
-    const mountainsBlock = unitType.conditions?.includes('optics') ?? false;
-    revealSquare(map, visibility, unit.position.x, unit.position.y, unitType.visibility, registry, mountainsBlock);
+    const conds = unitType.conditions ?? [];
+    const ox = unit.position.x, oy = unit.position.y;
+    if (conds.includes('squinting_eyes_2')) {
+      // L2: inner 3×3 fully visible, the surrounding 5×5 ring only as fog.
+      revealSquareLevel(map, visibility, ox, oy, 2, registry, 'explored', false);
+      revealSquareLevel(map, visibility, ox, oy, 1, registry, 'visible', false);
+    } else if (conds.includes('squinting_eyes_1')) {
+      // L1: 3×3 seen only as fog (terrain, no units).
+      revealSquareLevel(map, visibility, ox, oy, 1, registry, 'explored', false);
+    } else {
+      // Normal sight. "Optics" makes mountains block this unit's line of sight.
+      const mountainsBlock = conds.includes('optics');
+      revealSquareLevel(map, visibility, ox, oy, Math.floor(unitType.visibility), registry, 'visible', mountainsBlock);
+    }
   }
 
   return visibility;
 }
+
+// Visibility precedence so a tile lit 'visible' by one source isn't downgraded to
+// fog by another (and fog isn't downgraded to hidden).
+const VIS_RANK: Record<TileVisibility, number> = { hidden: 0, explored: 1, visible: 2 };
 
 /**
  * Snapshot everything currently visible to `playerId` into their fog memory
@@ -78,7 +94,7 @@ export function recordSight(state: GameState, playerId: PlayerId, registry: Data
   if (!mem) return;
   for (let y = 0; y < state.map.height; y++) {
     for (let x = 0; x < state.map.width; x++) {
-      if (vis[y][x] !== 'visible') continue;
+      if (vis[y][x] === 'hidden') continue; // record both visible and squint-fog tiles
       mem.tiles[y][x] = cloneJSON(state.map.tiles[y][x]);
 
       const b = state.buildings.find(bb => bb.position.x === x && bb.position.y === y);
@@ -92,14 +108,19 @@ export function recordSight(state: GameState, playerId: PlayerId, registry: Data
   }
 }
 
-/** Reveal a Chebyshev-radius square around (ox,oy), each tile gated by line of sight. */
-function revealSquare(
+/**
+ * Reveal a Chebyshev-radius square around (ox,oy) to `level` ('visible' or fog
+ * 'explored'), each tile gated by line of sight. Only ever raises a tile's level,
+ * never lowers it (so visible beats fog beats hidden).
+ */
+function revealSquareLevel(
   map: GameMap,
   visibility: TileVisibility[][],
   ox: number,
   oy: number,
   range: number,
   registry: DataRegistry,
+  level: TileVisibility,
   mountainsBlock = false,
 ): void {
   for (let dy = -range; dy <= range; dy++) {
@@ -108,7 +129,7 @@ function revealSquare(
       const ty = oy + dy;
       if (tx < 0 || tx >= map.width || ty < 0 || ty >= map.height) continue;
       if (hasLineOfSight(map, ox, oy, tx, ty, registry, mountainsBlock)) {
-        visibility[ty][tx] = 'visible';
+        if (VIS_RANK[level] > VIS_RANK[visibility[ty][tx]]) visibility[ty][tx] = level;
       }
     }
   }

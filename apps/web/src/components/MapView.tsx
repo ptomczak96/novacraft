@@ -45,7 +45,10 @@ export function MapView() {
     );
     if (!city) return null;
     const popMax = cityPop(city, registry);
-    const popUsed = visibleState.units.filter(u => visibleState.unitHomeCity[u.id] === city.id).length;
+    // Weighted, rounded up — scuttlings count 0.5 each (a pair = 1).
+    const popUsed = Math.ceil(visibleState.units
+      .filter(u => visibleState.unitHomeCity[u.id] === city.id)
+      .reduce((s, u) => s + (registry.unitTypes[u.typeId]?.popCost ?? 1), 0));
     const supply = citySupplyProgress(city, registry);
     return { city, popUsed, popMax, supply };
   }, [selectedCity, visibleState, registry]);

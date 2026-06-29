@@ -12,6 +12,10 @@ opts in by listing the condition id in its `conditions` array in
 |---|---|---|
 | `mountain_restricted` | Mountain restricted | Cannot move onto mountain tiles. |
 | `optics` | Optics | Mountains block this unit's line of sight (it sees the mountain, not past it). |
+| `sacrificial_founder` | Sacrificial Founder | The unit dies when it founds a city. |
+| `blind` | Blind | Visibility 0 (sees only its own tile); may still move into cloud/fog tiles. |
+| `squinting_eyes_1` | Squinting eyes (L1) | Sees its 3×3 as **fog** only (terrain, not units). |
+| `squinting_eyes_2` | Squinting eyes (L2) | 3×3 fully visible; the surrounding 5×5 ring as **fog** (≈ visibility 1.5). |
 
 ---
 
@@ -41,8 +45,37 @@ and for units whose `visibility` ≥ 2 (at radius 1 every neighbour is adjacent)
 
 ---
 
+## `sacrificial_founder` — Sacrificial Founder
+**Rule:** when this unit founds a city, it **dies** (consumed by the founding) instead
+of re-homing to the new city. Used by Hive **Scuttlings**.
+
+**Enforced in:** `game.ts` (`applyFoundCity`) — the founder is removed and its home
+link cleared; the city is still founded with 0 units homed.
+
+## `blind` — Blind
+**Rule:** the unit has **visibility 0** (reveals only the tile it stands on), so it
+discovers nothing around it. It may, however, **move into cloud/fog tiles** (movement
+isn't fog-gated). In the UI a selected blind unit highlights its move targets even on
+undiscovered cloud tiles. *(Planned: "bump" — moving onto a tile with a hidden enemy
+reveals that unit instead of completing the move; not yet implemented.)*
+
+**Enforced in:** visibility 0 falls out of the normal sight code (`fog.ts`); the
+cloud-tile move highlight is in `IsoCanvas.tsx`.
+
+## `squinting_eyes_1` / `squinting_eyes_2` — Squinting eyes
+**Rule:** the unit sees terrain/structures as **fog** at part of its range but never
+the **units** standing there. *L1:* the 3×3 around it is fog only. *L2:* the 3×3 is
+fully visible and the next ring out (the 5×5) is fog — hence the "1.5" visibility.
+Fog tiles show terrain + buildings (recorded into fog memory) but no enemy units.
+
+**Enforced in:** `fog.ts` (`computeVisibility` → `revealSquareLevel`), which reveals
+some rings as `'explored'` (fog) rather than `'visible'`; `recordSight` snapshots fog
+tiles too, and enemy units are only shown on currently-`'visible'` tiles.
+
 ## Current assignments
-- **Scout** (`scout`): `mountain_restricted`, `optics` (visibility 2 light recon).
+- **Scout** (`scout`, Vanguard/shared): `mountain_restricted`, `optics`.
+- **Scuttling** (`scuttling`, Hive): `sacrificial_founder`, `blind`.
+- **Scout** (`hive_scout`, Hive): `squinting_eyes_2`.
 
 *(Conditions are independent of `traits` — traits like `flying`/`aquatic`/
 `ignoresTerrainCost` are movement/terrain flags baked into pathfinding; conditions are

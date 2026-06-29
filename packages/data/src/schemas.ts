@@ -36,6 +36,8 @@ export const UnitTypeSchema = z.object({
   attackRange: z.number().min(1),
   visibility: z.number().min(0), // fog sight radius: 0=own tile, 1=3x3, 2=5x5 …
   unitClass: z.string().optional(), // e.g. "light" — flavour/grouping, not yet mechanical
+  popCost: z.number().min(0).optional(), // pop weight per unit (default 1; scuttling 0.5)
+  recruitCount: z.number().int().min(1).optional(), // units spawned per recruit (default 1; scuttling 2)
   conditions: z.array(z.string()).optional().default([]), // special conditions (see docs/conditions.md)
   abilities: z.array(AbilityDefSchema),
   traits: z.array(z.string()),

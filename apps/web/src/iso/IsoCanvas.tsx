@@ -164,6 +164,14 @@ export function IsoCanvas({ mode, onPaint }: IsoCanvasProps) {
     return { moveTargets, attackTargets };
   }, [mode, selectedUnitId, legalActions, units]);
 
+  // Blind units (e.g. scuttlings) reveal nothing but may move into cloud tiles —
+  // so their move targets are highlighted even on undiscovered (cloud) tiles.
+  const selectedUnitBlind = React.useMemo(() => {
+    if (selectedUnitId == null) return false;
+    const u = units.find(uu => uu.id === selectedUnitId);
+    return !!(u && registry.unitTypes[u.typeId]?.conditions?.includes('blind'));
+  }, [selectedUnitId, units, registry]);
+
   // ── Render the full scene ──
   const render = useCallback(() => {
     const canvas = canvasRef.current;
@@ -192,8 +200,13 @@ export function IsoCanvas({ mode, onPaint }: IsoCanvasProps) {
         const vis = visibility?.[y]?.[x] ?? 'visible';
         const key = `${x},${y}`;
 
-        // Hidden (undiscovered) tiles: cover with a white cloud, draw nothing else.
-        if (vis === 'hidden') { drawCloud(ctx, x, y, map.height); continue; }
+        // Hidden (undiscovered) tiles: cover with a white cloud. A selected blind
+        // unit still shows its move targets (blue) on the cloud so it can advance.
+        if (vis === 'hidden') {
+          drawCloud(ctx, x, y, map.height);
+          if (selectedUnitBlind && moveTargets.has(key)) drawMoveHighlight(ctx, x, y, map.height, tile.terrain);
+          continue;
+        }
 
         // ── 1. Draw tile prism ──
         drawTile(ctx, tile, x, y, map.height, registry);
@@ -329,7 +342,7 @@ export function IsoCanvas({ mode, onPaint }: IsoCanvasProps) {
   }, [
     map, visibility, registry, config, units, unitByPos, buildings, buildingByPos, cities,
     selectedUnitId, hoveredTile, legalActions, moveTargets, attackTargets, mode,
-    buildPromptTile, spriteTick, animTick, territorySelect, gameState,
+    buildPromptTile, spriteTick, animTick, territorySelect, gameState, selectedUnitBlind,
   ]);
 
   // Re-render whenever state changes

@@ -277,8 +277,28 @@ export function unitsHomedAt(state: GameState, cityId: CityId): number {
   return count;
 }
 
+/** Raw (un-rounded) pop weight of units homed at a city — scuttlings count 0.5 each. */
+export function cityPopRaw(state: GameState, cityId: CityId, registry: DataRegistry): number {
+  let sum = 0;
+  for (const unit of state.units) {
+    if (state.unitHomeCity[unit.id] !== cityId) continue;
+    sum += registry.unitTypes[unit.typeId]?.popCost ?? 1;
+  }
+  return sum;
+}
+
+/** Pop used by a city for display/capacity — rounded UP (so a lone 0.5 scuttling = 1). */
+export function cityPopUsed(state: GameState, cityId: CityId, registry: DataRegistry): number {
+  return Math.ceil(cityPopRaw(state, cityId, registry));
+}
+
+/** Can the city absorb `addedPop` more pop weight without exceeding its cap? */
+export function cityHasCapacityFor(state: GameState, city: CityState, registry: DataRegistry, addedPop = 1): boolean {
+  return Math.ceil(cityPopRaw(state, city.id, registry) + addedPop) <= cityPop(city, registry);
+}
+
 export function cityHasCapacity(state: GameState, city: CityState, registry: DataRegistry): boolean {
-  return unitsHomedAt(state, city.id) < cityPop(city, registry);
+  return cityHasCapacityFor(state, city, registry, 1);
 }
 
 // ── Resource income ──
