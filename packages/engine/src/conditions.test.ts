@@ -47,20 +47,24 @@ describe('Mountains: default impassable; only mountain-condition units climb', (
 });
 
 describe('Condition: frazzled', () => {
-  it('caps movement at 1 when inside an enemy’s attack range', () => {
+  it('caps movement at 1 only when adjacent to an enemy (AOI = the 3×3, not attack range)', () => {
     const state = createGame({ ...defaultConfig, fogOfWar: false }, registry, ['vanguard', 'hive'], 7);
     for (let y = 2; y <= 8; y++) for (let x = 2; x <= 8; x++) state.map.tiles[y][x].terrain = 'plains';
     const scout = { id: 1, typeId: 'hive_scout', owner: 1, position: { x: 5, y: 5 }, hp: 10, hasMoved: false, hasAttacked: false, abilityCooldowns: {} };
+    const reach = (others: typeof scout[]) => getReachableTiles(scout, registry.unitTypes['hive_scout'], state.map, [scout, ...others], registry, 0);
 
     // No enemy nearby → full movement (2) reaches a tile 2 away.
-    const far = getReachableTiles(scout, registry.unitTypes['hive_scout'], state.map, [scout], registry, 0);
-    expect(far.has('7,5')).toBe(true);
+    expect(reach([]).has('7,5')).toBe(true);
 
-    // A melee enemy adjacent → frazzled → movement 1 (can't reach 2 away).
-    const enemy = { id: 2, typeId: 'warrior', owner: 0, position: { x: 6, y: 5 }, hp: 10, hasMoved: false, hasAttacked: false, abilityCooldowns: {} };
-    const near = getReachableTiles(scout, registry.unitTypes['hive_scout'], state.map, [scout, enemy], registry, 0);
-    expect(near.has('3,5')).toBe(false); // 2 tiles west — out of reach now
-    expect(near.has('4,5')).toBe(true);  // 1 tile west — still reachable
+    // Adjacent enemy (in the scout's 3×3) → frazzled → movement 1.
+    const adjacent = { id: 2, typeId: 'warrior', owner: 0, position: { x: 6, y: 5 }, hp: 10, hasMoved: false, hasAttacked: false, abilityCooldowns: {} };
+    const near = reach([adjacent]);
+    expect(near.has('3,5')).toBe(false); // 2 west — out of reach now
+    expect(near.has('4,5')).toBe(true);  // 1 west — still reachable
+
+    // A range-2 enemy 2 tiles away is NOT adjacent → no frazzle (full movement).
+    const ranged2 = { id: 3, typeId: 'lancer', owner: 0, position: { x: 3, y: 3 }, hp: 10, hasMoved: false, hasAttacked: false, abilityCooldowns: {} };
+    expect(reach([ranged2]).has('7,5')).toBe(true); // still reaches 2 away
   });
 });
 

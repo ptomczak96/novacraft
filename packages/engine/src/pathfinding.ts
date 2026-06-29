@@ -19,15 +19,14 @@ export function getReachableTiles(
   let maxMove = unitType.movement + movementBonus;
   const ignoresTerrain = unitType.traits.includes('ignoresTerrainCost');
 
-  // "Frazzled": while standing inside an enemy's area of influence (within any enemy's
-  // attack range), this unit's movement is capped at 1. See docs/conditions.md.
+  // "Frazzled": while standing inside an enemy's area of influence, this unit's movement
+  // is capped at 1. A unit's AOI is the 3×3 around it (Chebyshev radius 1) by default —
+  // range doesn't widen it. See docs/conditions.md.
   if (unitType.conditions?.includes('frazzled')) {
     const inEnemyAOI = units.some(u => {
       if (u.owner === unit.owner) return false;
-      const et = registry.unitTypes[u.typeId];
-      if (!et) return false;
       const d = Math.max(Math.abs(u.position.x - unit.position.x), Math.abs(u.position.y - unit.position.y));
-      return d <= et.attackRange;
+      return d <= 1;
     });
     if (inEnemyAOI) maxMove = Math.min(maxMove, 1);
   }

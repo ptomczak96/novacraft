@@ -15,7 +15,7 @@ const CONDITION_INFO: Record<string, { name: string; desc: string }> = {
   squinting_eyes_1: { name: 'Squinting Eyes I', desc: 'Sees its 3×3 as fog only (terrain, not units).' },
   squinting_eyes_2: { name: 'Squinting Eyes II', desc: '3×3 fully visible; the surrounding 5×5 ring shown as fog.' },
   corrosive: { name: 'Corrosive', desc: 'Its attack also applies the Corrosive status (−20% defence) to the target.' },
-  frazzled: { name: 'Frazzled', desc: 'While inside an enemy’s area of influence (within an enemy’s attack range), its movement is capped at 1.' },
+  frazzled: { name: 'Frazzled', desc: 'While inside an enemy’s area of influence (the 3×3 around it — i.e. adjacent to an enemy), its movement is capped at 1.' },
 };
 function conditionInfo(id: string): { name: string; desc: string } {
   const dash = /^dash_(\d+)$/.exec(id);

@@ -609,10 +609,16 @@ things; *supersedes the earlier Fortify ×2.25 entry.*
 ### 2026-06-29 — Artisan Ornaments — condition: Frazzled (Hive Scout)
 
 - New condition **`frazzled`** on the Hive Scout: while inside an **enemy's area of
-  influence**, its movement is capped at **1** (base 2). *AOI defined as within an enemy
-  unit's attack range* (Chebyshev ≤ enemy `attackRange`); counts all enemies incl. unseen
-  — flagged in `docs/conditions.md` as the one spot to change if AOI should mean something
-  else. Enforced in `pathfinding.ts` (`getReachableTiles` caps `maxMove`).
+  influence**, its movement is capped at **1** (base 2). Enforced in `pathfinding.ts`
+  (`getReachableTiles` caps `maxMove`). *(AOI definition revised below.)*
+
+### 2026-06-29 — Artisan Ornaments — AOI defined as the 3×3 (not attack range)
+
+- **Area of Influence (AOI)** is now a general concept: unless a unit states otherwise, a
+  unit's AOI is the **3×3 grid around it** (Chebyshev radius 1) — **attack range does not
+  widen it** (a range-2 unit still has a 3×3 AOI). Supersedes the prior Frazzled note that
+  used attack range; Frazzled now triggers only when **adjacent** to an enemy. Documented
+  as a glossary entry in `docs/conditions.md`.
 
 ### 2026-06-29 — Artisan Ornaments — drop Vanguard archer; L2 income reward +30→+20
 

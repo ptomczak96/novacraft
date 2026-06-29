@@ -8,6 +8,9 @@ opts in by listing the condition id in its `conditions` array in
 > `conditions` list — the existing definition below is applied automatically. Add any
 > new condition to this file with its id, plain-English rule, and where it's enforced.
 
+> **Glossary — Area of Influence (AOI):** unless a unit states otherwise, a unit's AOI
+> is the **3×3 grid around it** (Chebyshev radius 1). Attack range does not widen it.
+
 | Id | Name | One-line effect |
 |---|---|---|
 | `mountain_restricted` | Mountain restricted | Cannot move onto mountain tiles. |
@@ -19,7 +22,7 @@ opts in by listing the condition id in its `conditions` array in
 | `squinting_eyes_2` | Squinting eyes (L2) | 3×3 fully visible; the surrounding 5×5 ring as **fog** (≈ visibility 1.5). |
 | `dash_N` | Dash N | After attacking, the unit may move up to **N** tiles (default: no move after attacking). |
 | `corrosive` | Corrosive | The unit's attack also applies the **corrosive status** (−20% defence) to the target. |
-| `frazzled` | Frazzled | While inside an enemy's **area of influence**, its movement is capped at **1**. |
+| `frazzled` | Frazzled | While inside an enemy's **area of influence** (the 3×3 around it), its movement is capped at **1**. |
 | `mountain_defense` | Mountain Defense | Can climb mountains; gains **×1.2 defence** while on a mountain. |
 | `mountain_shooter` | Mountain Shooter | Can climb mountains; gains **×1.2 attack** while on a mountain. |
 | `mountain_sight` | Mountain Sight | Can climb mountains; its **visibility becomes 2** while on a mountain. |
@@ -123,11 +126,10 @@ affected unit's **defence by 20%** in all future combat until removed.
 **Rule:** while this unit is standing inside an **enemy's area of influence**, its
 movement is capped at **1** (regardless of its base movement or movement bonuses).
 
-**Area of influence** is currently defined as **within an enemy unit's attack range**
-(Chebyshev distance ≤ that enemy's `attackRange`) — e.g. adjacent to a melee enemy, or
-within 2 tiles of a range-2 enemy. Counts all enemies (even unseen ones — the influence
-is real). *If "AOI" should mean something else (a fixed radius, vision, etc.), this is
-the one spot to change.*
+**Area of influence (AOI)** — unless a unit states otherwise, a unit's AOI is the **3×3
+grid around it** (Chebyshev radius 1). Attack range does NOT widen it: a range-2 unit
+still has a 3×3 AOI. So Frazzled triggers when the unit is **adjacent to (incl.
+diagonally) any enemy**. Counts all enemies, even unseen ones (the influence is real).
 
 **Enforced in:** `pathfinding.ts` (`getReachableTiles`) — caps `maxMove` to 1 when the
 unit has this condition and stands in an enemy AOI.
