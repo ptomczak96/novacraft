@@ -11,7 +11,7 @@
     "movement": 1,
     "attackRange": 1,
     "visibility": 2,
-    "conditions": ["mountain_restricted", "optics", "impotent_founder"],
+    "conditions": ["mountain_restricted", "low_horizons", "impotent_founder"],
     "abilities": [],
     "traits": []
   },

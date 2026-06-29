@@ -70,8 +70,8 @@ export function computeVisibility(
       // L1: 3×3 seen only as fog (terrain, no units).
       revealSquareLevel(map, visibility, ox, oy, 1, registry, 'explored', false);
     } else {
-      // Normal sight. "Optics" makes mountains block this unit's line of sight.
-      const mountainsBlock = conds.includes('optics');
+      // Normal sight. "Low Horizons" makes mountains block this unit's line of sight.
+      const mountainsBlock = conds.includes('low_horizons');
       revealSquareLevel(map, visibility, ox, oy, Math.floor(unitType.visibility), registry, 'visible', mountainsBlock);
     }
   }
@@ -137,7 +137,7 @@ function revealSquareLevel(
 
 /**
  * Line of sight (bresenham). Vision is a clean square by default — nothing blocks it —
- * EXCEPT when `mountainsBlock` (the Optics condition), where a mountain between the
+ * EXCEPT when `mountainsBlock` (the Low Horizons condition), where a mountain between the
  * unit and the target hides everything beyond it. The target tile itself is never the
  * blocker (you see the mountain, just not past it). `registry` is unused now but kept
  * for signature stability / future terrain-based rules.
@@ -169,6 +169,6 @@ function hasLineOfSight(
 
     if (cx === x1 && cy === y1) return true;
     if (cx < 0 || cx >= map.width || cy < 0 || cy >= map.height) return false;
-    if (map.tiles[cy][cx].terrain === 'mountain') return false; // Optics: mountains block
+    if (map.tiles[cy][cx].terrain === 'mountain') return false; // Low Horizons: mountains block
   }
 }

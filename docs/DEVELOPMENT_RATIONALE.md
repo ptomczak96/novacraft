@@ -560,3 +560,10 @@ things; *supersedes the earlier Fortify ×2.25 entry.*
   symptom was a stale dev bundle + the misaligned highlight.)
 - **Combat log** gained an attacker-vs-defender **stats block** (⚔ attack / 🛡 defence /
   ♥ HP for both) above the existing force/damage breakdown.
+
+### 2026-06-29 — Artisan Ornaments — rename condition `optics` → `low_horizons`
+
+- Renamed the special condition **`optics` → `low_horizons`** ("Low Horizons") — same
+  effect (mountains block the unit's line of sight). Updated the unit data, the `fog.ts`
+  check, tests, and `docs/conditions.md`. (Earlier entries still say "optics" — that was
+  the prior name; this supersedes the label.)

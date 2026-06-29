@@ -37,7 +37,7 @@ describe('Condition: impotent_founder', () => {
   });
 });
 
-describe('Condition: optics', () => {
+describe('Condition: low_horizons', () => {
   it('a mountain blocks the scout’s sight beyond it (sees the mountain, not past)', () => {
     const state = createGame(cfg(), registry, ['vanguard', 'hive'], 7);
     state.units = state.units.filter(u => u.owner !== 0); // isolate the scout's sight

@@ -11,7 +11,7 @@ opts in by listing the condition id in its `conditions` array in
 | Id | Name | One-line effect |
 |---|---|---|
 | `mountain_restricted` | Mountain restricted | Cannot move onto mountain tiles. |
-| `optics` | Optics | Mountains block this unit's line of sight (it sees the mountain, not past it). |
+| `low_horizons` | Low Horizons | Mountains block this unit's line of sight (it sees the mountain, not past it). |
 | `sacrificial_founder` | Sacrificial Founder | The unit dies when it founds a city. |
 | `impotent_founder` | Impotent Founder | The unit cannot found cities at all. |
 | `blind` | Blind | Visibility 0 (sees only its own tile); may still move into cloud/fog tiles. |
@@ -27,10 +27,10 @@ passable terrain, so this is a per-unit restriction.
 **Enforced in:** `packages/engine/src/pathfinding.ts` (`getReachableTiles`) — mountain
 tiles are excluded from the unit's reachable set, so the move is never offered.
 
-## `optics` — Optics
-**Rule:** the unit's line of sight is **blocked by mountains** (in addition to the
-normal forest sight-blocking that applies to everyone). It still *sees the mountain
-tile itself*, just nothing beyond it — both **orthogonally and diagonally**.
+## `low_horizons` — Low Horizons
+**Rule:** the unit's line of sight is **blocked by mountains**. (Vision is otherwise a
+clean square — nothing else blocks it.) It still *sees the mountain tile itself*, just
+nothing beyond it — both **orthogonally and diagonally**.
 
 Example (unit at `a1`, sight radius 2):
 - `a1 → a2 (flat) → a3 (flat)`: sees `a2` **and** `a3`.
@@ -39,7 +39,7 @@ Example (unit at `a1`, sight radius 2):
 - Diagonal `a1 → b2 (mountain) → c3`: sees `b2`, but `c3` is **hidden**.
 
 **Enforced in:** `packages/engine/src/fog.ts` (`computeVisibility` →
-`revealSquare` → `hasLineOfSight`), via a `mountainsBlock` flag set when the unit has
+`revealSquareLevel` → `hasLineOfSight`), via a `mountainsBlock` flag set when the unit has
 this condition. Bresenham line-of-sight treats mountains as blockers (the endpoint is
 never the blocker, so the mountain tile stays visible). Only matters with fog of war on
 and for units whose `visibility` ≥ 2 (at radius 1 every neighbour is adjacent).
@@ -87,7 +87,7 @@ some rings as `'explored'` (fog) rather than `'visible'`; `recordSight` snapshot
 tiles too, and enemy units are only shown on currently-`'visible'` tiles.
 
 ## Current assignments
-- **Scout** (`scout`, Vanguard/shared): `mountain_restricted`, `optics`, `impotent_founder`.
+- **Scout** (`scout`, Vanguard/shared): `mountain_restricted`, `low_horizons`, `impotent_founder`.
 - **Scuttling** (`scuttling`, Hive): `sacrificial_founder`, `blind`.
 - **Scout** (`hive_scout`, Hive): `squinting_eyes_2`, `impotent_founder`.
 
