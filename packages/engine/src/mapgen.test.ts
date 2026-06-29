@@ -61,4 +61,18 @@ describe('Mapgen — ruins & territories', () => {
     const b = createGame(config, registry, ['vanguard', 'hive'], 314);
     expect(JSON.stringify(a.map)).toBe(JSON.stringify(b.map));
   });
+
+  it('"Double Resources" spawns more resources across the map', () => {
+    const count = (s: GameState) => {
+      let n = 0;
+      for (const row of s.map.tiles) for (const t of row) if (t.isResourceTile) n++;
+      return n;
+    };
+    let normal = 0, doubled = 0;
+    for (const seed of [1, 7, 42, 100, 314]) {
+      normal += count(createGame(config, registry, ['vanguard', 'hive'], seed));
+      doubled += count(createGame({ ...config, mapgen: { doubleResources: true } }, registry, ['vanguard', 'hive'], seed));
+    }
+    expect(doubled).toBeGreaterThan(normal);
+  });
 });

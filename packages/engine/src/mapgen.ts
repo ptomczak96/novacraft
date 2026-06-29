@@ -22,6 +22,7 @@ interface ResolvedOptions {
   biome: Biome;
   resourceDensity: number;
   ruinCount: number;
+  resourceMultiplier: number; // 2× when "double resources" (testing) is on
 }
 
 function resolveOptions(opts?: MapGenOptions): ResolvedOptions {
@@ -29,6 +30,7 @@ function resolveOptions(opts?: MapGenOptions): ResolvedOptions {
     biome:           opts?.biome           ?? 'grassland',
     resourceDensity: opts?.resourceDensity ?? 0.08,
     ruinCount:       opts?.ruinCount       ?? 3,
+    resourceMultiplier: opts?.doubleResources ? 2 : 1,
   };
 }
 
@@ -287,8 +289,8 @@ export function generateMap(
         const j = Math.floor(r * (k + 1));
         [surround[k], surround[j]] = [surround[j], surround[k]];
       }
-      const oreCount = Math.min(weighted([0, 1, 2, 3, 4], [10, 20, 50, 25, 5]), surround.length);
-      const plasmaCount = Math.min(weighted([0, 1, 2], [35, 50, 15]), surround.length - oreCount);
+      const oreCount = Math.min(weighted([0, 1, 2, 3, 4], [10, 20, 50, 25, 5]) * o.resourceMultiplier, surround.length);
+      const plasmaCount = Math.min(weighted([0, 1, 2], [35, 50, 15]) * o.resourceMultiplier, surround.length - oreCount);
       let idx = 0;
       for (let k = 0; k < oreCount; k++, idx++) {
         const t = tiles[surround[idx].y][surround[idx].x];
@@ -303,7 +305,7 @@ export function generateMap(
     // Scattered resources OUTSIDE all city/ruin territories — a light sprinkling
     // (~66% of a city's 3x3 density, i.e. 3 resources / 8 tiles) so there's
     // something to grab when city borders expand later. ~2:1 ore:plasma like cities.
-    const sprinkleP = 0.66 * (3 / 8);
+    const sprinkleP = 0.66 * (3 / 8) * o.resourceMultiplier;
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x++) {
         const t = tiles[y][x];

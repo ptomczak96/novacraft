@@ -114,6 +114,7 @@ export interface MapGenOptions {
   biome?: Biome;            // overall map theme
   resourceDensity?: number; // 0..1 — fraction of land carrying ore/plasma
   ruinCount?: number;       // number of foundable-city ruins to scatter
+  doubleResources?: boolean; // testing: 2× the map's resource spawn rate
 }
 
 export interface CombatConfig {

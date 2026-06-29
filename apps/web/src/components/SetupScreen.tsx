@@ -126,6 +126,11 @@ export function SetupScreen() {
             onChange={e => setConfig({ ...config, winConditions: { ...config.winConditions, highestScoreAtLimit: e.target.checked } })} />
           <label htmlFor="wc-score">Win: Highest Score at Turn Limit</label>
         </div>
+        <div className="checkbox-row">
+          <input type="checkbox" id="double-res" checked={mapgen.doubleResources ?? false}
+            onChange={e => setMapgen({ doubleResources: e.target.checked })} />
+          <label htmlFor="double-res">Double Resources (For testing)</label>
+        </div>
 
         <div className="setup-actions">
           <button className="primary" onClick={handleStart}>Start Game</button>

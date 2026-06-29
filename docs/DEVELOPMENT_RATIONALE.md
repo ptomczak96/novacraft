@@ -612,6 +612,14 @@ things; *supersedes the earlier Fortify ×2.25 entry.*
   influence**, its movement is capped at **1** (base 2). Enforced in `pathfinding.ts`
   (`getReachableTiles` caps `maxMove`). *(AOI definition revised below.)*
 
+### 2026-06-29 — Artisan Ornaments — "Double Resources" testing toggle
+
+- Setup-screen checkbox **"Double Resources (For testing)"** (below the win conditions),
+  bound to `config.mapgen.doubleResources`. When on, mapgen applies a **×2 resource
+  multiplier** to the scattered sprinkle density and the per-ruin ore/plasma counts
+  (capped by available tiles). Default off; deterministic per seed. Capital resources
+  unchanged.
+
 ### 2026-06-29 — Artisan Ornaments — AOI defined as the 3×3 (not attack range)
 
 - **Area of Influence (AOI)** is now a general concept: unless a unit states otherwise, a
