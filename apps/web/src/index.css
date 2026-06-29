@@ -437,6 +437,17 @@ label {
   border-color: var(--accent);
 }
 
+/* Unaffordable units: shown but tinted red and not clickable. */
+.recruit-card--unaffordable {
+  cursor: not-allowed;
+  border-color: rgba(214, 69, 69, 0.6);
+  background: rgba(150, 40, 40, 0.18);
+}
+.recruit-card--unaffordable:hover { border-color: rgba(214, 69, 69, 0.7); }
+.recruit-card--unaffordable .name,
+.recruit-card--unaffordable .stats { color: #e08a8a; opacity: 0.85; }
+.recruit-card--unaffordable .cost { color: #ff6b6b; font-weight: 700; }
+
 .recruit-card .name {
   font-size: 12px;
   font-weight: 600;

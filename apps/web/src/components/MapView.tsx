@@ -1,5 +1,5 @@
 import React, { useMemo, useEffect } from 'react';
-import { cityPop, citySupplyProgress } from '@tactica/engine';
+import { cityPop, citySupplyProgress, getRecruitOptions } from '@tactica/engine';
 import { useGameStore } from '../store/gameStore.js';
 import { IsoCanvas } from '../iso/IsoCanvas.js';
 import { TerritorySelectBar } from './TerritorySelectBar.js';
@@ -19,20 +19,18 @@ const UNIT_ICONS: Record<string, string> = {
 
 export function MapView() {
   const {
-    gameState, visibleState, registry, legalActions,
+    gameState, visibleState, registry,
     selectedCity, executeAction, setSelectedCity,
   } = useGameStore();
 
   const [showRecruit, setShowRecruit] = React.useState(false);
 
-  // Recruit options for the currently selected city only — so recruited units
-  // belong to (and count against the pop of) the city you clicked.
-  const recruitActions = useMemo(() => {
-    if (!selectedCity) return [];
-    return legalActions.filter(
-      a => a.type === 'recruit' && a.cityPosition.x === selectedCity.x && a.cityPosition.y === selectedCity.y,
-    );
-  }, [legalActions, selectedCity]);
+  // Full recruit roster for the selected city (incl. unaffordable units, flagged),
+  // so they can be shown red rather than hidden.
+  const recruitOptions = useMemo(() => {
+    if (!selectedCity || !gameState) return [];
+    return getRecruitOptions(gameState, registry, gameState.currentPlayer, selectedCity);
+  }, [gameState, registry, selectedCity]);
 
   // Collapse the menu whenever the selected city changes.
   useEffect(() => { setShowRecruit(false); }, [selectedCity]);
@@ -87,26 +85,34 @@ export function MapView() {
       )}
 
       {/* Recruit button — shown when an owned city is selected and can build a unit */}
-      {selectedCity && recruitActions.length > 0 && (
+      {selectedCity && recruitOptions.length > 0 && (
         <div style={{ position: 'absolute', bottom: 16, left: '50%', transform: 'translateX(-50%)' }}>
           <button className="primary" onClick={() => setShowRecruit(s => !s)}>
-            Recruit ({recruitActions.length})
+            Recruit ({recruitOptions.length})
           </button>
         </div>
       )}
 
-      {/* Recruit panel — units recruited here belong to the selected city */}
-      {showRecruit && selectedCity && recruitActions.length > 0 && (
+      {/* Recruit panel — all buildable units; unaffordable ones are tinted red */}
+      {showRecruit && selectedCity && recruitOptions.length > 0 && (
         <div className="recruit-panel">
-          {recruitActions.map(action => {
-            if (action.type !== 'recruit') return null;
-            const utId = action.unitTypeId;
-            const ut = registry.unitTypes[utId];
+          {recruitOptions.map(opt => {
+            const ut = registry.unitTypes[opt.unitTypeId];
             if (!ut) return null;
+            const cls = `recruit-card${opt.affordable ? '' : ' recruit-card--unaffordable'}`;
             return (
-              <div key={utId} className="recruit-card" onClick={() => { executeAction(action); setShowRecruit(false); }}>
-                <div className="name">{UNIT_ICONS[utId] || '●'} {ut.name}</div>
-                <div className="cost">{ut.cost}◈</div>
+              <div
+                key={opt.unitTypeId}
+                className={cls}
+                title={opt.affordable ? undefined : 'Not enough resources'}
+                onClick={() => {
+                  if (!opt.affordable) return;
+                  executeAction({ type: 'recruit', unitTypeId: opt.unitTypeId, cityPosition: selectedCity });
+                  setShowRecruit(false);
+                }}
+              >
+                <div className="name">{UNIT_ICONS[opt.unitTypeId] || '●'} {ut.name}</div>
+                <div className="cost">{opt.cost}◈{opt.plasmaCost > 0 ? ` ${opt.plasmaCost}✦` : ''}</div>
                 <div className="stats">
                   HP:{ut.maxHP} ATK:{ut.attack} DEF:{ut.defence} MOV:{ut.movement} RNG:{ut.attackRange}
                 </div>

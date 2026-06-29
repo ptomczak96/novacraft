@@ -2,7 +2,7 @@ import type {
   GameState, GameConfig, GameResult, Action, MoveAction, AttackAction,
   RecruitAction, ResearchAction, BuildAction, UpgradeBuildingAction, FoundCityAction,
   CaptureCityAction, LevelUpCityAction, ExpandTerritoryAction, EndTurnAction, Unit, PlayerId, CityState,
-  VisibleState, DataRegistry, Coord, PlayerState, TileVisibility,
+  VisibleState, DataRegistry, Coord, PlayerState, TileVisibility, RecruitOption,
 } from './types.js';
 import { createPRNG, nextInt } from './prng.js';
 import { generateMap } from './mapgen.js';
@@ -246,6 +246,44 @@ export function getLegalActions(state: GameState, registry: DataRegistry, player
   actions.push({ type: 'endTurn' });
 
   return actions;
+}
+
+/**
+ * Every unit a player's city could recruit (unlocked + fits the city's pop + the
+ * city tile is free), each flagged `affordable`. Unlike getLegalActions (which only
+ * lists affordable recruits as actions), this drives the UI so unaffordable units can
+ * still be shown — greyed/red — rather than vanishing.
+ */
+export function getRecruitOptions(
+  state: GameState,
+  registry: DataRegistry,
+  playerId: PlayerId,
+  cityPosition: Coord,
+): RecruitOption[] {
+  const city = cityAt(state, cityPosition);
+  if (!city || city.owner !== playerId) return [];
+  const player = state.players[playerId];
+  const faction = registry.factions[player.factionId];
+  if (!faction) return [];
+  // Need an empty city tile to recruit at (single-spawn units appear there).
+  if (state.units.some(u => u.position.x === city.position.x && u.position.y === city.position.y)) return [];
+
+  const options: RecruitOption[] = [];
+  for (const unitTypeId of faction.unitTypes) {
+    const ut = registry.unitTypes[unitTypeId];
+    if (!ut) continue;
+    if (!isUnitUnlocked(state, playerId, unitTypeId, registry)) continue;
+    const addedPop = (ut.popCost ?? 1) * (ut.recruitCount ?? 1);
+    if (!cityHasCapacityFor(state, city, registry, addedPop)) continue;
+    const plasmaCost = getUnitPlasmaCost(unitTypeId, registry);
+    options.push({
+      unitTypeId,
+      cost: ut.cost,
+      plasmaCost,
+      affordable: ut.cost <= player.ore && plasmaCost <= player.plasma,
+    });
+  }
+  return options;
 }
 
 // ── Apply Action ──

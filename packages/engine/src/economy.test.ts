@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  createGame, applyAction, getLegalActions,
+  createGame, applyAction, getLegalActions, getRecruitOptions,
   calculateOreIncome, calculatePlasmaIncome, cityProduction, cityPop, cityLevelForSupply,
   cityAt, canBuild, unitsHomedAt, cityCanLevelUp,
   validateExpansion, isExpansionTileEligible, territoryCityAt,
@@ -256,6 +256,21 @@ describe('Resources & recruiting costs', () => {
     state.units = []; state.unitHomeCity = {};
     state.players[0].ore = 100; state.players[0].plasma = 0;
     expect(getLegalActions(state, registry, 0).filter(a => a.type === 'recruit' && a.unitTypeId === 'warrior').length).toBe(0);
+  });
+
+  it('getRecruitOptions lists all buildable units with an affordable flag', () => {
+    const registry = getRegistry();
+    const state = createGame(getConfig(), registry, ['vanguard', 'hive'], 7);
+    const cap = capitalOf(state, 0);
+    state.units = []; state.unitHomeCity = {}; // free the city tile
+    state.players[0].ore = 20; // can afford warrior (20), not scout (30) or lancer (50)
+
+    const opts = getRecruitOptions(state, registry, 0, cap.position);
+    const byId = Object.fromEntries(opts.map(o => [o.unitTypeId, o]));
+    expect(byId['scout']).toBeTruthy();           // shown even though unaffordable
+    expect(byId['scout'].affordable).toBe(false);  // 30 > 20
+    expect(byId['warrior'].affordable).toBe(true); // 20 <= 20
+    expect(byId['lancer'].affordable).toBe(false); // 50 > 20
   });
 });
 

@@ -287,6 +287,14 @@ export interface PlayerState {
   researchedTechs: string[];
 }
 
+/** A unit a city *could* recruit, with whether the player can currently afford it. */
+export interface RecruitOption {
+  unitTypeId: string;
+  cost: number; // ore
+  plasmaCost: number;
+  affordable: boolean;
+}
+
 /**
  * A player's remembered view of the world (fog memory). Updated only for tiles
  * currently in sight; everything else stays frozen at its last-seen snapshot.
