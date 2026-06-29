@@ -110,47 +110,42 @@ export function CombatLog() {
         </button>
       </div>
 
-      {/* Matchup header */}
-      <div className="combat-log-matchup">
-        <span className="combat-log-unit">{attacker.name}</span>
-        <span className="combat-log-arrow">&rarr;</span>
-        <span className="combat-log-unit">{defender.name}</span>
-      </div>
-
-      {/* Attacker vs defender stats */}
+      {/* Matchup: two unit columns (Tile · VS · Tile), each with stacked stats */}
       <div className="combat-log-stats">
         <div className="cls-col">
-          <div className="cls-name">{attacker.name} <span className="cls-role">(attacker)</span></div>
-          <div className="cls-line">⚔ {attacker.attack} &nbsp; 🛡 {attacker.defence}</div>
-          <div className="cls-line">♥ {attacker.hpBefore}/{attacker.maxHP}</div>
+          <div className="cls-name">{attacker.name}</div>
+          <div className="cls-role">attacker</div>
+          <div className="cls-line"><span className="cls-ico">♥</span> HP: {attacker.hpBefore}/{attacker.maxHP}</div>
+          <div className="cls-line"><span className="cls-ico">⚔</span> Attack: {attacker.attack}</div>
+          <div className="cls-line"><span className="cls-ico">🛡</span> Defense: {attacker.defence}</div>
         </div>
-        <div className="cls-vs">vs</div>
+        <div className="cls-vs">VS</div>
         <div className="cls-col">
-          <div className="cls-name">{defender.name} <span className="cls-role">(defender)</span></div>
-          <div className="cls-line">⚔ {defender.attack} &nbsp; 🛡 {defender.defence}</div>
-          <div className="cls-line">♥ {defender.hpBefore}/{defender.maxHP}</div>
+          <div className="cls-name">{defender.name}</div>
+          <div className="cls-role">defender</div>
+          <div className="cls-line"><span className="cls-ico">♥</span> HP: {defender.hpBefore}/{defender.maxHP}</div>
+          <div className="cls-line"><span className="cls-ico">⚔</span> Attack: {defender.attack}</div>
+          <div className="cls-line"><span className="cls-ico">🛡</span> Defense: {defender.defence}</div>
         </div>
       </div>
 
-      {/* Attack breakdown */}
+      {/* Attack calculation */}
       <BreakdownSection
         label={`${attacker.name} attacks`}
         breakdown={attackBreakdown}
         attackerName={attacker.name}
         defenderName={defender.name}
       />
-
-      {/* HP result for defender */}
       <div className="combat-log-hp-result">
         <span>{defender.name}: {defender.hpBefore} &rarr; {defender.hpAfter} HP</span>
         {defenderKilled && <span className="combat-log-killed">Killed</span>}
       </div>
 
-      {/* Retaliation */}
-      {retaliationBreakdown && (
+      {/* Defense calculation (the defender's counter, driven by its defense stat) */}
+      {retaliationBreakdown ? (
         <>
           <BreakdownSection
-            label={`${defender.name} retaliates`}
+            label={`${defender.name} defends`}
             breakdown={retaliationBreakdown}
             attackerName={defender.name}
             defenderName={attacker.name}
@@ -160,10 +155,12 @@ export function CombatLog() {
             {attackerKilled && <span className="combat-log-killed">Killed</span>}
           </div>
         </>
-      )}
-
-      {!retaliationBreakdown && !defenderKilled && (
-        <div className="combat-log-no-retaliation">No retaliation (out of range)</div>
+      ) : (
+        <div className="combat-log-no-retaliation">
+          {defenderKilled
+            ? `${defender.name} was defeated — no defense`
+            : `${defender.name} can't counter (attacker out of range)`}
+        </div>
       )}
     </div>
   );
