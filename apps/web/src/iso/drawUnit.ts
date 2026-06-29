@@ -161,6 +161,10 @@ const UNIT_DRAWERS: Record<string, UnitDrawFn> = {
   ironclad_siege_tower: drawSiegeTower,
   sylvan_ranger: drawRanger,
   sylvan_treant: drawTreant,
+  scuttling: drawScuttling,
+  scab: drawScab,
+  reaper: drawReaper,
+  lancer: drawLancer,
 };
 
 // ═══════════════════════════════════════
@@ -1044,6 +1048,151 @@ function drawTreant(
   ctx.strokeStyle = '#4a3010';
   ctx.lineWidth = 1;
   ctx.stroke();
+}
+
+// ═══════════════════════════════════════
+// SCUTTLING — zergling: low insectoid, raised scythe claws
+// ═══════════════════════════════════════
+function drawScuttling(
+  ctx: CanvasRenderingContext2D,
+  cx: number, cy: number,
+  color: string, dark: string, light: string,
+) {
+  const by = cy + FOOT_Y;
+
+  // Four little legs
+  ctx.strokeStyle = dark; ctx.lineWidth = 1.2; ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(cx - 4, by - 5); ctx.lineTo(cx - 7, by);
+  ctx.moveTo(cx - 1, by - 5); ctx.lineTo(cx - 2, by);
+  ctx.moveTo(cx + 1, by - 5); ctx.lineTo(cx + 2, by);
+  ctx.moveTo(cx + 4, by - 5); ctx.lineTo(cx + 7, by);
+  ctx.stroke();
+
+  // Low carapace body
+  outlined(ctx, color, () => { ctx.ellipse(cx, by - 6, 6, 3.5, 0, 0, Math.PI * 2); });
+  filled(ctx, light, () => { ctx.ellipse(cx - 1, by - 7, 3, 1.3, -0.3, 0, Math.PI * 2); });
+
+  // Two raised scythe claws (the zergling silhouette)
+  filled(ctx, METAL_LIGHT, () => {
+    ctx.moveTo(cx - 3, by - 8); ctx.lineTo(cx - 7, by - 15); ctx.lineTo(cx - 4, by - 9); ctx.closePath();
+  });
+  filled(ctx, METAL_LIGHT, () => {
+    ctx.moveTo(cx + 1, by - 8); ctx.lineTo(cx - 1, by - 15); ctx.lineTo(cx + 2, by - 9); ctx.closePath();
+  });
+
+  // Head forward with mandibles
+  outlined(ctx, dark, () => { ctx.ellipse(cx + 5, by - 7, 2.5, 2, 0, 0, Math.PI * 2); });
+  ctx.strokeStyle = OUTLINE; ctx.lineWidth = 0.8;
+  ctx.beginPath();
+  ctx.moveTo(cx + 7, by - 7.5); ctx.lineTo(cx + 9, by - 8.5);
+  ctx.moveTo(cx + 7, by - 6.5); ctx.lineTo(cx + 9, by - 5.5);
+  ctx.stroke();
+  filled(ctx, '#ffdd44', () => { ctx.arc(cx + 5, by - 7.5, 0.7, 0, Math.PI * 2); });
+}
+
+// ═══════════════════════════════════════
+// SCAB — hydralisk: upright serpent, back spines, bone scythe
+// ═══════════════════════════════════════
+function drawScab(
+  ctx: CanvasRenderingContext2D,
+  cx: number, cy: number,
+  color: string, dark: string, light: string,
+) {
+  const by = cy + FOOT_Y;
+
+  // Coiled serpent base
+  outlined(ctx, dark, () => { ctx.ellipse(cx, by - 3, 6, 3.5, 0, 0, Math.PI * 2); });
+  filled(ctx, color, () => { ctx.ellipse(cx + 1, by - 3.5, 3, 1.5, 0, 0, Math.PI * 2); });
+
+  // Upright torso
+  outlined(ctx, color, () => {
+    ctx.moveTo(cx - 3, by - 5); ctx.lineTo(cx + 3, by - 5);
+    ctx.lineTo(cx + 2, by - 16); ctx.lineTo(cx - 2, by - 16); ctx.closePath();
+  });
+
+  // Back spines (row of needle spikes)
+  filled(ctx, light, () => { ctx.moveTo(cx - 2, by - 7); ctx.lineTo(cx - 7, by - 8); ctx.lineTo(cx - 2, by - 9); ctx.closePath(); });
+  filled(ctx, light, () => { ctx.moveTo(cx - 2, by - 11); ctx.lineTo(cx - 7, by - 12); ctx.lineTo(cx - 2, by - 13); ctx.closePath(); });
+
+  // Forward bone scythe / needle arm
+  filled(ctx, METAL_LIGHT, () => {
+    ctx.moveTo(cx + 2, by - 13); ctx.lineTo(cx + 10, by - 17); ctx.lineTo(cx + 9, by - 15); ctx.lineTo(cx + 2, by - 12); ctx.closePath();
+  });
+
+  // Hooded snake head
+  outlined(ctx, dark, () => { ctx.ellipse(cx, by - 18, 3, 2.5, 0, 0, Math.PI * 2); });
+  filled(ctx, '#88ff88', () => { ctx.fillRect(cx - 2, by - 18.5, 1, 1); ctx.fillRect(cx + 1, by - 18.5, 1, 1); });
+}
+
+// ═══════════════════════════════════════
+// REAPER — ultralisk: bulky quadruped, head blades
+// ═══════════════════════════════════════
+function drawReaper(
+  ctx: CanvasRenderingContext2D,
+  cx: number, cy: number,
+  color: string, dark: string, light: string,
+) {
+  const by = cy + FOOT_Y;
+
+  // Four stubby legs
+  for (const lx of [cx - 7, cx - 3, cx + 1, cx + 5]) {
+    filled(ctx, dark, () => { ctx.fillRect(lx, by - 4, 2.5, 4); });
+  }
+
+  // Bulky humped body
+  outlined(ctx, color, () => {
+    ctx.moveTo(cx - 8, by - 4);
+    ctx.quadraticCurveTo(cx - 9, by - 14, cx - 1, by - 16);
+    ctx.quadraticCurveTo(cx + 6, by - 16, cx + 8, by - 7);
+    ctx.lineTo(cx + 8, by - 4); ctx.closePath();
+  });
+  filled(ctx, light, () => { ctx.ellipse(cx - 2, by - 13, 4, 2, -0.3, 0, Math.PI * 2); });
+
+  // Head (lower front)
+  outlined(ctx, dark, () => { ctx.ellipse(cx + 7, by - 6, 3, 2.5, 0, 0, Math.PI * 2); });
+
+  // Big kaiser blades / tusks
+  filled(ctx, METAL_LIGHT, () => { ctx.moveTo(cx + 8, by - 7); ctx.lineTo(cx + 14, by - 11); ctx.lineTo(cx + 11, by - 6); ctx.closePath(); });
+  filled(ctx, METAL_LIGHT, () => { ctx.moveTo(cx + 8, by - 5); ctx.lineTo(cx + 14, by - 4); ctx.lineTo(cx + 10, by - 3); ctx.closePath(); });
+
+  filled(ctx, '#ff6622', () => { ctx.arc(cx + 7, by - 6.5, 0.9, 0, Math.PI * 2); });
+}
+
+// ═══════════════════════════════════════
+// LANCER — StarCraft marine: armored human with rifle
+// ═══════════════════════════════════════
+function drawLancer(
+  ctx: CanvasRenderingContext2D,
+  cx: number, cy: number,
+  color: string, dark: string, light: string,
+) {
+  const by = cy + FOOT_Y;
+
+  // Armored legs
+  filled(ctx, METAL_DARK, () => { ctx.moveTo(cx - 3, by - 7); ctx.lineTo(cx - 4, by); ctx.lineTo(cx - 1, by); ctx.closePath(); });
+  filled(ctx, METAL_DARK, () => { ctx.moveTo(cx + 1, by - 7); ctx.lineTo(cx + 2, by); ctx.lineTo(cx + 5, by); ctx.closePath(); });
+
+  // Bulky armored torso
+  outlined(ctx, color, () => {
+    ctx.moveTo(cx - 6, by - 7); ctx.lineTo(cx + 6, by - 7);
+    ctx.lineTo(cx + 5, by - 16); ctx.lineTo(cx - 5, by - 16); ctx.closePath();
+  });
+  filled(ctx, dark, () => { ctx.fillRect(cx - 3, by - 14, 6, 4); }); // chest plate
+
+  // Shoulder pauldrons
+  outlined(ctx, light, () => { ctx.ellipse(cx - 6, by - 15, 2.5, 2, 0, 0, Math.PI * 2); });
+  outlined(ctx, light, () => { ctx.ellipse(cx + 6, by - 15, 2.5, 2, 0, 0, Math.PI * 2); });
+
+  // Rifle held across the body (+ muzzle, magazine)
+  filled(ctx, METAL_DARK, () => { ctx.fillRect(cx - 2, by - 12, 12, 2); });
+  filled(ctx, METAL_MID, () => { ctx.fillRect(cx + 9, by - 12.5, 3, 1); });
+  filled(ctx, METAL_DARK, () => { ctx.fillRect(cx, by - 10, 2, 3); });
+
+  // Helmet + visor
+  outlined(ctx, METAL_MID, () => { ctx.arc(cx, by - 18, 3, 0, Math.PI * 2); });
+  filled(ctx, dark, () => { ctx.fillRect(cx - 3, by - 20.5, 6, 1.5); });
+  filled(ctx, '#66ccff', () => { ctx.fillRect(cx - 2, by - 19, 4, 1.5); });
 }
 
 // ═══════════════════════════════════════
