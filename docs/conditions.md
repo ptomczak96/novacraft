@@ -55,11 +55,17 @@ link cleared; the city is still founded with 0 units homed.
 ## `blind` — Blind
 **Rule:** the unit has **visibility 0** (reveals only the tile it stands on), so it
 discovers nothing around it. It may, however, **move into cloud/fog tiles** (movement
-isn't fog-gated). In the UI a selected blind unit highlights its move targets even on
-undiscovered cloud tiles. *(Planned: "bump" — moving onto a tile with a hidden enemy
-reveals that unit instead of completing the move; not yet implemented.)*
+isn't fog-gated); a selected blind unit highlights its move targets even on cloud tiles.
 
-**Enforced in:** visibility 0 falls out of the normal sight code (`fog.ts`); the
+**Bump:** if a blind unit tries to move onto a tile holding a **hidden enemy** (under
+cloud, or under fog), it doesn't move — it **stays put**, **reveals** that tile + the
+enemy for the rest of the turn, and may then **attack** (range 1) or stand. The bumped
+tile enters fog memory (its terrain persists as fog); the enemy is shown only this turn
+and returns to normal fog when the player's turn ends.
+
+**Enforced in:** visibility 0 falls out of the normal sight code (`fog.ts`); blind move
+targets onto enemy tiles come from `pathfinding.ts` (`bumpEnemies`); the bump itself is
+in `game.ts` (`applyMove` + `GameState.revealedTiles`, cleared in `applyEndTurn`);
 cloud-tile move highlight is in `IsoCanvas.tsx`.
 
 ## `squinting_eyes_1` / `squinting_eyes_2` — Squinting eyes

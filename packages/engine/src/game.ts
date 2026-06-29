@@ -99,6 +99,7 @@ export function createGame(
     buildings: [],
     unitHomeCity,
     memory: players.map(() => makePlayerMemory(map.width, map.height)),
+    revealedTiles: players.map(() => []),
     currentPlayer: 0,
     turn: 1,
     nextUnitId,
@@ -160,7 +161,8 @@ export function getLegalActions(state: GameState, registry: DataRegistry, player
 
     // Move actions
     if (!unit.hasMoved) {
-      const reachable = getReachableTiles(unit, unitType, state.map, state.units, registry, movementBonus);
+      const canBump = unitType.conditions?.includes('blind') ?? false;
+      const reachable = getReachableTiles(unit, unitType, state.map, state.units, registry, movementBonus, canBump);
       for (const [key] of reachable) {
         const [x, y] = key.split(',').map(Number);
         actions.push({ type: 'move', unitId: unit.id, to: { x, y } });
@@ -293,9 +295,26 @@ function dispatchAction(newState: GameState, action: Action, registry: DataRegis
   }
 }
 
-function applyMove(state: GameState, action: MoveAction, _registry: DataRegistry): GameState {
+function applyMove(state: GameState, action: MoveAction, registry: DataRegistry): GameState {
   const unit = state.units.find(u => u.id === action.unitId);
   if (!unit) return state;
+
+  // "Bump": a blind unit moving onto a tile occupied by a hidden enemy doesn't move —
+  // it stays put, reveals that tile + the enemy for the rest of this turn (the tile
+  // also enters fog memory), and may then attack (range 1) or stand still.
+  const enemyOnTarget = state.units.find(
+    u => u.position.x === action.to.x && u.position.y === action.to.y && u.owner !== unit.owner,
+  );
+  const ut = registry.unitTypes[unit.typeId];
+  if (enemyOnTarget && ut?.conditions?.includes('blind')) {
+    unit.hasMoved = true; // the bump spends the move; hasAttacked stays false so it can attack
+    const p = unit.owner;
+    (state.revealedTiles[p] ??= []).push({ x: action.to.x, y: action.to.y });
+    const mem = state.memory?.[p];
+    if (mem) mem.tiles[action.to.y][action.to.x] = clone(state.map.tiles[action.to.y][action.to.x]); // tile → fog
+    return checkWinConditions(state, registry);
+  }
+
   unit.position = { ...action.to };
   unit.hasMoved = true;
 
@@ -303,7 +322,7 @@ function applyMove(state: GameState, action: MoveAction, _registry: DataRegistry
   // LATER turn via the explicit captureCity action (see applyCaptureCity). Lone
   // resources aren't captured either — ownership comes from a city's territory.
 
-  return checkWinConditions(state, _registry);
+  return checkWinConditions(state, registry);
 }
 
 function applyAttack(state: GameState, action: AttackAction, registry: DataRegistry): GameState {
@@ -614,6 +633,9 @@ function applyExpandTerritory(state: GameState, action: ExpandTerritoryAction, r
 }
 
 function applyEndTurn(state: GameState, registry: DataRegistry): GameState {
+  // The bump reveals expire when the bumping player's turn ends (fog returns).
+  if (state.revealedTiles[state.currentPlayer]) state.revealedTiles[state.currentPlayer] = [];
+
   // Reset all current player's units
   for (const unit of state.units) {
     if (unit.owner === state.currentPlayer) {
@@ -826,11 +848,13 @@ export function getVisibleState(state: GameState, playerId: PlayerId, registry: 
     ...mem.cities.filter(c => !isVisible(c.position.x, c.position.y)).map(clone),
   ];
 
-  // Units: own units always; enemy units only on currently-visible tiles (never
-  // remembered, so fog never shows stale enemy positions).
+  // Units: own units always; enemy units on currently-visible tiles, plus any tile a
+  // blind unit "bumped" this turn (a temporary reveal that clears at end of turn).
+  const revealed = state.revealedTiles?.[playerId] ?? [];
+  const isRevealed = (x: number, y: number) => revealed.some(t => t.x === x && t.y === y);
   const visibleUnits = state.units.filter(u => {
     if (u.owner === playerId) return true;
-    return isVisible(u.position.x, u.position.y);
+    return isVisible(u.position.x, u.position.y) || isRevealed(u.position.x, u.position.y);
   });
 
   return {

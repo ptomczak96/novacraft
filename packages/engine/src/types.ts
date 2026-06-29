@@ -310,6 +310,9 @@ export interface GameState {
   // never-seen tiles show as cloud. Drives both the cloud/fog distinction and what
   // structures/terrain are drawn under fog.
   memory: PlayerMemory[];
+  // Temporary "bump" reveals: tiles where a blind unit bumped a hidden enemy this
+  // turn, so that enemy shows to revealedTiles[player] until the player's turn ends.
+  revealedTiles: Coord[][];
   currentPlayer: PlayerId;
   turn: number;
   nextUnitId: UnitId;

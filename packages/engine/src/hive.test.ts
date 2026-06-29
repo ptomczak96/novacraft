@@ -60,6 +60,32 @@ describe('Hive: Scuttlings (paired, 0.5 pop)', () => {
   });
 });
 
+describe('Hive: Scuttling bump (blind reveal)', () => {
+  it('bumping a hidden enemy reveals it without moving; the reveal clears at end of turn', () => {
+    const state = createGame(cfg({ fogOfWar: true }), registry, ['vanguard', 'hive'], 7);
+    clearPlayer1(state);
+    state.currentPlayer = 1;
+    state.units.push({ id: 700, typeId: 'scuttling', owner: 1, position: { x: 6, y: 6 }, hp: 10, hasMoved: false, hasAttacked: false, abilityCooldowns: {} });
+    state.units.push({ id: 701, typeId: 'warrior', owner: 0, position: { x: 7, y: 6 }, hp: 10, hasMoved: false, hasAttacked: false, abilityCooldowns: {} });
+    for (let y = 4; y <= 8; y++) for (let x = 4; x <= 8; x++) state.map.tiles[y][x].terrain = 'plains';
+
+    // The blind scuttling can't see the adjacent hidden enemy yet…
+    expect(getVisibleState(state, 1, registry).units.some(u => u.id === 701)).toBe(false);
+    // …but it has a "bump" move targeting the enemy tile.
+    const bump = getLegalActions(state, registry, 1).find(a => a.type === 'move' && a.unitId === 700 && a.to.x === 7 && a.to.y === 6);
+    expect(bump).toBeTruthy();
+
+    const after = applyAction(state, bump!, registry);
+    expect(after.units.find(u => u.id === 700)!.position).toEqual({ x: 6, y: 6 }); // stayed put
+    const vs = getVisibleState(after, 1, registry);
+    expect(vs.units.some(u => u.id === 701)).toBe(true);     // enemy revealed this turn
+    expect(vs.visibility[6][7]).toBe('explored');            // bumped tile is now fog
+
+    const next = applyAction(after, { type: 'endTurn' }, registry);
+    expect(next.revealedTiles[1].length).toBe(0);            // reveal cleared (fog returns)
+  });
+});
+
 describe('Hive: Squinting eyes (fog vision)', () => {
   it('L2: inner 3×3 is visible, the surrounding 5×5 ring is fog, beyond is cloud', () => {
     const state = createGame(cfg({ fogOfWar: true }), registry, ['vanguard', 'hive'], 7);

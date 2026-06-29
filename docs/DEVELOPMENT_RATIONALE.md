@@ -524,9 +524,15 @@ things; *supersedes the earlier Fortify ×2.25 entry.*
   `cityPopUsed` = `ceil(raw)`; capacity checks use `cityHasCapacityFor(addedPop)`.
   Conditions: **`sacrificial_founder`** (dies when founding a city) and **`blind`**.
 - **`blind`** (vis 0): reveals only its own tile but may move into cloud/fog; the UI
-  highlights a selected blind unit's move targets on cloud tiles. The "bump into a
-  hidden enemy" interaction is **deferred** (needs temporary per-turn reveal state) —
-  staged as the next step.
+  highlights a selected blind unit's move targets on cloud tiles.
+- **Bump (now implemented).** A blind unit moving onto a tile with a hidden enemy
+  **stays put**, reveals the tile + enemy for the turn, and may attack or stand. Chosen
+  design (per the user): the unit does NOT move; the bumped tile enters fog memory
+  (terrain persists) and the enemy shows only this turn. New `GameState.revealedTiles`
+  (per-player, cleared in `applyEndTurn`) carries the temporary unit reveal;
+  `pathfinding.ts` gains a `bumpEnemies` flag so blind units can *target* enemy tiles
+  (without pathing through them); `applyMove` detects the bump; `getVisibleState` shows
+  enemies on revealed tiles.
 - **Hive Scout** (cost 20, HP 15, atk 0.5, def 1, mov 2, rng 1, light) has
   **`squinting_eyes_2`**: 3×3 fully visible, the surrounding 5×5 ring as **fog**
   (terrain/buildings, no enemy units) — the "1.5 visibility". Implemented by giving

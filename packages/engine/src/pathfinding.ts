@@ -14,6 +14,7 @@ export function getReachableTiles(
   units: Unit[],
   registry: DataRegistry,
   movementBonus: number = 0,
+  bumpEnemies: boolean = false, // blind units may target enemy tiles (to "bump"/reveal)
 ): Map<string, number> {
   const maxMove = unitType.movement + movementBonus;
   const reachable = new Map<string, number>(); // "x,y" -> cost
@@ -72,9 +73,17 @@ export function getReachableTiles(
         if (!terrain.passable && terrain.id !== 'water') continue;
       }
 
-      // Can't move through enemy units
+      // Can't move through enemy units. Blind units may *target* an adjacent enemy
+      // tile as a "bump" destination (handled specially on apply) but never path
+      // through it, so it's added to reachable without being expanded.
       const nKey = `${nx},${ny}`;
-      if (occupiedByEnemy.has(nKey)) continue;
+      if (occupiedByEnemy.has(nKey)) {
+        if (bumpEnemies) {
+          const bumpCost = current.cost + 1;
+          if (bumpCost <= maxMove && !reachable.has(nKey)) reachable.set(nKey, bumpCost);
+        }
+        continue;
+      }
 
       const moveCost = 1; // All passable terrain costs 1 (terrain penalties ignored)
       const newCost = current.cost + moveCost;
