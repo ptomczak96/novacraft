@@ -11,6 +11,6 @@
     "name": "Hive",
     "color": "#8a4fa0",
     "startingUnits": [{ "unit": "scuttling", "count": 2 }],
-    "unitTypes": ["scuttling", "hive_scout", "archer", "defender", "catapult", "sylvan_ranger", "sylvan_treant"]
+    "unitTypes": ["scuttling", "hive_scout", "reaper", "scab", "defender", "catapult", "sylvan_ranger", "sylvan_treant"]
   }
 ]

@@ -80,6 +80,38 @@
     "traits": []
   },
   {
+    "id": "reaper",
+    "name": "Reaper",
+    "faction": "hive",
+    "unitClass": "light",
+    "cost": 40,
+    "maxHP": 10,
+    "attack": 3,
+    "defence": 1,
+    "movement": 2,
+    "attackRange": 1,
+    "visibility": 1,
+    "conditions": ["dash_1"],
+    "abilities": [],
+    "traits": []
+  },
+  {
+    "id": "scab",
+    "name": "Scab",
+    "faction": "hive",
+    "unitClass": "light",
+    "cost": 50,
+    "maxHP": 10,
+    "attack": 2,
+    "defence": 1,
+    "movement": 1,
+    "attackRange": 2,
+    "visibility": 2,
+    "conditions": ["corrosive"],
+    "abilities": [],
+    "traits": []
+  },
+  {
     "id": "archer",
     "name": "Archer",
     "faction": "shared",

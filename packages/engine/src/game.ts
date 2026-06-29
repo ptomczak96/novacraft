@@ -176,10 +176,18 @@ export function getLegalActions(state: GameState, registry: DataRegistry, player
       }
     }
 
-    // Move actions
-    if (!unit.hasMoved) {
-      const canBump = unitType.conditions?.includes('blind') ?? false;
+    // Move actions. Default: a unit moves BEFORE attacking and can't move afterward.
+    // Exception — the "Dash N" condition grants a post-attack move of up to N tiles.
+    const canBump = unitType.conditions?.includes('blind') ?? false;
+    const dash = unit.dashRemaining ?? 0;
+    if (!unit.hasMoved && !unit.hasAttacked) {
       const reachable = getReachableTiles(unit, unitType, state.map, state.units, registry, movementBonus, canBump);
+      for (const [key] of reachable) {
+        const [x, y] = key.split(',').map(Number);
+        actions.push({ type: 'move', unitId: unit.id, to: { x, y } });
+      }
+    } else if (unit.hasAttacked && dash > 0) {
+      const reachable = getReachableTiles(unit, { ...unitType, movement: dash }, state.map, state.units, registry, 0, canBump);
       for (const [key] of reachable) {
         const [x, y] = key.split(',').map(Number);
         actions.push({ type: 'move', unitId: unit.id, to: { x, y } });
@@ -371,13 +379,25 @@ function applyMove(state: GameState, action: MoveAction, registry: DataRegistry)
   }
 
   unit.position = { ...action.to };
-  unit.hasMoved = true;
+  // A move after attacking is a one-shot "Dash" (consume it); a normal pre-attack
+  // move spends the unit's movement for the turn.
+  if (unit.hasAttacked) unit.dashRemaining = 0;
+  else unit.hasMoved = true;
 
   // No instant capture: a unit standing on an enemy/neutral city captures it on a
   // LATER turn via the explicit captureCity action (see applyCaptureCity). Lone
   // resources aren't captured either — ownership comes from a city's territory.
 
   return checkWinConditions(state, registry);
+}
+
+/** Post-attack move range granted by a "dash_N" condition (0 if none). */
+function dashRange(unitType: { conditions?: string[] }): number {
+  for (const c of unitType.conditions ?? []) {
+    const m = /^dash_(\d+)$/.exec(c);
+    if (m) return parseInt(m[1], 10);
+  }
+  return 0;
 }
 
 function applyAttack(state: GameState, action: AttackAction, registry: DataRegistry): GameState {
@@ -407,17 +427,27 @@ function applyAttack(state: GameState, action: AttackAction, registry: DataRegis
     state.units = state.units.filter(u => u.id !== attacker.id);
   }
 
-  // Mark attacker as having attacked
+  // Mark attacker as having attacked.
   if (!result.attackerKilled) {
     attacker.hasAttacked = true;
-    // If unit has noMoveAndAttack, also mark as moved
-    if (attackerType.traits.includes('noMoveAndAttack')) {
-      attacker.hasMoved = true;
-    }
+    // Default: a unit can't move after attacking. The "Dash N" condition is the
+    // exception — it grants a post-attack move of up to N tiles (see applyMove).
+    const dashN = dashRange(attackerType);
+    if (dashN > 0) attacker.dashRemaining = dashN;
+    else attacker.hasMoved = true;
+
+    if (attackerType.traits.includes('noMoveAndAttack')) attacker.hasMoved = true;
     // Melee units advance into the tile of a unit they kill (Polytopia-style).
     if (result.defenderKilled && attackerType.attackRange === 1) {
       attacker.position = { ...defender.position };
-      attacker.hasMoved = true; // can't also capture a city this same turn
+      if (dashN <= 0) attacker.hasMoved = true; // dash units keep their dash after advancing
+    }
+
+    // "Corrosive": the attacker's hit leaves a corrosive status on a surviving
+    // defender (−20% defence). Doesn't stack.
+    if (attackerType.conditions?.includes('corrosive') && !result.defenderKilled) {
+      defender.statuses ??= [];
+      if (!defender.statuses.includes('corrosive')) defender.statuses.push('corrosive');
     }
   }
 
@@ -691,11 +721,12 @@ function applyEndTurn(state: GameState, registry: DataRegistry): GameState {
   // The bump reveals expire when the bumping player's turn ends (fog returns).
   if (state.revealedTiles[state.currentPlayer]) state.revealedTiles[state.currentPlayer] = [];
 
-  // Reset all current player's units
+  // Reset all current player's units (statuses like "corrosive" persist).
   for (const unit of state.units) {
     if (unit.owner === state.currentPlayer) {
       unit.hasMoved = false;
       unit.hasAttacked = false;
+      unit.dashRemaining = 0;
     }
   }
 

@@ -11,6 +11,38 @@ function clearPlayer1(state: GameState) {
   state.units = state.units.filter(u => u.owner !== 1);
 }
 
+describe('Hive: Reaper (Dash) & Scab (Corrosive)', () => {
+  const plains = (s: GameState) => { for (let y = 0; y < s.map.height; y++) for (let x = 0; x < s.map.width; x++) s.map.tiles[y][x].terrain = 'plains'; };
+  const mk = (id: number, t: string, o: number, x: number, y: number): Unit =>
+    ({ id, typeId: t, owner: o, position: { x, y }, hp: registry.unitTypes[t].maxHP, hasMoved: false, hasAttacked: false, abilityCooldowns: {} });
+
+  it('Reaper can move after attacking (Dash 1); a warrior cannot', () => {
+    let state = createGame(cfg(), registry, ['vanguard', 'hive'], 7);
+    state.units = []; state.unitHomeCity = {}; state.currentPlayer = 1; plains(state);
+    state.units.push(mk(1, 'reaper', 1, 3, 3), mk(2, 'warrior', 0, 4, 3));
+    state = applyAction(state, { type: 'attack', unitId: 1, targetId: 2 }, registry);
+    expect(state.units.find(u => u.id === 1)!.dashRemaining).toBe(1);
+    expect(getLegalActions(state, registry, 1).some(a => a.type === 'move' && a.unitId === 1)).toBe(true);
+
+    // A warrior gets no post-attack move (the new default).
+    let s2 = createGame(cfg(), registry, ['vanguard', 'hive'], 7);
+    s2.units = []; s2.unitHomeCity = {}; s2.currentPlayer = 0; plains(s2);
+    s2.units.push(mk(1, 'warrior', 0, 3, 3), mk(2, 'warrior', 1, 4, 3));
+    s2 = applyAction(s2, { type: 'attack', unitId: 1, targetId: 2 }, registry);
+    expect(getLegalActions(s2, registry, 0).some(a => a.type === 'move' && a.unitId === 1)).toBe(false);
+  });
+
+  it('Scab applies the corrosive status on hit (and never stacks)', () => {
+    let state = createGame(cfg(), registry, ['vanguard', 'hive'], 7);
+    state.units = []; state.unitHomeCity = {}; state.currentPlayer = 1; plains(state);
+    state.units.push(mk(1, 'scab', 1, 3, 3), mk(2, 'warrior', 0, 5, 3)); // scab range 2
+    state = applyAction(state, { type: 'attack', unitId: 1, targetId: 2 }, registry);
+    const w = state.units.find(u => u.id === 2)!;
+    expect(w.statuses).toContain('corrosive');
+    expect(w.statuses!.filter(s => s === 'corrosive').length).toBe(1); // no stacking
+  });
+});
+
 describe('Hive: starting units', () => {
   it('Hive starts with 2 scuttlings (no warrior) and cannot build warriors', () => {
     const state = createGame(cfg(), registry, ['vanguard', 'hive'], 7);

@@ -75,6 +75,23 @@ describe('Combat — Polytopia force formula (spec)', () => {
     expect(onForest).toBe(9); // defenseForce 7.5, total 12.5 → round(0.4*5*4.5)=9
   });
 
+  it('forest gives LIGHT units only ×1.2 cover (heavier units still ×1.5)', () => {
+    const map = plainsMap();
+    map.tiles[0][1].terrain = 'forest';
+    const light = fight(ut(), ut({ unitClass: 'light' }), map, unit(0, 20, 0, 0), unit(1, 20, 1, 0));
+    expect(light.attackBreakdown.terrainBonus).toBe(1.2);
+    const heavy = fight(ut(), ut({ unitClass: 'heavy' }), map, unit(0, 20, 0, 0), unit(1, 20, 1, 0));
+    expect(heavy.attackBreakdown.terrainBonus).toBe(1.5);
+  });
+
+  it('the corrosive status cuts the defender’s effective defence (−20%)', () => {
+    const map = plainsMap();
+    const tough = ut({ defence: 10 }); // high def so the 20% cut survives rounding
+    const normal = fight(ut(), tough, map, unit(0, 20, 0, 0), unit(1, 20, 1, 0)).attackerDamage;
+    const corroded = fight(ut(), tough, map, unit(0, 20, 0, 0), { ...unit(1, 20, 1, 0), statuses: ['corrosive'] }).attackerDamage;
+    expect(corroded).toBeGreaterThan(normal);
+  });
+
   it('a non-fortified city still gives ×1.5 defense', () => {
     const map = plainsMap();
     map.tiles[0][1].isCity = true;

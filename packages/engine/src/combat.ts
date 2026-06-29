@@ -105,13 +105,21 @@ const FORTIFY_DEFENSE_MULTIPLIER = 3.0;
 /**
  * Defense-force multiplier for the tile a unit defends on:
  *   ×3.0  fortified city ("walls")
- *   ×1.5  any city tile, OR defensive terrain (forest / mountain / defenceBonus > 0)
+ *   ×1.5  any city tile, OR defensive terrain (mountain / defenceBonus > 0)
+ *   ×1.2  forest — but only for LIGHT units (heavier units still get ×1.5)
  *   ×1.0  otherwise (open ground)
  */
-function getDefenseMultiplier(tile: Tile, terrain: { defenceBonus: number } | undefined): number {
+function getDefenseMultiplier(
+  tile: Tile,
+  terrain: { id: string; defenceBonus: number } | undefined,
+  unitClass: string | undefined,
+): number {
   if (tile.fortified) return FORTIFY_DEFENSE_MULTIPLIER;
   if (tile.isCity) return 1.5;
-  if (terrain && terrain.defenceBonus > 0) return 1.5;
+  if (terrain && terrain.defenceBonus > 0) {
+    if (terrain.id === 'forest' && unitClass === 'light') return 1.2; // light units get less forest cover
+    return 1.5;
+  }
   return 1.0;
 }
 
@@ -135,14 +143,18 @@ export function resolveCombat(
   // Defender's tile gives the defense bonus (applied to defenseForce only).
   const defenderTile = map.tiles[defender.position.y][defender.position.x];
   const defenderTerrain = registry.terrainTypes[defenderTile.terrain];
-  const defenderDefenseMultiplier = getDefenseMultiplier(defenderTile, defenderTerrain);
+  const defenderDefenseMultiplier = getDefenseMultiplier(defenderTile, defenderTerrain, defenderType.unitClass);
+
+  // "Corrosive" status on the defender: −20% to its defence stat (see docs/conditions.md).
+  const corroded = defender.statuses?.includes('corrosive') ?? false;
+  const effectiveDefence = defenderType.defence * (corroded ? 0.8 : 1);
 
   // ONE force split yields both the attack damage and the retaliation, from the
   // sides' current (pre-damage) HP. Canonical Polytopia: retaliation = defenseResult
   // (driven by the DEFENDER'S DEFENSE stat), not a fresh counter-attack.
   const f = computeForces(
     attackerType.attack, attacker.hp, attackerType.maxHP,
-    defenderType.defence, defender.hp, defenderType.maxHP,
+    effectiveDefence, defender.hp, defenderType.maxHP,
     defenderDefenseMultiplier,
   );
 

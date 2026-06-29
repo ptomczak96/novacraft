@@ -22,8 +22,10 @@ Accord with two factions selectable for both players in the setup menu:
 - **Hive** (`id: "hive"`, colour `#8a4fa0`) — organic / swarm style (Zerg-ish).
 
 **For Patrick:** unit **sprites/portraits per faction** when art is ready. New units
-needing art: Vanguard **Lancer** (`lancer`); Hive **Scuttling** (`scuttling`, spawns in
-pairs) and Hive **Scout** (`hive_scout`). NOTE: the rosters are still partly the *old
+needing art: Vanguard **Lancer** (`lancer`, a marine with a gun); Hive **Scuttling**
+(`scuttling`, a bug, spawns in pairs), Hive **Scout** (`hive_scout`), Hive **Reaper**
+(`reaper`, a raptor-style claw), and Hive **Scab** (`scab`, an acid/conical-flask).
+(Current emoji icons are placeholders: scuttling 🐛, lancer 🪖, reaper 🦅, scab ⚗️.) NOTE: the rosters are still partly the *old
 shared units reused* for both teams (we'll redesign units slowly). Some units now have
 a `unitClass` ("light"), `conditions` (see `docs/conditions.md`), and pop/recruit
 fields (`popCost`, `recruitCount`). Unit **ids still carry the old prefixes** (`ironclad_berserker`,

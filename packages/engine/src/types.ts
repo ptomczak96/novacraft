@@ -154,6 +154,8 @@ export interface Unit {
   hasMoved: boolean;
   hasAttacked: boolean;
   abilityCooldowns: Record<string, number>;
+  dashRemaining?: number; // post-attack move budget from the "Dash N" condition (this turn)
+  statuses?: string[]; // active status effects on this unit (e.g. "corrosive")
 }
 
 // ── Actions ──

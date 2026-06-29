@@ -584,6 +584,26 @@ things; *supersedes the earlier Fortify ×2.25 entry.*
   15→**8**. They were too resistant; a warrior now removes ~6 of 8 HP in one hit.
   (Attack stays 0.5 — recon units, not fighters.)
 
+### 2026-06-29 — Artisan Ornaments — Reaper + Scab, Dash/Corrosive, forest cover, turn flow
+
+- **Light units get only ×1.2 forest cover** (heavier units keep ×1.5). `combat.ts`
+  `getDefenseMultiplier` now takes the defender's `unitClass`; only `forest` is reduced
+  (mountain/city/fortify unchanged). All current units are "light", so forest = ×1.2 now.
+- **Turn-flow default changed:** a unit may move-then-attack, and **can't move/act after
+  attacking** (previously a unit that attacked without moving could still move). Move
+  legality is now `!hasMoved && !hasAttacked`.
+- **New condition `dash_N`** (the exception to the above): after attacking, the unit gets
+  a one-shot move of up to N tiles. Tracked via new `Unit.dashRemaining`. **Reaper** (Hive,
+  new) has `dash_1`.
+- **New condition `corrosive` + status system.** A `corrosive`-condition unit's hit
+  applies a **`corrosive` status** (`Unit.statuses`) to a surviving target → **−20%
+  defence**, non-stacking, persistent. **Scab** (Hive, new — renamed from "Caustic Dreg"
+  per request) has `corrosive`. First real status-effect plumbing in combat.
+- **New Hive units:** **Reaper** (cost 40 / 10HP / 3atk / 1def / mv2 / melee / dash_1) and
+  **Scab** (cost 50 / 10HP / 2atk / 1def / mv1 / rng2 / vis2 / corrosive). **Removed the
+  Archer from the Hive roster.** Placeholder icons: scuttling 🐛, lancer 🪖, reaper 🦅,
+  scab ⚗️ (Patrick to replace — see overlap).
+
 ### 2026-06-29 — Artisan Ornaments — scout HP back to 15, Hive starts with scuttlings
 
 - **HP kept in multiples of 5.** Reverted the scout HP tweak: Vanguard scout and Hive

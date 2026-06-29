@@ -17,6 +17,13 @@ opts in by listing the condition id in its `conditions` array in
 | `blind` | Blind | Visibility 0 (sees only its own tile); may still move into cloud/fog tiles. |
 | `squinting_eyes_1` | Squinting eyes (L1) | Sees its 3×3 as **fog** only (terrain, not units). |
 | `squinting_eyes_2` | Squinting eyes (L2) | 3×3 fully visible; the surrounding 5×5 ring as **fog** (≈ visibility 1.5). |
+| `dash_N` | Dash N | After attacking, the unit may move up to **N** tiles (default: no move after attacking). |
+| `corrosive` | Corrosive | The unit's attack also applies the **corrosive status** (−20% defence) to the target. |
+
+> **Default turn flow:** a unit may **move, then attack**, and **cannot move or act after attacking** — unless it has a `dash_N` condition.
+
+> **Status effects** (distinct from conditions — applied *to* a unit during play, stored on `unit.statuses`):
+> - **`corrosive`** — the unit's effective **defence is reduced 20%** while it has this status. Does not stack. Persists (not cleared at end of turn). Applied by `corrosive`-condition units when they hit a surviving target.
 
 ---
 
@@ -86,10 +93,30 @@ Fog tiles show terrain + buildings (recorded into fog memory) but no enemy units
 some rings as `'explored'` (fog) rather than `'visible'`; `recordSight` snapshots fog
 tiles too, and enemy units are only shown on currently-`'visible'` tiles.
 
+## `dash_N` — Dash N
+**Rule:** by default a unit can't move once it has attacked. With `dash_N`, after
+attacking it gets a one-shot post-attack move of up to **N** tiles (in addition to any
+pre-attack movement). The number is parsed from the id (`dash_1`, `dash_2`, …).
+
+**Enforced in:** `game.ts` — `applyAttack` sets `unit.dashRemaining = N` (instead of
+ending movement); `getLegalActions` offers a post-attack move within `dashRemaining`;
+`applyMove` consumes it; `applyEndTurn` resets it.
+
+## `corrosive` — Corrosive
+**Rule:** when this unit attacks and the target **survives**, it applies the
+**`corrosive` status** to that target (does not stack). The corrosive status reduces the
+affected unit's **defence by 20%** in all future combat until removed.
+
+**Enforced in:** `game.ts` (`applyAttack` adds the status) and `combat.ts`
+(`resolveCombat` multiplies the defender's defence by 0.8 if `statuses` includes
+`corrosive`).
+
 ## Current assignments
 - **Scout** (`scout`, Vanguard/shared): `mountain_restricted`, `low_horizons`, `impotent_founder`.
 - **Scuttling** (`scuttling`, Hive): `sacrificial_founder`, `blind`.
 - **Scout** (`hive_scout`, Hive): `squinting_eyes_2`, `impotent_founder`.
+- **Reaper** (`reaper`, Hive): `dash_1`.
+- **Scab** (`scab`, Hive): `corrosive`.
 
 *(Conditions are independent of `traits` — traits like `flying`/`aquatic`/
 `ignoresTerrainCost` are movement/terrain flags baked into pathfinding; conditions are
