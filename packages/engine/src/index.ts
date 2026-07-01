@@ -13,8 +13,8 @@ export {
   isTileClaimable, isExpansionTileEligible, validateExpansion,
   unitsHomedAt, cityHasCapacity, cityHasCapacityFor, cityPopUsed, cityPopRaw,
   recomputeCities, buildingOutput, buildingSupply,
-  getUnitPlasmaCost, canBuild, canUpgradeBuilding, upgradeCostFor, buildingCost, canFoundCity,
-  resourceKindAt,
+  getUnitPlasmaCost, canBuild, canBuildLocation, canUpgradeBuilding, upgradeCostFor, buildingCost, canFoundCity,
+  resourceKindAt, buildingBlocked, playerEconomy,
 } from './economy.js';
 export { generateMap, loadMapFromJSON } from './mapgen.js';
 export { createPRNG, nextRandom, nextInt, shuffle } from './prng.js';

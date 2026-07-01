@@ -688,3 +688,187 @@ things; *supersedes the earlier Fortify ×2.25 entry.*
   still starts with 1 warrior. `createGame` places multiple starting units on the
   capital tile then free passable neighbours (deterministic). Capture test rewritten
   to set up its own defender (no longer assumes player 1 starts with one warrior).
+
+---
+
+## 2026-07-01 — Click-to-inspect: unit → tile cycling + terrain info box (unknown)
+
+**What changed (apps/web only):**
+
+- Clicking a tile now **cycles**. First click on a tile that holds a unit selects
+  the unit (as before). Clicking the **same** unit's tile **again** no longer
+  deselects — it falls through to the tile itself, opening a terrain info box and
+  (if the tile is a buildable ore/plasma tile) the build prompt. This fixes the
+  reported issue that a **resource tile under a unit was unreachable** (unit
+  selection always intercepted the click, so you could never build on / inspect it).
+- Clicking an **empty** tile (no unit, no city) opens the same terrain info box
+  directly and deselects any unit.
+- New **tile info box** (`.tile-info`, reuses the `.city-info` card, gold accent):
+  shows the terrain icon + name (e.g. Forest / Plains / Mountain), any resource
+  (Ore ◈ / Plasma ✦), and short notes (impassable-to-most for mountains, +20%
+  light-unit cover for forest, ruin = foundable, coords). Gated on fog: a `hidden`
+  tile shows nothing (no terrain leak under clouds).
+- The inspected tile gets a **gold diamond outline** on the canvas
+  (`drawTileOutline` in `drawOverlays.ts`).
+- Store: added `inspectedTile` + `setInspectedTile`. Selecting a unit or city, moving/
+  attacking, undo, and starting a new game all clear it, so the box never lingers
+  on stale state. City card and tile card share the top-left slot but are mutually
+  exclusive (selecting one clears the other).
+
+**Why:** the user asked for map tiles to be inspectable and for a unit standing on a
+resource/terrain tile not to block access to the tile underneath — a two-click
+"unit first, tile second" affordance rather than hiding the tile.
+
+---
+
+## 2026-07-01 — Economy breakdown UI + REB blocking rule (unknown)
+
+**New engine rule — REB blocking (income only):** while an **enemy unit stands on
+one of your REBs**, that building's resource output is not collected (excluded from
+income) until it leaves. Supply/leveling is deliberately **unaffected** — the user
+chose "income only" over "income + supply" to keep occupation a raiding tactic, not
+a way to de-level a city. `buildingBlocked(state, building)` (occupant owner ≠ the
+building's city owner; a friendly unit never blocks) is the predicate; `buildingIncome`
+skips blocked REBs so `calculateOreIncome`/`calculatePlasmaIncome` (and thus the
+end-of-turn settlement) reflect it automatically. Tests cover block/restore, friendly
+non-block, and the breakdown flag.
+
+**New engine helper — `playerEconomy(state, playerId, registry)`:** a structured,
+per-city income breakdown (base city production + each REB, with per-kind indices,
+gross amounts, and a `blocked` flag; totals exclude blocked). Added so all the UI
+surfaces derive the *same* numbers from one deterministic pass rather than each
+re-deriving. Types `EconomySource` / `CityEconomy` in `types.ts`.
+
+**UI (apps/web):**
+- **Top-bar income tooltips** now show a **comprehensive per-city breakdown** grouped
+  by city — e.g. `Capital +50` then indented `City production +40`, `Mine 1 +10` —
+  with a grand total. Plasma got its own hover tooltip too (previously ore-only). Old
+  flat `oreBreakdown` loop in `GameScreen` replaced by `playerEconomy` + a shared
+  `EconomyBreakdown.tsx` component.
+- **City-info box** (top-left, own cities only) now shows the city's ore & plasma
+  production breakdown beneath pop/supply.
+- **Blocked REBs** render struck-through + "blocked" tag in the breakdowns, and a red
+  **✕** at the tile's bottom-right on the map (`drawBlockedMark`), per the user's ask.
+- **Build prompt** ("Build Mine?/Extractor?") now shows the **cost** on a second gold
+  line (e.g. `50◈`) via an optional `sublabel` on `drawActionBox`.
+
+**Why:** the user wanted the economy legible at a glance — what each city makes and
+what produces it — and wanted enemy occupation of resource buildings to be a real,
+visible economic lever.
+
+---
+
+## 2026-07-01 — REB economy rebalance + REB2 build-gate change (unknown)
+
+**Rebalanced building numbers (`economy.json`):**
+- **Extractor** (plasma REB1): cost 50/70/90 → **100/125/200**, output 10/20/30 →
+  **5/10/20** (marginal +5/+5/+10), supply unchanged (2/3/4). It already output plasma
+  (not ore); the user reconfirmed that and it's locked with a test.
+- **Refinery** (REB2, ore): cost 50/120/200 → **100/150/250**, per-adjacent output
+  10/20/30 → **20/40/80**, and supply moved from per-adjacent (1/3/5) to a **flat
+  total 2/3/4**; now **1 per city**.
+- **Purifier** (REB2, plasma): cost 50/120/200 → **300/400/750**, per-adjacent output
+  10/20/30 → **5/15/30**, supply per-adjacent → **flat total 3/4/5**; 1 per city (as before).
+- TTRs recorded inline in `docs/ECONOMY.md` per the econ-recalc rule.
+
+**Semantic changes:**
+1. **REB2 supply is now flat per level** (a fixed total), not multiplied by adjacent
+   REB1s — the user specified fixed supply totals, which only make sense as flat values.
+   Handled purely in data: `buildingSupply` already prefers `supplyByLevel` over
+   `supplyPerAdjacentByLevel`, so the REB2 defs just switched fields. Output still uses
+   `outputPerAdjacentByLevel` (per-adjacent, level-agnostic multiplier — unchanged logic).
+2. **REB2 build gate changed** from "adjacent to an existing same-city REB1" to
+   "its 3×3 contains ≥1 resource tile of the kind it refines that **this city owns**".
+   New helper `hasResourceTileInCity` in `economy.ts`; `canBuild`'s `land` branch now
+   calls it with `def.output` as the required resource kind. Rationale: the user wants
+   the resource *tile* (in-territory) to be the prerequisite — you can pre-place a
+   refinery beside a bare ore tile before mining it; output stays 0 until a mine exists.
+
+**UI:** Refinery renders as 🏭, Purifier as 🚰 (plumbing/heavy-industrial) instead of
+their text words, via a `BUILDING_ICON` map in `drawEconomy.ts` (emoji drawn larger;
+mine/extractor keep their word labels). Build-cost line (added earlier) automatically
+shows the new costs.
+
+**Tests:** updated the refinery test (now +20/adj output, flat +2 supply) and added
+coverage for the extractor plasma-not-ore output, the resource-tile build gate
+(in-territory required; bare-ore-tile buildable; out-of-territory ore rejected), and
+the 1-refinery-per-city limit. 100 tests pass; `validate-data` passes.
+
+---
+
+## 2026-07-01 — REB2 build prompts + always-visible (unaffordable) build sites (unknown)
+
+**Bug:** the on-canvas build prompt only recognised `mine`/`extractor`; refinery and
+purifier build actions existed in `getLegalActions` but the UI ignored them, so REB2s
+couldn't be built. Fixed the click detector and prompt renderer to handle all four
+building kinds (`Build Refinery?` / `Build Purifier?`, with cost line).
+
+**Follow-up (root of "still can't build"):** the prompt was derived from
+`getLegalActions`, which only contains *affordable* builds — so a valid REB2 site
+where the player was short on ore showed nothing, reading as "can't build". Split the
+engine predicate: new `canBuildLocation` (all checks except affordability) vs `canBuild`
+(= location + affordability). The canvas now shows a build prompt on **any valid site**
+via `canBuildLocation`; when the player can't afford it the box is dimmed with the cost
+in **red** (mirroring the recruit menu) and clicking it is a no-op that keeps the prompt.
+Legal-actions/apply still use `canBuild`, so affordability is still enforced by the engine.
+
+**Why:** the user expected "clicking a tile where it's possible to build a REB2 shows
+the box + cost." Tying visibility to affordability hid valid sites and made the feature
+look broken; showing the site with a red cost tells them *what* they could build and
+*why* they can't yet (not enough ore) — e.g. purifier now costs 300◈.
+
+Also: internal `canBuild` edits and new engine exports in this project don't reliably
+propagate through Vite HMR — the dev server must be restarted (cache cleared) for
+engine changes to take effect in the browser.
+
+---
+
+## 2026-07-01 — REB2 gate reverted to adjacent-REB1 (supersedes resource-tile gate) (unknown)
+
+Earlier today the REB2 build gate was set to "≥1 resource tile of the refined kind in
+the 3×3, owned by this city." The user corrected this: a REB2 must require an actual
+**adjacent same-city REB1 building** — a purifier needs an adjacent **extractor** (not
+just a bare plasma vent), a refinery an adjacent **mine**. Symptoms that prompted it:
+purifiers were buildable next to un-tapped plasma vents, and (because building a mine
+doesn't consume the ore tile) the resource-tile gate made the refinery's appearance
+depend on the vent/tile rather than the mine.
+
+Reverted `canBuildLocation`'s `land` branch to `adjacentSameCity(pos, def.adjacentTo,
+city.id) >= 1` (the original rule) and removed the `hasResourceTileInCity` helper. This
+also keeps the gate consistent with the **output** calc, which already counts adjacent
+same-city REB1s. Net effect: build the mine/extractor first, then the refinery/purifier
+beside it. Tests updated accordingly (bare ore/vent → not buildable; buildable once the
+REB1 exists; +1 purifier/refinery per city). This entry supersedes the resource-tile
+gate decision from the same day.
+
+---
+
+## 2026-07-01 — Refinery tech gate removed; purifier cost confirmed ore (unknown)
+
+**Refinery no longer requires the Refineries tech** (`refinery.techRequired: null`).
+Root cause of "refinery still not appearing next to mines": the refinery was gated
+behind the `refineries` tech while the purifier had no gate, so the purifier worked and
+the refinery didn't until researched. The user expects the two REB2s to behave as a
+pair, so the gate was dropped for parity — both now build as soon as their REB1 (mine /
+extractor) is adjacent. The `refineries` tech still exists but gates nothing (kept to
+avoid churning the tech tree). Updated `tech.test.ts` (was "Refineries gates the
+refinery" → now "refinery has no tech gate") and dropped the research calls from the
+refinery economy tests.
+
+**Purifier cost:** verified it is **300 ore** (not plasma) — no building in economy.json
+has a `plasmaCostByLevel`, `buildingCost` charges ore, and the only cost UI (the
+on-canvas build box) renders `◈`. A stale browser bundle was the likely cause of the
+"costs plasma" report; a clean dev-server restart + hard refresh resolves it. No code
+change was needed for the cost itself.
+
+---
+
+## 2026-07-01 — "Rich start - for testing" setup toggle (unknown)
+
+Added a setup-screen checkbox **"Rich start - for testing"** (next to Fog of War /
+Double Resources). When ticked, every team starts with **2000 ore + 2000 plasma**
+instead of the economy.json defaults — lets buildings/units be exercised without
+grinding economy first. Implemented as an optional top-level `GameConfig.richStart`
+flag (runtime UI toggle, carried straight to `createGame`; like `mapgen.doubleResources`
+it isn't part of the validated config.json schema). `createGame` overrides the starting
+ore/plasma when set. Test added.

@@ -94,18 +94,16 @@ describe('Tech gates on buildings', () => {
     expect(canBuild(state, r, 0, 'extractor', p)).toBe(true);
   });
 
-  it('Refineries gates the refinery', () => {
+  it('the refinery has no tech gate — buildable as soon as a mine is adjacent', () => {
     const r = getRegistry();
     let state = createGame(getConfig(), r, ['vanguard', 'hive'], 7);
     const cap = capitalOf(state, 0);
     state.players[0].ore = 400;
     const m = makeTile(state, cap.position, 1, 0, 'ore');
+    const ref = makeTile(state, cap.position, 0, 1, null); // land, adjacent to the mine site
+    expect(canBuild(state, r, 0, 'refinery', ref)).toBe(false); // no mine yet
     state = applyAction(state, { type: 'build', kind: 'mine', position: m }, r);
-    const ref = makeTile(state, cap.position, 0, 1, null); // land, adjacent to the mine
-    expect(canBuild(state, r, 0, 'refinery', ref)).toBe(false);
-    state = applyAction(state, { type: 'research', techId: 'prospecting' }, r);
-    state = applyAction(state, { type: 'research', techId: 'refineries' }, r);
-    expect(canBuild(state, r, 0, 'refinery', ref)).toBe(true);
+    expect(canBuild(state, r, 0, 'refinery', ref)).toBe(true);  // mine adjacent, no tech needed
   });
 
   it('Drilling gates the mine L2 upgrade', () => {

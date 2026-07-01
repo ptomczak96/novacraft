@@ -44,8 +44,8 @@
       "output": "plasma",
       "maxLevel": 3,
       "perCity": null,
-      "costByLevel": [50, 70, 90],
-      "outputByLevel": [10, 20, 30],
+      "costByLevel": [100, 125, 200],
+      "outputByLevel": [5, 10, 20],
       "supplyByLevel": [2, 3, 4],
       "techRequired": null,
       "upgradeTechRequired": [null, null]
@@ -54,12 +54,12 @@
       "on": "land",
       "output": "ore",
       "maxLevel": 3,
-      "perCity": null,
+      "perCity": 1,
       "adjacentTo": "mine",
-      "costByLevel": [50, 120, 200],
-      "outputPerAdjacentByLevel": [10, 20, 30],
-      "supplyPerAdjacentByLevel": [1, 3, 5],
-      "techRequired": "refineries",
+      "costByLevel": [100, 150, 250],
+      "outputPerAdjacentByLevel": [20, 40, 80],
+      "supplyByLevel": [2, 3, 4],
+      "techRequired": null,
       "upgradeTechRequired": [null, null]
     },
     "purifier": {
@@ -68,9 +68,9 @@
       "maxLevel": 3,
       "perCity": 1,
       "adjacentTo": "extractor",
-      "costByLevel": [50, 120, 200],
-      "outputPerAdjacentByLevel": [10, 20, 30],
-      "supplyPerAdjacentByLevel": [1, 3, 5],
+      "costByLevel": [300, 400, 750],
+      "outputPerAdjacentByLevel": [5, 15, 30],
+      "supplyByLevel": [3, 4, 5],
       "techRequired": null,
       "upgradeTechRequired": [null, null]
     }

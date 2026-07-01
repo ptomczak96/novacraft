@@ -33,8 +33,33 @@ export function drawHighlight(
   ctx.fill();
 }
 
+/** Strokes a diamond outline around a tile — used to mark the inspected tile. */
+export function drawTileOutline(
+  ctx: CanvasRenderingContext2D,
+  tx: number,
+  ty: number,
+  mapHeight: number,
+  terrainId: string,
+  color: string,
+) {
+  const elev = ELEVATION[terrainId] ?? 0;
+  const { sx, sy } = tileToScreenShifted(tx, ty, mapHeight, elev);
+
+  ctx.beginPath();
+  ctx.moveTo(sx, sy);
+  ctx.lineTo(sx + HW, sy + HH);
+  ctx.lineTo(sx, sy + TILE_H);
+  ctx.lineTo(sx - HW, sy + HH);
+  ctx.closePath();
+  ctx.lineWidth = 2.5;
+  ctx.strokeStyle = color;
+  ctx.stroke();
+}
+
 /**
  * Cloud (undiscovered / 'hidden') tile: a flat white diamond hiding everything.
+ * A faint grey outline traces the diamond so individual cloud tiles read as a grid
+ * rather than one blank white expanse.
  * Placeholder — Patrick to replace with a painted cloud tile sprite (see overlap.md).
  */
 export function drawCloud(ctx: CanvasRenderingContext2D, tx: number, ty: number, mapHeight: number) {
@@ -47,6 +72,9 @@ export function drawCloud(ctx: CanvasRenderingContext2D, tx: number, ty: number,
   ctx.closePath();
   ctx.fillStyle = '#eef1f5';
   ctx.fill();
+  ctx.strokeStyle = 'rgba(140,150,165,0.35)'; // faint grey grid line
+  ctx.lineWidth = 1;
+  ctx.stroke();
 }
 
 /**

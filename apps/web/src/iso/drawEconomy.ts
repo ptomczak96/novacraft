@@ -1,8 +1,9 @@
-import { TILE_H } from './constants.js';
+import { TILE_H, TILE_W } from './constants.js';
 import { tileToScreenShifted } from './projection.js';
 import type { BuildingState, ResourceKind } from '@tactica/engine';
 
 const HH = TILE_H / 2;
+const HW = TILE_W / 2;
 
 export interface ScreenRect { x: number; y: number; w: number; h: number; }
 
@@ -25,27 +26,37 @@ const BUILDING_LABEL: Record<string, string> = {
   mine: 'mine', extractor: 'extractor', refinery: 'refinery', purifier: 'purifier',
 };
 
-/** A building drawn as a text label with N stacked horizontal lines above it for level. */
+// REB2s render as an emoji symbol instead of a word: a factory for the refinery and
+// a plumbing / heavy-industrial glyph for the purifier.
+const BUILDING_ICON: Record<string, string> = {
+  refinery: '🏭',
+  purifier: '🚰',
+};
+
+/** A building drawn as a symbol/label with N stacked horizontal lines above it for level. */
 export function drawBuildingLabel(ctx: CanvasRenderingContext2D, building: BuildingState, mapHeight: number) {
   const { cx, cy } = tileCentre(building.position.x, building.position.y, mapHeight);
-  const text = BUILDING_LABEL[building.kind] ?? building.kind;
-  ctx.font = 'bold 11px sans-serif';
+  const icon = BUILDING_ICON[building.kind];
+  const text = icon ?? BUILDING_LABEL[building.kind] ?? building.kind;
+  const fontSize = icon ? 18 : 11;
+  const halfH = icon ? 11 : 7;
+  ctx.font = `bold ${fontSize}px sans-serif`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   const tw = ctx.measureText(text).width;
 
   ctx.fillStyle = 'rgba(18,18,28,0.82)';
-  roundRect(ctx, cx - tw / 2 - 4, cy - 7, tw + 8, 14, 3);
+  roundRect(ctx, cx - tw / 2 - 4, cy - halfH, tw + 8, halfH * 2, 3);
   ctx.fill();
 
-  ctx.fillStyle = '#ffd966';
+  ctx.fillStyle = icon ? '#ffffff' : '#ffd966';
   ctx.fillText(text, cx, cy);
 
-  // Level denotation: 1 line for L1, 2 for L2, 3 for L3 — same width as the text.
+  // Level denotation: 1 line for L1, 2 for L2, 3 for L3 — same width as the symbol.
   ctx.strokeStyle = '#ffd966';
   ctx.lineWidth = 1.5;
   for (let i = 0; i < building.level; i++) {
-    const ly = cy - 11 - i * 3;
+    const ly = cy - halfH - 4 - i * 3;
     ctx.beginPath();
     ctx.moveTo(cx - tw / 2, ly);
     ctx.lineTo(cx + tw / 2, ly);
@@ -67,24 +78,70 @@ export function drawResourceLabel(ctx: CanvasRenderingContext2D, tx: number, ty:
   ctx.fillText(kind, cx, cy);
 }
 
+/**
+ * Small red ✕ toward the bottom-right of a tile — marks a REB whose output is
+ * currently blocked by an enemy unit standing on it. Drawn on the bottom-right
+ * face so it doesn't collide with the building label (which sits at tile centre).
+ */
+export function drawBlockedMark(ctx: CanvasRenderingContext2D, tx: number, ty: number, mapHeight: number) {
+  const { sx, sy } = tileToScreenShifted(tx, ty, mapHeight, 0);
+  // Midpoint of the bottom-right edge (right vertex → bottom vertex).
+  const mx = sx + HW / 2;
+  const my = sy + HH + HH / 2;
+  const r = 5;
+  ctx.strokeStyle = '#ff3b30';
+  ctx.lineWidth = 2.5;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(mx - r, my - r);
+  ctx.lineTo(mx + r, my + r);
+  ctx.moveTo(mx + r, my - r);
+  ctx.lineTo(mx - r, my + r);
+  ctx.stroke();
+  ctx.lineCap = 'butt';
+}
+
 /** A clickable action box above a tile. Returns its on-screen rect for hit-testing. */
-export function drawActionBox(ctx: CanvasRenderingContext2D, tx: number, ty: number, mapHeight: number, label: string): ScreenRect {
+export function drawActionBox(
+  ctx: CanvasRenderingContext2D,
+  tx: number,
+  ty: number,
+  mapHeight: number,
+  label: string,
+  sublabel?: string,     // e.g. a build cost "50◈" shown on a second line
+  unaffordable?: boolean, // dim the box + show the cost in red (valid site, can't afford)
+): ScreenRect {
   const { cx, topY } = tileCentre(tx, ty, mapHeight);
-  ctx.font = 'bold 11px sans-serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  const w = ctx.measureText(label).width + 16;
-  const h = 19;
+
+  ctx.font = 'bold 11px sans-serif';
+  const labelW = ctx.measureText(label).width;
+  let subW = 0;
+  if (sublabel) {
+    ctx.font = '10px sans-serif';
+    subW = ctx.measureText(sublabel).width;
+  }
+  const w = Math.max(labelW, subW) + 16;
+  const h = sublabel ? 32 : 19;
   const x = cx - w / 2;
   const y = topY - h - 6;
-  ctx.fillStyle = 'rgba(46,98,170,0.96)';
+
+  ctx.fillStyle = unaffordable ? 'rgba(70,74,88,0.94)' : 'rgba(46,98,170,0.96)';
   roundRect(ctx, x, y, w, h, 4);
   ctx.fill();
-  ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+  ctx.strokeStyle = unaffordable ? 'rgba(255,255,255,0.45)' : 'rgba(255,255,255,0.85)';
   ctx.lineWidth = 1;
   ctx.stroke();
-  ctx.fillStyle = '#fff';
-  ctx.fillText(label, cx, y + h / 2);
+
+  ctx.fillStyle = unaffordable ? '#d8d8d8' : '#fff';
+  ctx.font = 'bold 11px sans-serif';
+  ctx.fillText(label, cx, sublabel ? y + 11 : y + h / 2);
+  if (sublabel) {
+    ctx.font = '10px sans-serif';
+    ctx.fillStyle = unaffordable ? '#ff6b60' : '#ffe08a'; // red = can't afford, gold = ok
+    ctx.fillText(sublabel, cx, y + 23);
+  }
   return { x, y, w, h };
 }
 

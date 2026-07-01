@@ -131,6 +131,11 @@ export function SetupScreen() {
             onChange={e => setMapgen({ doubleResources: e.target.checked })} />
           <label htmlFor="double-res">Double Resources (For testing)</label>
         </div>
+        <div className="checkbox-row">
+          <input type="checkbox" id="rich-start" checked={config.richStart ?? false}
+            onChange={e => setConfig({ ...config, richStart: e.target.checked })} />
+          <label htmlFor="rich-start">Rich start - for testing</label>
+        </div>
 
         <div className="setup-actions">
           <button className="primary" onClick={handleStart}>Start Game</button>

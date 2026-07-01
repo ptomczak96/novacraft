@@ -102,6 +102,7 @@ export interface GameConfig {
   };
   comebackThreshold: number; // fraction, e.g. 0.25 = 25%
   mapgen?: MapGenOptions; // optional; sensible defaults applied when absent
+  richStart?: boolean; // testing: each team starts with 2000 ore + 2000 plasma
 }
 
 // ── Map generation tuning ──
@@ -280,6 +281,21 @@ export interface BuildingState {
   position: Coord;
   level: number; // 1..def.maxLevel
   cityId: CityId | null; // the city whose territory contains this building
+}
+
+// ── Economy breakdown (for income tooltips / city-info readouts) ──
+export interface EconomySource {
+  kind: 'city' | BuildingKind; // 'city' = base city production, else a building
+  index: number;               // 1-based index among same-kind sources in this city ("Mine 1")
+  amount: number;              // gross output for the resource (before any blocking)
+  blocked: boolean;            // enemy unit sitting on this REB → output not collected
+}
+export interface CityEconomy {
+  cityId: CityId;
+  isCapital: boolean;
+  cityIndex: number;           // 1-based index among the player's cities
+  ore: { total: number; sources: EconomySource[] };    // total excludes blocked sources
+  plasma: { total: number; sources: EconomySource[] };
 }
 
 // ── Game State ──

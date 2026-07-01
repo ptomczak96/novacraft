@@ -53,6 +53,15 @@ describe('createGame economy init', () => {
     expect(cap.level).toBe(1);
     expect(unitsHomedAt(state, cap.id)).toBe(1); // starting warrior homed here
   });
+
+  it('"Rich start" gives every team 2000 ore + 2000 plasma', () => {
+    const registry = getRegistry();
+    const state = createGame(getConfig({ richStart: true }), registry, ['vanguard', 'hive'], 42);
+    for (const p of state.players) {
+      expect(p.ore).toBe(2000);
+      expect(p.plasma).toBe(2000);
+    }
+  });
 });
 
 describe('City production / pop (capacity) / supply→level', () => {
@@ -139,29 +148,172 @@ describe('REB1 — mines (output + supply)', () => {
   });
 });
 
-describe('REB2 — refineries (output + supply per adjacent same-city mine)', () => {
-  it('produces +10 ore and +1 supply per adjacent mine', () => {
+describe('REB1 — extractors (plasma)', () => {
+  it('adds plasma income (not ore): +5 at L1, +10 at L2', () => {
     const registry = getRegistry();
     let state = createGame(getConfig(), registry, ['vanguard', 'hive'], 7);
     const cap = capitalOf(state, 0);
-    state.players[0].ore = 400;
+    state.players[0].ore = 800;
+    const v = makeOreTile(state, cap.position, 1, 0);
+    state.map.tiles[v.y][v.x].resourceKind = 'plasma'; // make it a plasma vent
+
+    const oreBefore = calculateOreIncome(state, 0, registry);
+    const plasmaBefore = calculatePlasmaIncome(state, 0, registry);
+    state = applyAction(state, { type: 'build', kind: 'extractor', position: v }, registry);
+    expect(calculatePlasmaIncome(state, 0, registry)).toBe(plasmaBefore + 5); // +5 plasma
+    expect(calculateOreIncome(state, 0, registry)).toBe(oreBefore); // never any ore
+
+    state = applyAction(state, { type: 'upgradeBuilding', position: v }, registry); // → L2
+    expect(calculatePlasmaIncome(state, 0, registry)).toBe(plasmaBefore + 10); // total 10 at L2
+  });
+});
+
+describe('REB2 — refineries (per-adjacent-mine output, flat supply, adjacent-REB1 gate)', () => {
+  it('produces +20 ore per adjacent mine and a FLAT +2 supply (level-agnostic multiplier)', () => {
+    const registry = getRegistry();
+    let state = createGame(getConfig(), registry, ['vanguard', 'hive'], 7);
+    const cap = capitalOf(state, 0);
+    state.players[0].ore = 800;
 
     const m1 = makeOreTile(state, cap.position, 1, 0);
     const m2 = makeOreTile(state, cap.position, 1, 1);
     const proc = makeLandTile(state, cap.position, 0, 1); // adjacent to both mines
     state = applyAction(state, { type: 'build', kind: 'mine', position: m1 }, registry);
     state = applyAction(state, { type: 'build', kind: 'mine', position: m2 }, registry);
-    // Refinery is gated behind the Refineries tech (L2 → needs an L1 first).
-    state = applyAction(state, { type: 'research', techId: 'prospecting' }, registry);
-    state = applyAction(state, { type: 'research', techId: 'refineries' }, registry);
+    // No tech gate on refineries — buildable as soon as a mine is adjacent.
 
     const oreBefore = calculateOreIncome(state, 0, registry);
     const supplyBefore = cityAt(state, cap.position)!.supply;
     expect(canBuild(state, registry, 0, 'refinery', proc)).toBe(true);
     state = applyAction(state, { type: 'build', kind: 'refinery', position: proc }, registry);
 
-    expect(calculateOreIncome(state, 0, registry)).toBe(oreBefore + 20); // +10 per mine x2
-    expect(cityAt(state, cap.position)!.supply).toBe(supplyBefore + 2); // +1 per mine x2
+    expect(calculateOreIncome(state, 0, registry)).toBe(oreBefore + 40); // +20 per mine x2
+    expect(cityAt(state, cap.position)!.supply).toBe(supplyBefore + 2); // FLAT +2 (not per-mine)
+  });
+
+  it('requires an adjacent MINE (a bare ore tile is not enough), then shows once the mine exists', () => {
+    const registry = getRegistry();
+    let state = createGame(getConfig(), registry, ['vanguard', 'hive'], 7);
+    const cap = capitalOf(state, 0);
+    state.players[0].ore = 800;
+
+    const ore = makeOreTile(state, cap.position, 1, 0);   // ore tile in territory, no mine yet
+    const proc = makeLandTile(state, cap.position, 0, 1);  // adjacent to the ore tile
+    expect(canBuild(state, registry, 0, 'refinery', proc)).toBe(false); // no mine → not buildable
+
+    state = applyAction(state, { type: 'build', kind: 'mine', position: ore }, registry);
+    expect(canBuild(state, registry, 0, 'refinery', proc)).toBe(true);  // mine present → buildable
+  });
+
+  it('is limited to 1 refinery per city', () => {
+    const registry = getRegistry();
+    let state = createGame(getConfig(), registry, ['vanguard', 'hive'], 7);
+    const cap = capitalOf(state, 0);
+    state.players[0].ore = 800;
+
+    const mA = makeOreTile(state, cap.position, 1, 0);
+    const mB = makeOreTile(state, cap.position, -1, 1);
+    state = applyAction(state, { type: 'build', kind: 'mine', position: mA }, registry);
+    state = applyAction(state, { type: 'build', kind: 'mine', position: mB }, registry);
+    const p1 = makeLandTile(state, cap.position, 0, 1);   // adjacent to mA
+    const p2 = makeLandTile(state, cap.position, -1, 0);  // adjacent to mB
+    expect(canBuild(state, registry, 0, 'refinery', p2)).toBe(true);  // p2 valid on its own
+    state = applyAction(state, { type: 'build', kind: 'refinery', position: p1 }, registry);
+    expect(canBuild(state, registry, 0, 'refinery', p2)).toBe(false); // now blocked: 1 per city
+  });
+});
+
+describe('REB2 — purifiers (require an adjacent extractor)', () => {
+  it('is NOT buildable next to a bare plasma vent, but IS once an extractor is on it', () => {
+    const registry = getRegistry();
+    let state = createGame(getConfig(), registry, ['vanguard', 'hive'], 7);
+    const cap = capitalOf(state, 0);
+    state.players[0].ore = 1200;
+
+    const vent = makeOreTile(state, cap.position, 1, 0);
+    state.map.tiles[vent.y][vent.x].resourceKind = 'plasma'; // a plasma vent, no extractor
+    const proc = makeLandTile(state, cap.position, 0, 1);     // adjacent to the vent
+    expect(canBuild(state, registry, 0, 'purifier', proc)).toBe(false); // bare vent → no
+
+    state = applyAction(state, { type: 'build', kind: 'extractor', position: vent }, registry);
+    expect(canBuild(state, registry, 0, 'purifier', proc)).toBe(true);  // extractor → yes
+
+    const plasmaBefore = calculatePlasmaIncome(state, 0, registry);
+    state = applyAction(state, { type: 'build', kind: 'purifier', position: proc }, registry);
+    expect(calculatePlasmaIncome(state, 0, registry)).toBe(plasmaBefore + 5); // +5 per adj extractor (L1)
+  });
+});
+
+describe('REB blocking — enemy unit on a REB stops its output', () => {
+  it('blocks a mine\'s ore output (income only) while an enemy stands on it, restores when it leaves', () => {
+    const registry = getRegistry();
+    let state = createGame(getConfig(), registry, ['vanguard', 'hive'], 11);
+    const cap = capitalOf(state, 0);
+    state.players[0].ore = 400;
+    const m = makeOreTile(state, cap.position, 1, 0);
+    state = applyAction(state, { type: 'build', kind: 'mine', position: m }, registry);
+
+    const withMine = calculateOreIncome(state, 0, registry); // includes +10 mine
+    const cityBefore = cityAt(state, cap.position)!.supply;
+
+    // Park an enemy unit on the mine tile.
+    state.units.push({
+      id: 9999, typeId: 'scuttling', owner: 1, position: { ...m },
+      hp: 5, hasMoved: false, hasAttacked: false, abilityCooldowns: {},
+    });
+
+    expect(calculateOreIncome(state, 0, registry)).toBe(withMine - 10); // mine output blocked
+    expect(cityAt(state, cap.position)!.supply).toBe(cityBefore); // supply/leveling unaffected
+
+    state.units = state.units.filter(u => u.id !== 9999); // enemy leaves
+    expect(calculateOreIncome(state, 0, registry)).toBe(withMine); // restored
+  });
+
+  it('a friendly unit on your own REB does NOT block it', () => {
+    const registry = getRegistry();
+    let state = createGame(getConfig(), registry, ['vanguard', 'hive'], 11);
+    const cap = capitalOf(state, 0);
+    state.players[0].ore = 400;
+    const m = makeOreTile(state, cap.position, 1, 0);
+    state = applyAction(state, { type: 'build', kind: 'mine', position: m }, registry);
+    const withMine = calculateOreIncome(state, 0, registry);
+
+    state.units.push({
+      id: 9998, typeId: 'warrior', owner: 0, position: { ...m },
+      hp: 10, hasMoved: false, hasAttacked: false, abilityCooldowns: {},
+    });
+    expect(calculateOreIncome(state, 0, registry)).toBe(withMine); // own unit, no block
+  });
+});
+
+describe('playerEconomy — per-city income breakdown', () => {
+  it('groups base city production + each REB under its city, and flags blocked ones', async () => {
+    const { playerEconomy } = await import('./index.js');
+    const registry = getRegistry();
+    let state = createGame(getConfig(), registry, ['vanguard', 'hive'], 11);
+    const cap = capitalOf(state, 0);
+    state.players[0].ore = 400;
+    const m = makeOreTile(state, cap.position, 1, 0);
+    state = applyAction(state, { type: 'build', kind: 'mine', position: m }, registry);
+
+    const eco = playerEconomy(state, 0, registry);
+    const capEco = eco.find(c => c.cityId === cap.id)!;
+    expect(capEco.isCapital).toBe(true);
+    // ore sources: base city production + Mine 1
+    expect(capEco.ore.sources.map(s => s.kind)).toEqual(['city', 'mine']);
+    expect(capEco.ore.total).toBe(cityProduction(cap, registry) + 10);
+
+    // Enemy on the mine → source present but flagged blocked, total drops by 10.
+    state.units.push({
+      id: 9997, typeId: 'scuttling', owner: 1, position: { ...m },
+      hp: 5, hasMoved: false, hasAttacked: false, abilityCooldowns: {},
+    });
+    const eco2 = playerEconomy(state, 0, registry);
+    const capEco2 = eco2.find(c => c.cityId === cap.id)!;
+    const mineSrc = capEco2.ore.sources.find(s => s.kind === 'mine')!;
+    expect(mineSrc.blocked).toBe(true);
+    expect(mineSrc.amount).toBe(10); // would-be amount still reported
+    expect(capEco2.ore.total).toBe(cityProduction(cap, registry)); // blocked amount excluded
   });
 });
 

@@ -8,7 +8,8 @@ import { CombatLog } from './CombatLog.js';
 import { TechTreeView } from './TechTreeView.js';
 import { LevelUpModal } from './LevelUpModal.js';
 import type { Action } from '@tactica/engine';
-import { getLegalActions, cityProduction, buildingOutput } from '@tactica/engine';
+import { getLegalActions, playerEconomy } from '@tactica/engine';
+import { ResourceBreakdown } from './EconomyBreakdown.js';
 
 export function GameScreen() {
   const {
@@ -26,6 +27,7 @@ export function GameScreen() {
   // per player and persists with the game state (and save/replay).
   const [techOpen, setTechOpen] = useState(false);
   const [showIncome, setShowIncome] = useState(false);
+  const [showPlasma, setShowPlasma] = useState(false);
   const handleResearch = useCallback((id: string) => {
     executeAction({ type: 'research', techId: id });
   }, [executeAction]);
@@ -102,25 +104,11 @@ export function GameScreen() {
     doBotTurn();
   };
 
-  // Ore income breakdown (shown on hover over the ore total).
-  const oreBreakdown: { label: string; amount: number }[] = [];
-  let cityNum = 0, mineNum = 0, refNum = 0;
-  for (const c of gameState.cities) {
-    if (c.owner !== currentPlayer) continue;
-    cityNum++;
-    oreBreakdown.push({ label: c.isCapital ? 'Capital' : `City ${cityNum}`, amount: cityProduction(c, registry) });
-  }
-  for (const b of gameState.buildings) {
-    const city = gameState.cities.find(c => c.id === b.cityId);
-    if (!city || city.owner !== currentPlayer) continue;
-    const out = buildingOutput(gameState, b, registry);
-    if (out.resource !== 'ore' || out.amount === 0) continue;
-    let label = b.kind as string;
-    if (b.kind === 'mine') label = `Mine ${++mineNum}`;
-    else if (b.kind === 'refinery') label = `Refinery ${++refNum}`;
-    oreBreakdown.push({ label, amount: out.amount });
-  }
-  const oreTotal = oreBreakdown.reduce((s, r) => s + r.amount, 0);
+  // Per-city income breakdown (shown on hover over the ore / plasma totals). A single
+  // structured pass from the engine feeds both the ore and plasma tooltips; blocked
+  // REBs (enemy sitting on them) are reported but excluded from the totals.
+  const economy = playerEconomy(gameState, currentPlayer, registry);
+  const hasPlasma = economy.some(c => c.plasma.sources.length > 0);
 
   return (
     <div className="game-screen">
@@ -142,26 +130,23 @@ export function GameScreen() {
               onMouseLeave={() => setShowIncome(false)}
             >
               {player.ore}◈
-              {showIncome && oreBreakdown.length > 0 && (
-                <div style={{
-                  position: 'absolute', top: '100%', left: 0, marginTop: 4, zIndex: 60,
-                  background: 'rgba(18,18,30,0.97)', border: '1px solid #444', borderRadius: 4,
-                  padding: '6px 9px', whiteSpace: 'nowrap', fontWeight: 400, fontSize: '0.82em', color: '#ddd',
-                }}>
-                  <div style={{ fontWeight: 700, marginBottom: 3 }}>Ore / turn</div>
-                  {oreBreakdown.map((r, i) => (
-                    <div key={i} style={{ display: 'flex', justifyContent: 'space-between', gap: 14 }}>
-                      <span>{r.label}</span><span style={{ color: '#ffd966' }}>+{r.amount}</span>
-                    </div>
-                  ))}
-                  <div style={{ borderTop: '1px solid #555', marginTop: 3, paddingTop: 3, display: 'flex', justifyContent: 'space-between', fontWeight: 700 }}>
-                    <span>Total</span><span>+{oreTotal}</span>
-                  </div>
+              {showIncome && (
+                <div className="eco-tooltip">
+                  <ResourceBreakdown resource="ore" cities={economy} />
                 </div>
               )}
             </span>
-            <span style={{ color: 'var(--p1-color, #5aa9e6)' }}>
+            <span
+              style={{ color: 'var(--p1-color, #5aa9e6)', position: 'relative', cursor: hasPlasma ? 'help' : 'default' }}
+              onMouseEnter={() => setShowPlasma(true)}
+              onMouseLeave={() => setShowPlasma(false)}
+            >
               {player.plasma}✦
+              {showPlasma && hasPlasma && (
+                <div className="eco-tooltip">
+                  <ResourceBreakdown resource="plasma" cities={economy} />
+                </div>
+              )}
             </span>
           </div>
           <div className="top-bar-actions">

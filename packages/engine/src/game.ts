@@ -36,11 +36,15 @@ export function createGame(
     config.mapWidth, config.mapHeight, playerCount, registry, prng, config.mapgen,
   );
 
+  // "Rich start" (testing): flood each team with resources so buildings/units can be
+  // exercised without grinding economy first.
+  const startOre = config.richStart ? 2000 : registry.economy.startingOre;
+  const startPlasma = config.richStart ? 2000 : registry.economy.startingPlasma;
   const players: PlayerState[] = factionIds.map((factionId, i) => ({
     id: i,
     factionId,
-    ore: registry.economy.startingOre,
-    plasma: registry.economy.startingPlasma,
+    ore: startOre,
+    plasma: startPlasma,
     researchedTechs: [],
   }));
 

@@ -45,6 +45,8 @@ interface GameStore {
   selectedUnitId: number | null;
   selectedCity: Coord | null;
   hoveredTile: Coord | null;
+  inspectedTile: Coord | null; // tile whose info box is shown (terrain/resource)
+  setInspectedTile: (c: Coord | null) => void;
   legalActions: Action[];
 
   // Territory-expansion picker (L4 reward): active while the player ticks tiles.
@@ -121,6 +123,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   stateHistory: [],
   selectedUnitId: null,
   selectedCity: null,
+  inspectedTile: null,
   territorySelect: null,
   hoveredTile: null,
   legalActions: [],
@@ -158,15 +161,18 @@ export const useGameStore = create<GameStore>((set, get) => ({
       legalActions: legal,
       stateHistory: [],
       selectedUnitId: null,
+      selectedCity: null,
+      inspectedTile: null,
       screen: 'game',
       showInterstitial: false,
     });
   },
 
-  selectUnit: (unitId) => set({ selectedUnitId: unitId, selectedCity: null }),
-  setSelectedCity: (c) => set({ selectedCity: c, selectedUnitId: null }),
+  selectUnit: (unitId) => set({ selectedUnitId: unitId, selectedCity: null, inspectedTile: null }),
+  setSelectedCity: (c) => set({ selectedCity: c, selectedUnitId: null, inspectedTile: null }),
   setHoveredTile: (c) => set({ hoveredTile: c }),
-  setTerritorySelect: (v) => set({ territorySelect: v, selectedUnitId: null, selectedCity: null }),
+  setInspectedTile: (c) => set({ inspectedTile: c }),
+  setTerritorySelect: (v) => set({ territorySelect: v, selectedUnitId: null, selectedCity: null, inspectedTile: null }),
 
   executeAction: (action) => {
     const { gameState, registry, config } = get();
@@ -226,6 +232,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       stateHistory: [...get().stateHistory, gameState],
       selectedUnitId: null,
       territorySelect: null,
+      inspectedTile: null,
       showInterstitial,
       lastCombatResult: combatLogEntry ?? get().lastCombatResult,
     });
@@ -243,6 +250,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       legalActions: legal,
       stateHistory: stateHistory.slice(0, -1),
       selectedUnitId: null,
+      inspectedTile: null,
     });
   },
 
