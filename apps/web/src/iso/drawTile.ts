@@ -1,30 +1,41 @@
 import {
-  TILE_W, TILE_H, SPRITE_W, BASE_DEPTH,
+  TILE_W, TILE_H, BASE_DEPTH,
   ELEVATION, TERRAIN_COLORS, PLAYER_COLORS,
 } from './constants.js';
 import { tileToScreenShifted } from './projection.js';
-import { getTileSprite, getResourceIcon } from './tileSprites.js';
+import {
+  getTileSprite, getResourceIcon, getThemeDrawParams,
+  getThemeAutotile, getSpriteByKey, getThemeFlushLiquids,
+} from './tileSprites.js';
 import type { Tile, DataRegistry } from '@tactica/engine';
 
 const HW = TILE_W / 2;
 const HH = TILE_H / 2;
 
-// Vertical nudge for tile sprites so the cube's top-face apex aligns with the
-// diamond's top vertex. Tuned against the 148×164 tileset art.
-const SPRITE_Y_OFFSET = -6;
+// Recessed terrains: water/lava/river surfaces sit BELOW the land plane so they
+// read as sunken pools/basins. Depth ≈ 2/5 of a tile step (TILE_H) down from a
+// regular surface tile. The whole tile + its markers shift down together, and
+// front-row land tiles occlude the sunken front edge via painter order.
+const TERRAIN_SINK: Record<string, number> = {
+  water: TILE_H * 0.4,
+  lava:  TILE_H * 0.4,
+  river: TILE_H * 0.4,
+};
 
-// Resource marker icons: drawn on the tile surface, lifted slightly.
+// Resource marker icons (default theme): drawn on the tile surface, lifted slightly.
 const RESOURCE_ICON_W = 40;
 const RESOURCE_ICON_LIFT = 10;
 
-// City/base marker scale (50% larger than the base vector drawing).
-const CITY_SCALE = 1.5;
+// Themed resource "object" props (transparent prop art planted on the surface):
+// a transparent prop scaled to a fraction of the tile width and planted so its
+// base-footprint CENTROID sits on the tile-surface centre — so the prop reads as
+// centred on the tile, not shoved into its back half.
+const RESOURCE_OBJECT_SCALE = 0.434;   // draw width as a fraction of spriteW
+const RESOURCE_OBJECT_BASEFRAC = 0.86; // base-footprint centroid as a fraction of art height
+const RESOURCE_OBJECT_LIFT = 5;        // extra nudge below the surface centre (px)
 
-/** Deterministic per-tile value used to pick a stable sprite variant. */
-function variantHash(x: number, y: number): number {
-  const h = (x * 73856093) ^ (y * 19349663);
-  return h >>> 0;
-}
+// City/base marker scale for the vector drawing (50% larger than the drawing).
+const CITY_SCALE = 1.5;
 
 /**
  * Draw a single isometric tile. Uses the terrain sprite when loaded, otherwise
@@ -37,26 +48,58 @@ export function drawTile(
   ty: number,
   mapHeight: number,
   _registry: DataRegistry,
+  _cityLevel = 1,
+  /** Terrain id at any grid cell (null off-map). Enables shore autotiling. */
+  terrainAt?: (x: number, y: number) => string | null,
 ) {
   const terrainId = tile.terrain;
   // Flat board: every tile renders at one level. Territory ownership is shown by a
   // separate outer-border pass (drawTerritoryBorders), not by raising base tiles.
   const elev = ELEVATION[terrainId] ?? 0;
-  const { sx, sy } = tileToScreenShifted(tx, ty, mapHeight, elev);
+  const { sx, sy: syGrid } = tileToScreenShifted(tx, ty, mapHeight, elev);
+
+  const hasFeature = tile.isCity || tile.isResourceTile || !!tile.isRuin;
+
+  // Sink recessed terrains (water/lava) below the land plane for a basin effect —
+  // unless the theme draws its liquids flush (solid barrier art, e.g. mesa towers).
+  const sink = getThemeFlushLiquids() ? 0 : (TERRAIN_SINK[terrainId] ?? 0);
+  const sy = syGrid + sink;
 
   const cx = sx;
   const cy = sy + HH; // center of the top-face diamond (where units/markers sit)
 
-  const sprite = getTileSprite(terrainId, variantHash(tx, ty));
+  const dp = getThemeDrawParams();
+
+  // Shore autotiling: for liquid terrains, pick the tile whose baked foam sits on
+  // the edges that border LAND (mask = "NE SE SW NW", 1 = land neighbour).
+  let selected = getTileSprite(terrainId, tx, ty, hasFeature);
+  const auto = getThemeAutotile();
+  if (auto && !hasFeature && terrainAt && auto.terrains.includes(terrainId)) {
+    const land = (nx: number, ny: number): '0' | '1' => {
+      const t = terrainAt(nx, ny);
+      return t != null && !auto.terrains.includes(t) ? '1' : '0';
+    };
+    const mask = land(tx, ty - 1) + land(tx + 1, ty) + land(tx, ty + 1) + land(tx - 1, ty);
+    const cands = auto.lookup[mask];
+    if (cands && cands.length) {
+      const h = ((tx * 73856093) ^ (ty * 19349663)) >>> 0;
+      selected = getSpriteByKey(cands[h % cands.length]);
+    }
+  }
+  const { img: sprite, nudge } = selected;
   if (sprite) {
     // ── Sprite tile ──
-    // Drawn at SPRITE_W (independent of grid spacing) so cubes overlap and the
-    // board reads tight. The body hangs below the diamond and is occluded by
-    // front-row tiles via painter order.
-    const scale = SPRITE_W / sprite.naturalWidth;
-    const dw = sprite.naturalWidth * scale;
-    const dh = sprite.naturalHeight * scale;
-    ctx.drawImage(sprite, sx - dw / 2, sy + SPRITE_Y_OFFSET, dw, dh);
+    // Drawn at the theme's sprite width (independent of grid spacing) so cubes
+    // overlap and the board reads tight. topOffsetY places the art's top surface
+    // on the tile diamond (+ per-sprite `nudge` for tiles authored slightly off the
+    // shared surface plane). The body hangs below and is occluded by front-row
+    // tiles via painter order.
+    const dw = dp.spriteW;
+    // Anisotropic height when the theme sets spriteH (maps the art's top-face
+    // diamond onto the grid's 2:1); otherwise preserve the art's natural aspect.
+    // Keep dw/dh fractional — rounding drifts the 0.5 edge slope and reopens seams.
+    const dh = dp.spriteH ?? dw * (sprite.naturalHeight / sprite.naturalWidth);
+    ctx.drawImage(sprite, sx - dw / 2, sy + dp.topOffsetY + nudge, dw, dh);
   } else {
     drawVectorTile(ctx, terrainId, sx, sy, elev, cx, cy);
   }
@@ -65,9 +108,14 @@ export function drawTile(
   if (tile.isResourceTile) {
     const kind = tile.resourceKind ?? 'ore';
     const icon = getResourceIcon(kind);
-    if (icon) {
-      // Scale the 32px icon up to sit nicely on the chunky tile, centered on the
-      // top-face and lifted a touch so it reads as resting on the surface.
+    if (icon && dp.resourceMode === 'object') {
+      // Themed prop: scale to the tile and plant its opaque base on the surface
+      // centre so it stands upright within the tile.
+      const dw = dp.spriteW * RESOURCE_OBJECT_SCALE;
+      const dh = dw * (icon.naturalHeight / icon.naturalWidth);
+      ctx.drawImage(icon, cx - dw / 2, cy + RESOURCE_OBJECT_LIFT - dh * RESOURCE_OBJECT_BASEFRAC, dw, dh);
+    } else if (icon) {
+      // Default: small icon centred on the tile.
       const iw = RESOURCE_ICON_W;
       const ih = icon.naturalHeight * (iw / icon.naturalWidth);
       ctx.drawImage(icon, cx - iw / 2, cy - ih / 2 - RESOURCE_ICON_LIFT, iw, ih);
@@ -82,7 +130,7 @@ export function drawTile(
     const flagColor = tile.owner !== null
       ? (PLAYER_COLORS[tile.owner] ?? '#c44536')
       : '#c44536';
-    // Scale up around the castle base (~cy+6) so it stays planted on the tile.
+    // Vector castle, scaled up around its base (~cy+6).
     ctx.save();
     ctx.translate(cx, cy + 6);
     ctx.scale(CITY_SCALE, CITY_SCALE);

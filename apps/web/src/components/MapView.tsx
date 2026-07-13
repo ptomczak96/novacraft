@@ -2,6 +2,7 @@ import React, { useMemo, useEffect } from 'react';
 import { cityPop, citySupplyProgress, getRecruitOptions } from '@tactica/engine';
 import { useGameStore } from '../store/gameStore.js';
 import { IsoCanvas } from '../iso/IsoCanvas.js';
+import { Starfield } from '../iso/Starfield.js';
 import { TerritorySelectBar } from './TerritorySelectBar.js';
 
 const UNIT_ICONS: Record<string, string> = {
@@ -28,6 +29,12 @@ export function MapView() {
   } = useGameStore();
 
   const [showRecruit, setShowRecruit] = React.useState(false);
+
+  // Map pan offset (drag-to-pan). Drives both the board's CSS translate and the
+  // starfield parallax. Reset to centre whenever a new game starts.
+  const [pan, setPan] = React.useState({ x: 0, y: 0 });
+  const seed = gameState?.prng?.seed;
+  useEffect(() => { setPan({ x: 0, y: 0 }); }, [seed]);
 
   // Full recruit roster for the selected city (incl. unaffordable units, flagged),
   // so they can be shown red rather than hidden.
@@ -59,7 +66,8 @@ export function MapView() {
 
   return (
     <div className="map-container" style={{ position: 'relative' }}>
-      <IsoCanvas mode="game" />
+      <Starfield pan={pan} />
+      <IsoCanvas mode="game" pan={pan} onPanChange={setPan} />
 
       {/* Territory-expansion picker — pinned to the map's top-right corner */}
       <TerritorySelectBar />
