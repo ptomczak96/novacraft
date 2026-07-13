@@ -77,3 +77,10 @@ export const LABEL_COLOR = 'rgba(255,255,255,0.4)';
 
 // ── Canvas padding around the rendered map ──
 export const CANVAS_PAD = 32;
+
+// ── Top reserve for tall tile art ──
+// Some themed tile sprites (e.g. the AI "Ashen Wastes" set) draw their top
+// surface well above the grid diamond's top vertex. Reserve vertical room above
+// the map so the back row isn't clipped. Sized for the tallest theme; harmless
+// extra margin for shorter ones.
+export const SPRITE_TOP_OVERHANG = 64;

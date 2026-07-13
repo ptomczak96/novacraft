@@ -23,14 +23,18 @@ interface ResolvedOptions {
   resourceDensity: number;
   ruinCount: number;
   resourceMultiplier: number; // 2× when "double resources" (testing) is on
+  impassableFraction: number;
+  mountainFraction: number;
 }
 
 function resolveOptions(opts?: MapGenOptions): ResolvedOptions {
   return {
-    biome:           opts?.biome           ?? 'grassland',
-    resourceDensity: opts?.resourceDensity ?? 0.08,
-    ruinCount:       opts?.ruinCount       ?? 3,
+    biome:              opts?.biome              ?? 'grassland',
+    resourceDensity:    opts?.resourceDensity    ?? 0.08,
+    ruinCount:          opts?.ruinCount          ?? 3,
     resourceMultiplier: opts?.doubleResources ? 2 : 1,
+    impassableFraction: opts?.impassableFraction ?? 0.05,
+    mountainFraction:   opts?.mountainFraction   ?? 0.08,
   };
 }
 
@@ -100,7 +104,7 @@ function makeField(
 
 // Water/lava generation is disabled for now. Flip to true to bring back the
 // full elevation/temperature biome classifier below (waterLavaTerrain).
-const ENABLE_WATER_LAVA = false;
+const ENABLE_WATER_LAVA = true;
 
 /** Active classifier: two simple biomes, no water/lava. */
 function biomeTerrain(biome: Biome, e: number, m: number): string {
@@ -114,16 +118,20 @@ function biomeTerrain(biome: Biome, e: number, m: number): string {
 }
 
 /**
- * Disabled-but-kept classifier using smooth elevation + temperature fields.
- * Produces water (low) and lava (hot peaks); a smooth temperature field keeps
- * snow and lava from ever being adjacent. Re-enable via ENABLE_WATER_LAVA.
+ * Full classifier using smooth elevation + temperature + moisture fields.
+ * Produces water (low), lava (hot peaks), mountain (peaks), snow/sand
+ * (temperature extremes) and forest (moist temperate land) — so every themed
+ * tile role (open / cover / elevated / barrier) actually occurs on the map.
  */
-function waterLavaTerrain(e: number, t: number, seaLevel: number, mountainLevel: number): string {
+function waterLavaTerrain(
+  e: number, t: number, m: number,
+  seaLevel: number, mountainLevel: number,
+): string {
   if (e < seaLevel) return 'water';
   if (e > mountainLevel) return t > 0.72 ? 'lava' : 'mountain';
   if (t < 0.30) return 'snow';
   if (t > 0.70) return 'sand';
-  return 'plains';
+  return m > 0.62 ? 'forest' : 'plains';
 }
 
 export function generateMap(
@@ -146,13 +154,34 @@ export function generateMap(
   [temperature, p] = makeField(width, height, 6, p);
   [moisture, p] = makeField(width, height, 3, p);
 
+  // ── Impassable budget ──
+  // Water + lava (the impassable terrains) together target ~impassableFraction
+  // of the map, split 80% water / 20% lava. Fixed elevation thresholds make the
+  // share swing wildly per seed, so the sea level is taken as a QUANTILE of the
+  // actual elevation field: exactly the lowest `waterFrac` of tiles flood.
+  // Because the field is smooth, that low set stays blobby (coherent lakes),
+  // not scattered singles. Lava is capped after classification (below).
+  const totalTiles = width * height;
+  const waterBudget = Math.floor(totalTiles * o.impassableFraction * 0.8);
+  const lavaBudget = Math.floor(totalTiles * o.impassableFraction * 0.2);
+  const sortedElev = elevation.flat().sort((a, b) => a - b);
+  const seaLevel = waterBudget > 0 ? sortedElev[waterBudget] : -1;
+  // Mountains (passable, defence bonus) are budgeted the same way: only the
+  // top `mountainFraction` of the elevation field becomes the peak band
+  // (mountain + hot-peak lava), instead of a fixed threshold that could eat a
+  // quarter of the map.
+  const mountainBudget = Math.floor(totalTiles * o.mountainFraction);
+  const mountainLevel = mountainBudget > 0
+    ? sortedElev[Math.max(0, totalTiles - mountainBudget)]
+    : Infinity;
+
   // ── Base terrain ──
   const tiles: Tile[][] = [];
   for (let y = 0; y < height; y++) {
     tiles[y] = [];
     for (let x = 0; x < width; x++) {
       const terrain = ENABLE_WATER_LAVA
-        ? waterLavaTerrain(elevation[y][x], temperature[y][x], 0.34, 0.76)
+        ? waterLavaTerrain(elevation[y][x], temperature[y][x], moisture[y][x], seaLevel, mountainLevel)
         : biomeTerrain(o.biome, elevation[y][x], moisture[y][x]);
       tiles[y][x] = {
         terrain,
@@ -160,6 +189,23 @@ export function generateMap(
         isCity: false,
         isResourceTile: false,
       };
+    }
+  }
+
+  // Cap lava at its budget: keep only the hottest tiles, demote the rest to
+  // mountain (same elevation band, passable). Deterministic ordering.
+  if (ENABLE_WATER_LAVA) {
+    const lavaTiles: { x: number; y: number; t: number }[] = [];
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        if (tiles[y][x].terrain === 'lava') lavaTiles.push({ x, y, t: temperature[y][x] });
+      }
+    }
+    if (lavaTiles.length > lavaBudget) {
+      lavaTiles.sort((a, b) => b.t - a.t || a.y - b.y || a.x - b.x);
+      for (let i = lavaBudget; i < lavaTiles.length; i++) {
+        tiles[lavaTiles[i].y][lavaTiles[i].x].terrain = 'mountain';
+      }
     }
   }
 
@@ -238,6 +284,12 @@ export function generateMap(
       const terr = registry.terrainTypes[tiles[y][x].terrain];
       return !!terr && terr.passable && !tiles[y][x].isCity;
     };
+    // Resources only go on flat ground — never on mountain, water, lava or river
+    // (even where those are passable). Rocky is a render variant of plains and is
+    // suppressed under features separately (getTileSprite hasFeature).
+    const RESOURCE_FORBIDDEN = new Set(['mountain', 'water', 'lava', 'river']);
+    const resourceEligible = (x: number, y: number): boolean =>
+      passable(x, y) && !RESOURCE_FORBIDDEN.has(tiles[y][x].terrain);
     const weighted = (values: number[], weights: number[]): number => {
       const total = weights.reduce((a, b) => a + b, 0);
       const [r, np] = nextRandom(p); p = np;
@@ -280,7 +332,7 @@ export function generateMap(
           const nx = ruin.x + dx, ny = ruin.y + dy;
           if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
           const t = tiles[ny][nx];
-          if (t.isResourceTile || t.isRuin || t.isCity || !passable(nx, ny)) continue;
+          if (t.isResourceTile || t.isRuin || t.isCity || !resourceEligible(nx, ny)) continue;
           surround.push({ x: nx, y: ny });
         }
       }
@@ -309,7 +361,7 @@ export function generateMap(
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x++) {
         const t = tiles[y][x];
-        if (t.isResourceTile || t.isRuin || t.isCity || !passable(x, y)) continue;
+        if (t.isResourceTile || t.isRuin || t.isCity || !resourceEligible(x, y)) continue;
         if (minDistTo({ x, y }) <= 1) continue; // inside a territory → skip
         const [rr, pa] = nextRandom(p); p = pa;
         if (rr >= sprinkleP) continue;

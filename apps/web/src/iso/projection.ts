@@ -1,15 +1,20 @@
-import { TILE_W, TILE_H, SPRITE_W, CANVAS_PAD, ELEVATION } from './constants.js';
+import { TILE_W, TILE_H, CANVAS_PAD, SPRITE_TOP_OVERHANG, ELEVATION } from './constants.js';
 import type { GameMap } from '@tactica/engine';
 
 // Tile sprites are drawn wider/taller than the grid cell, so they overhang the
-// nominal diamond bounds. Reserve room so edge tiles aren't clipped.
-const SPRITE_H = SPRITE_W * (164 / 148);          // art aspect ratio
-const OVERHANG_X = Math.max(0, (SPRITE_W - TILE_W) / 2);
-const OVERHANG_Y = Math.max(0, SPRITE_H - TILE_H); // body hanging below the diamond
+// nominal diamond bounds. Reserve room so edge tiles aren't clipped. Sized for
+// the largest themes (the 192×256 FINAL biome sets drawn ~148 wide / ~197 tall);
+// generous for the shorter default theme, which is harmless extra margin.
+const DRAW_W_RESERVE = 150;                                 // widest tile draw width
+const DRAW_H_RESERVE = DRAW_W_RESERVE * (256 / 192);        // tallest tile draw height
+const OVERHANG_X = Math.max(0, (DRAW_W_RESERVE - TILE_W) / 2);
+const OVERHANG_BOTTOM = Math.max(0, DRAW_H_RESERVE - TILE_H); // body hanging below the diamond
+const OVERHANG_TOP = SPRITE_TOP_OVERHANG;                   // art rising above the diamond top
 
 /**
  * Convert tile grid coords to screen (canvas pixel) coords.
- * Returns the center-top of the top diamond face.
+ * Returns the center-top of the top diamond face. The vertical origin includes
+ * OVERHANG_TOP so tall tile art on the back row isn't clipped off the top.
  */
 export function tileToScreen(
   tx: number,
@@ -17,7 +22,7 @@ export function tileToScreen(
   elevation: number = 0,
 ): { sx: number; sy: number } {
   const sx = CANVAS_PAD + (tx - ty) * (TILE_W / 2) ;
-  const sy = CANVAS_PAD + (tx + ty) * (TILE_H / 2) - elevation;
+  const sy = CANVAS_PAD + OVERHANG_TOP + (tx + ty) * (TILE_H / 2) - elevation;
   return { sx, sy };
 }
 
@@ -43,7 +48,7 @@ export function tileToScreenShifted(
 ): { sx: number; sy: number } {
   const shift = computeOriginShift(mapHeight);
   const sx = CANVAS_PAD + shift + (tx - ty) * (TILE_W / 2);
-  const sy = CANVAS_PAD + (tx + ty) * (TILE_H / 2) - elevation;
+  const sy = CANVAS_PAD + OVERHANG_TOP + (tx + ty) * (TILE_H / 2) - elevation;
   return { sx, sy };
 }
 
@@ -60,7 +65,8 @@ export function canvasSize(
   // Plus extra for the base depth of the lowest tiles and padding.
   const maxElev = 24; // mountain elevation
   const w = (mapWidth + mapHeight - 1) * (TILE_W / 2) + TILE_W + OVERHANG_X * 2 + CANVAS_PAD * 2;
-  const h = (mapWidth + mapHeight - 1) * (TILE_H / 2) + TILE_H + OVERHANG_Y + maxElev + CANVAS_PAD * 2;
+  const h = (mapWidth + mapHeight - 1) * (TILE_H / 2) + TILE_H
+    + OVERHANG_TOP + OVERHANG_BOTTOM + maxElev + CANVAS_PAD * 2;
   return { width: w, height: h };
 }
 

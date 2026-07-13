@@ -106,8 +106,11 @@ export function getReachableTiles(
 
       // TERRAIN BUMP — an impassable-to-occupy tile (by terrain/building/resource/city,
       // NOT by a unit) becomes a selectable bump target for blind/burrowed units; moving
-      // onto it lands on `current` and reveals it as fog.
-      if (blindBump && bumps && !occ && !enemyHere && !friendlyHere && !bumps.has(nKey)) {
+      // onto it lands on `current` and reveals it as fog. The land tile must itself be a
+      // valid STOP (the start, or an occupiable reachable tile) — never a pass-under tile
+      // (a burrowed Wyrm traverses impassables but can't land on them).
+      const currentOccupiable = current.cost === 0 || reachable.has(currentKey);
+      if (blindBump && bumps && currentOccupiable && !occ && !enemyHere && !friendlyHere && !bumps.has(nKey)) {
         bumps.set(nKey, currentKey);
       }
 

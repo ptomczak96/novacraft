@@ -131,6 +131,8 @@ export interface MapGenOptions {
   resourceDensity?: number; // 0..1 — fraction of land carrying ore/plasma
   ruinCount?: number;       // number of foundable-city ruins to scatter
   doubleResources?: boolean; // testing: 2× the map's resource spawn rate
+  impassableFraction?: number; // 0..1 — target share of impassable tiles (water+lava); default 0.05
+  mountainFraction?: number;   // 0..1 — target share of mountain/peak tiles; default 0.08
 }
 
 export interface CombatConfig {

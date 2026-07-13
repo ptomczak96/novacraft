@@ -3,6 +3,7 @@ import {
   HP_HIGH, HP_MID, HP_LOW, SELECTION_COLOR,
 } from './constants.js';
 import { tileToScreenShifted } from './projection.js';
+import { getUnitSprite, DEFAULT_FACING, type Facing } from './unitSprites.js';
 import type { Unit, DataRegistry } from '@tactica/engine';
 
 // ── Color helpers ──
@@ -90,6 +91,10 @@ export function drawUnitAt(
   registry: DataRegistry,
   isSelected: boolean,
   posOverride?: { x: number; y: number },
+  facing: Facing = DEFAULT_FACING,
+  factionId?: string,
+  /** 0..1 white hit-flash intensity (generic combat feedback; 0/undefined = off). */
+  flash = 0,
 ) {
   // posOverride allows fractional tile coords for smooth move animations.
   const px = posOverride ? posOverride.x : unit.position.x;
@@ -102,30 +107,86 @@ export function drawUnitAt(
   const dark = shade(color, 0.65);
   const light = shade(color, 1.25);
 
+  const sprite = getUnitSprite(unit.typeId, facing, factionId);
+
+  // Sprite units plant their feet exactly on the diamond center so the figure is
+  // perfectly centered in its tile; vector units keep their slight FOOT_Y forward
+  // offset (their proportions were tuned around it).
+  const groundY = sprite ? cy : cy + FOOT_Y;
+
   // ── Shadow ellipse on ground ──
   ctx.beginPath();
-  ctx.ellipse(cx, cy + FOOT_Y + 1, 8, 3, 0, 0, Math.PI * 2);
+  ctx.ellipse(cx, groundY + 1, sprite ? 15 : 8, sprite ? 5.5 : 3, 0, 0, Math.PI * 2);
   ctx.fillStyle = 'rgba(0,0,0,0.25)';
   ctx.fill();
 
   // ── Selection ring ──
   if (isSelected) {
     ctx.beginPath();
-    ctx.ellipse(cx, cy + FOOT_Y + 1, 12, 5, 0, 0, Math.PI * 2);
+    ctx.ellipse(cx, groundY + 1, sprite ? 19 : 12, sprite ? 7.5 : 5, 0, 0, Math.PI * 2);
     ctx.strokeStyle = SELECTION_COLOR;
     ctx.lineWidth = 2;
     ctx.stroke();
   }
 
-  // ── Draw figure by type (scaled up around the feet so it stays planted) ──
+  // ── Draw figure — directional sprite if available, else the vector drawer. ──
   // Cloaked units (only ever shown to their owner) render ghosted so you can tell.
   const cloaked = registry.unitTypes[unit.typeId]?.conditions?.includes('cloak') ?? false;
-  const drawFn = UNIT_DRAWERS[unit.typeId] ?? drawGenericUnit;
+  const baseAlpha = cloaked ? 0.5 : 1;
   ctx.save();
-  if (cloaked) ctx.globalAlpha = 0.5;
-  ctx.translate(cx, cy + FOOT_Y);
-  ctx.scale(UNIT_SCALE, UNIT_SCALE);
-  drawFn(ctx, 0, -FOOT_Y, color, dark, light);
+  ctx.globalAlpha = baseAlpha;
+  if (sprite) {
+    // ── Directional sprite (art isn't team-colored, so mark ownership with a rim) ──
+    if (!isSelected) {
+      ctx.beginPath();
+      ctx.ellipse(cx, groundY + 1, 16, 6, 0, 0, Math.PI * 2);
+      ctx.strokeStyle = color;
+      ctx.globalAlpha = 0.55 * baseAlpha;
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      ctx.globalAlpha = baseAlpha;
+    }
+    const { img, def } = sprite;
+    const s = def.drawW / def.srcW;
+    const dx = cx - def.drawW / 2;
+    const dy = groundY - def.footY * s;
+    if (isSelected) {
+      // Minimal light-green glow hugging the sprite's silhouette. Canvas shadows
+      // follow the image alpha, so two blurred passes build a soft gradient rim
+      // that the crisp final draw sits on top of.
+      ctx.save();
+      ctx.shadowColor = 'rgba(130, 255, 170, 0.8)';
+      ctx.shadowBlur = 9;
+      ctx.drawImage(img, dx, dy, def.drawW, def.srcH * s);
+      ctx.drawImage(img, dx, dy, def.drawW, def.srcH * s);
+      ctx.restore();
+    }
+    ctx.drawImage(img, dx, dy, def.drawW, def.srcH * s);
+    if (flash > 0) {
+      // White silhouette overlay: the filter turns every opaque pixel white
+      // while keeping the alpha mask, so the flash hugs the sprite exactly.
+      ctx.save();
+      ctx.filter = 'brightness(0) invert(1)';
+      ctx.globalAlpha *= Math.min(1, flash);
+      ctx.drawImage(img, dx, dy, def.drawW, def.srcH * s);
+      ctx.restore();
+    }
+  } else {
+    // ── Draw figure by type (scaled up around the feet so it stays planted) ──
+    const drawFn = UNIT_DRAWERS[unit.typeId] ?? drawGenericUnit;
+    ctx.save();
+    ctx.translate(cx, cy + FOOT_Y);
+    ctx.scale(UNIT_SCALE, UNIT_SCALE);
+    drawFn(ctx, 0, -FOOT_Y, color, dark, light);
+    if (flash > 0) {
+      // Same white-out trick for vector figures: redraw the whole figure with
+      // every fill/stroke forced to white.
+      ctx.filter = 'brightness(0) invert(1)';
+      ctx.globalAlpha *= Math.min(1, flash);
+      drawFn(ctx, 0, -FOOT_Y, color, dark, light);
+    }
+    ctx.restore();
+  }
   ctx.restore();
 
   // ── HP bar ──
@@ -135,7 +196,7 @@ export function drawUnitAt(
     const barW = 18;
     const barH = 3;
     const barX = cx - barW / 2;
-    const barY = cy + FOOT_Y + 5;
+    const barY = groundY + 5;
 
     ctx.fillStyle = 'rgba(0,0,0,0.5)';
     ctx.fillRect(barX, barY, barW, barH);

@@ -182,7 +182,7 @@ export function getLegalActions(state: GameState, registry: DataRegistry, player
     if (unit.owner !== playerId) continue;
     const unitType = registry.unitTypes[unit.typeId];
     if (!unitType) continue;
-    // "Stunned" (Infiltrator's Stun): the unit can't move or act this turn.
+    // "Stunned" (Wraith's Stun): the unit can't move or act this turn.
     if (unit.statuses?.includes('stunned')) continue;
 
     // Capture: standing on an enemy/neutral city, but only when the unit didn't
@@ -710,7 +710,7 @@ function applyUseAbility(state: GameState, action: UseAbilityAction, registry: D
       sweepDead(state, registry);
     }
   } else if (action.abilityId === 'stun') {
-    // Stun (Infiltrator): applies "stunned" to an enemy — it can't move/act on its
+    // Stun (Wraith): applies "stunned" to an enemy — it can't move/act on its
     // next turn (cleared at the end of the stunned unit's own turn, in applyEndTurn).
     const target = state.units.find(u => u.owner !== unit.owner && u.position.x === action.target.x && u.position.y === action.target.y);
     if (target) {
@@ -1233,14 +1233,14 @@ export function computeScores(state: GameState, registry: DataRegistry): Record<
 }
 
 // ── Visible State (Fog of War) ──
-// "Cloak" (Infiltrator): an enemy cloaked unit is hidden from `viewerId` unless it is
+// "Cloak" (Wraith): an enemy cloaked unit is hidden from `viewerId` unless it is
 // "marked" or a viewer-owned "detect" unit is adjacent (Chebyshev ≤ 1). Cloak is
 // separate from fog — it hides the unit even when fog is off. (Detect range is 1 for
 // now — flagged to revisit.) Returns true if the unit should be HIDDEN from the viewer.
 function unitHiddenByCloak(state: GameState, unit: Unit, viewerId: PlayerId, registry: DataRegistry): boolean {
   if (unit.owner === viewerId) return false; // you always see your own units
   const ut = registry.unitTypes[unit.typeId];
-  // Cloak (Infiltrator) and Burrow (Wyrm) both hide the unit from enemies unless detected.
+  // Cloak (Wraith) and Burrow (Wyrm) both hide the unit from enemies unless detected.
   if (!ut?.conditions?.includes('cloak') && !ut?.conditions?.includes('burrowed')) return false;
   if (unit.statuses?.includes('marked')) return false; // marked/exposed → visible
   // A viewer's detect unit reveals it within its detect range (detect = 1, detect_2 = 2).

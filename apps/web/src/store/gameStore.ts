@@ -6,12 +6,28 @@ import {
 } from '@tactica/engine';
 import { buildRegistry, defaultConfig, defaultTerrain, defaultUnits, defaultFactions, defaultTechs } from '@tactica/data';
 import type { TerrainType, UnitType, FactionDef, TechDef } from '@tactica/engine';
+import type { TileTheme } from '../iso/tileSprites.js';
 
 export interface CombatLogEntry {
   attacker: { name: string; attack: number; defence: number; hpBefore: number; hpAfter: number; maxHP: number };
   defender: { name: string; attack: number; defence: number; hpBefore: number; hpAfter: number; maxHP: number };
   attackBreakdown: CombatBreakdown;
   retaliationBreakdown: CombatBreakdown | null;
+  defenderKilled: boolean;
+  attackerKilled: boolean;
+}
+
+/** One executed attack, published for the render layer's generic combat
+ *  animations (lunge / hit flash / damage popups). Purely presentational. */
+export interface CombatEvent {
+  seq: number;                 // increments per attack so effects can detect new events
+  at: number;                  // Date.now() when fired (staleness check)
+  attackerId: number;
+  defenderId: number;
+  attackerPos: Coord;
+  defenderPos: Coord;
+  damage: number;              // dealt to defender
+  retaliation: number;         // dealt back to attacker
   defenderKilled: boolean;
   attackerKilled: boolean;
 }
@@ -31,6 +47,9 @@ interface GameStore {
   techs: TechDef[];
   config: GameConfig;
   registry: DataRegistry;
+  // Tile art theme (pure render setting — not part of deterministic engine state).
+  tileTheme: TileTheme;
+  setTileTheme: (t: TileTheme) => void;
   rebuildRegistry: () => void;
   setTerrain: (t: TerrainType[]) => void;
   setUnits: (u: UnitType[]) => void;
@@ -78,6 +97,8 @@ interface GameStore {
 
   // Combat log
   lastCombatResult: CombatLogEntry | null;
+  // Latest attack, for render-layer combat animations.
+  lastCombatEvent: CombatEvent | null;
 
   // Actions
   startGame: (factions: [string, string], seed: number) => void;
@@ -110,6 +131,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
   techs: [...defaultTechs] as TechDef[],
   config: { ...defaultConfig, techTreeEnabled: false }, // tech tree OFF by default (all unlocked) until we engage it
   registry: buildRegistry(),
+  tileTheme: 'default',
+  setTileTheme: (t) => set({ tileTheme: t }),
 
   rebuildRegistry: () => {
     const { terrain, units, factions, techs } = get();
@@ -152,6 +175,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   setInspectorOpen: (v) => set({ inspectorOpen: v }),
 
   lastCombatResult: null,
+  lastCombatEvent: null,
 
   startGame: (factions, seed) => {
     const { config, registry } = get();
@@ -185,6 +209,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
     // Capture combat info before applying the action
     let combatLogEntry: CombatLogEntry | null = null;
+    let combatEvent: CombatEvent | null = null;
     if (action.type === 'attack') {
       const attacker = gameState.units.find(u => u.id === action.unitId);
       const defender = gameState.units.find(u => u.id === action.targetId);
@@ -218,6 +243,18 @@ export const useGameStore = create<GameStore>((set, get) => ({
             defenderKilled: result.defenderKilled,
             attackerKilled: result.attackerKilled,
           };
+          combatEvent = {
+            seq: (get().lastCombatEvent?.seq ?? 0) + 1,
+            at: Date.now(),
+            attackerId: attacker.id,
+            defenderId: defender.id,
+            attackerPos: attacker.position,
+            defenderPos: defender.position,
+            damage: result.attackerDamage,
+            retaliation: result.defenderRetaliation,
+            defenderKilled: result.defenderKilled,
+            attackerKilled: result.attackerKilled,
+          };
         }
       }
     }
@@ -241,6 +278,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       abilityMode: null,
       showInterstitial,
       lastCombatResult: combatLogEntry ?? get().lastCombatResult,
+      lastCombatEvent: combatEvent ?? get().lastCombatEvent,
     });
   },
 

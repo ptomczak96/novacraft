@@ -5,7 +5,14 @@ import type { GameConfig, GameState, Unit, UseAbilityAction, MoveAction } from '
 
 const registry = buildRegistry();
 const cfg = (o: Partial<GameConfig> = {}): GameConfig => ({ ...defaultConfig, fogOfWar: false, ...o });
-const plains = (s: GameState) => { for (let y = 0; y < s.map.height; y++) for (let x = 0; x < s.map.width; x++) s.map.tiles[y][x].terrain = 'plains'; };
+// Reset to clean plains — clear mapgen-placed resource/city/ruin flags too, so burrow
+// movement tests aren't perturbed by where the generator happened to stamp resources.
+const plains = (s: GameState) => {
+  for (let y = 0; y < s.map.height; y++) for (let x = 0; x < s.map.width; x++) {
+    const t = s.map.tiles[y][x];
+    t.terrain = 'plains'; t.isResourceTile = false; t.isCity = false; t.isRuin = false;
+  }
+};
 const mk = (id: number, t: string, o: number, x: number, y: number): Unit =>
   ({ id, typeId: t, owner: o, position: { x, y }, hp: registry.unitTypes[t].maxHP, hasMoved: false, hasAttacked: false, abilityCooldowns: {} });
 const u = (s: GameState, id: number) => s.units.find(x => x.id === id);

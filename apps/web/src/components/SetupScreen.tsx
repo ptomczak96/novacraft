@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useGameStore } from '../store/gameStore.js';
 
 export function SetupScreen() {
-  const { config, setConfig, factions, startGame, initMapEditor, loadGame, setBotSetting } = useGameStore();
+  const { config, setConfig, factions, startGame, initMapEditor, loadGame, setBotSetting, tileTheme, setTileTheme } = useGameStore();
   const [seed, setSeed] = useState(Math.floor(Math.random() * 100000));
   const [faction0, setFaction0] = useState(factions[0]?.id || 'vanguard');
   const [faction1, setFaction1] = useState(factions[1]?.id || 'hive');
@@ -66,6 +66,16 @@ export function SetupScreen() {
             >
               <option value="grassland">Grassland</option>
               <option value="stone">Stone</option>
+            </select>
+          </div>
+          <div className="setup-field">
+            <label>Map Generation</label>
+            <select value={tileTheme} onChange={e => setTileTheme(e.target.value as typeof tileTheme)}>
+              <option value="default">Default</option>
+              <option value="gen2_volcanic">GEN 2 - Volcanic</option>
+              <option value="grass_iso">Grassland (fantasy)</option>
+              <option value="gen3_desert">GEN 3 - Desert</option>
+              <option value="gen5_desert">GEN 5 - Desert</option>
             </select>
           </div>
         </div>
