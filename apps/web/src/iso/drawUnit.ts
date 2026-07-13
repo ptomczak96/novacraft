@@ -130,20 +130,16 @@ export function drawUnitAt(
   }
 
   if (sprite) {
-    // ── Directional sprite (art isn't team-colored, so mark ownership with a rim) ──
-    if (!isSelected) {
-      ctx.beginPath();
-      ctx.ellipse(cx, groundY + 1, 16, 6, 0, 0, Math.PI * 2);
-      ctx.strokeStyle = color;
-      ctx.globalAlpha = 0.55;
-      ctx.lineWidth = 1.5;
-      ctx.stroke();
-      ctx.globalAlpha = 1;
-    }
-    const { img, def } = sprite;
+    const { img, def, flip } = sprite;
     const s = def.drawW / def.srcW;
     const dx = cx - def.drawW / 2;
     const dy = groundY - def.footY * s;
+    ctx.save();
+    if (flip) {
+      // Mirror about the unit's vertical axis (Polytopia-style missing side).
+      ctx.translate(2 * cx, 0);
+      ctx.scale(-1, 1);
+    }
     if (isSelected) {
       // Minimal light-green glow hugging the sprite's silhouette. Canvas shadows
       // follow the image alpha, so two blurred passes build a soft gradient rim
@@ -165,6 +161,7 @@ export function drawUnitAt(
       ctx.drawImage(img, dx, dy, def.drawW, def.srcH * s);
       ctx.restore();
     }
+    ctx.restore();
   } else {
     // ── Draw figure by type (scaled up around the feet so it stays planted) ──
     const drawFn = UNIT_DRAWERS[unit.typeId] ?? drawGenericUnit;

@@ -1942,3 +1942,43 @@ the warrior art was made for — the 2026-07-08 placeholder mapping to
 red-tint recruit roster over the old filtered list, and both rationale-log
 tails were preserved per the append-only rule. All 93 tests pass post-rebase;
 live smoke test shows the Vanguard warrior sprite on GEN 5 under the new fog.
+
+## 2026-07-13 — Patrick Tomczak (patrick.tomczak.1@gmail.com)
+
+**Vanguard unit art v2 (Rigbound): all 4 recruitables, Polytopia-style duo
+facings.** Per Patrick, from `~/Rigbound - Art Prototyping/Units/Vanguard/*`
+("-A" picks). Each sheet held BOTH front views; split along the transparent
+gap, facing judged per figure (weapon direction + visor), and named copies
+saved back into his source folders (e.g. "Warrior SE.png" / "Warrior SW.png").
+
+- Units mapped: Warrior→warrior, Scout→scout, Lancer→lancer, Bulwark→defender
+  (the in-game name for defender IS Bulwark). Only these four — the game's
+  recruit roster — get sprites; Tank/Stalker/Titan/Wraith/Sentinel folders are
+  future units, and all Hive units keep vector drawers.
+- New duo mode in unitSprites: only se/sw front views load; ne→se and nw→sw
+  (Polytopia behaviour — no back views). If a side's file were missing, the
+  other mirrors at draw time (ctx horizontal flip about the unit axis, wrapped
+  around glow/main/flash passes) — unused for these sets since both views are
+  real art (Bulwark's V emblem stays correct).
+- Same body-anchored normalization as before, with a tweak: the foot row comes
+  from columns ≥30% of max height (includes the scout drone's thin legs) while
+  centering uses ≥45% columns (excludes sword/rifle). Old GEN 2 warrior set
+  (/units/vanguard_warrior) deleted — superseded.
+- Per-unit scale: warrior 70px, lancer 70, bulwark 76, scout 48 (drone).
+
+Verified live: all four render on their tiles facing SE; shifting each one
+tile in −x flips every unit to its SW art (sword/rifle/shield all switch
+sides). Typecheck passes.
+
+## 2026-07-13 — Patrick Tomczak (patrick.tomczak.1@gmail.com)
+
+**Unit centering v2 + ownership ring removed.** Per Patrick: units sat slightly
+off tile centers, and the player-color ellipse under sprite units was unwanted.
+(1) Sprite anchoring switched from the body-column midpoint to the GROUND-
+CONTACT CENTROID — the alpha-weighted center of the bottom ~7% band of the
+figure (boots / drone feet / shield base). A 3/4-view figure's visual ground
+footprint isn't centered under its torso, which was the visible offset.
+Contracts rebuilt, registry metrics updated (on-screen body heights unchanged).
+(2) The ownership rim ellipse is deleted from the sprite path — shadow, white
+selection ring, glow, and HP bar remain; ownership reads from the HP-bar side
+and territory colors. Verified live in both facings.
