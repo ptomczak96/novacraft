@@ -1930,3 +1930,15 @@ renderer (in-page probe of the running module): seed-555 board draws all nine
 files (opens 44/30/37, covers 11/5/4, barriers 2/7/4). Lesson recorded: after
 HMR edits, a plain dynamic import can create a SECOND module instance — restart
 Vite before in-page module probes.
+
+## 2026-07-13 — Patrick Tomczak (patrick.tomczak.1@gmail.com)
+
+**Integration: rebased local batch onto the faction rework; sprite key
+ironclad:warrior → vanguard:warrior.** The parallel branch replaced
+Ironclad/Sylvan with Vanguard & Hive (c0199d2), which is exactly the faction
+the warrior art was made for — the 2026-07-08 placeholder mapping to
+`ironclad` is superseded. Merge notes: kept both sides of the mapgen options
+(doubleResources multiplier + impassable/mountain budgets), kept the new
+red-tint recruit roster over the old filtered list, and both rationale-log
+tails were preserved per the append-only rule. All 93 tests pass post-rebase;
+live smoke test shows the Vanguard warrior sprite on GEN 5 under the new fog.

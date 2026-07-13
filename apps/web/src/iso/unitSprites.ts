@@ -20,12 +20,12 @@ interface UnitSpriteDef {
 // Keys are either `${factionId}:${typeId}` (sprite only for that team) or a bare
 // `typeId` (sprite for every team). Faction-scoped entries win over bare ones.
 const UNIT_SPRITES: Record<string, UnitSpriteDef> = {
-  // Vanguard warrior [variation] — the Vanguard team's basic melee unit, mapped
-  // to the Ironclad Dominion faction; other factions keep their vector drawers.
+  // Vanguard warrior [variation] — the Vanguard faction's basic melee unit;
+  // other factions keep their vector drawers.
   // Body-anchored normalization (sword excluded from centering/foot row):
   // 433×397 views, body centerline on the canvas center, feet at row 385, body
   // 373px tall. drawW keeps the figure ≈70px tall on screen (70·433/373).
-  'ironclad:warrior': {
+  'vanguard:warrior': {
     base: '/units/vanguard_warrior',
     srcW: 433, srcH: 397, footY: 385,
     drawW: 81.3,
