@@ -383,6 +383,24 @@ describe('Capture frees the new owner’s slots (Bug 1)', () => {
     expect(unitsHomedAt(state, founded.id)).toBe(1);           // counts against the new city
     expect(unitsHomedAt(state, cap.id)).toBe(capHomedBefore - 1); // freed from the capital
   });
+
+  it('founding a city ends the turn — the founder cannot attack afterwards', () => {
+    const registry = getRegistry();
+    let state = createGame(getConfig(), registry, ['vanguard', 'hive'], 7);
+    const pos = { x: 6, y: 6 };
+    state.map.tiles[pos.y][pos.x].isRuin = true;
+    state.map.tiles[pos.y][pos.x].isCity = false;
+    state.players[0].ore = 50;
+    // A founder on the ruin, with an enemy right next to it.
+    state.units.push({ id: 701, typeId: 'warrior', owner: 0, position: { ...pos }, hp: 15, hasMoved: false, hasAttacked: false, abilityCooldowns: {} });
+    state.units.push({ id: 702, typeId: 'warrior', owner: 1, position: { x: 7, y: 6 }, hp: 15, hasMoved: false, hasAttacked: false, abilityCooldowns: {} });
+
+    state = applyAction(state, { type: 'foundCity', position: pos }, registry);
+    const founder = state.units.find(u => u.id === 701)!;
+    expect(founder.hasAttacked).toBe(true);
+    expect(founder.hasMoved).toBe(true);
+    expect(getLegalActions(state, registry, 0).some(a => a.type === 'attack' && 'unitId' in a && a.unitId === 701)).toBe(false);
+  });
 });
 
 describe('Resources & recruiting costs', () => {
@@ -415,7 +433,8 @@ describe('Resources & recruiting costs', () => {
 
   it('getRecruitOptions lists all buildable units with an affordable flag', () => {
     const registry = getRegistry();
-    const state = createGame(getConfig(), registry, ['vanguard', 'hive'], 7);
+    // Tech tree OFF so Lancer/Bulwark (now gated by Small Arms) are available to list.
+    const state = createGame(getConfig({ techTreeEnabled: false }), registry, ['vanguard', 'hive'], 7);
     const cap = capitalOf(state, 0);
     state.units = []; state.unitHomeCity = {}; // free the city tile
     state.players[0].ore = 20; // can afford warrior (20), not scout (30) or lancer (50)

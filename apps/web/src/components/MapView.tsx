@@ -11,11 +11,19 @@ const UNIT_ICONS: Record<string, string> = {
   lancer: '🪖',
   archer: '🏹',
   defender: '🛡️',
+  wraith: '🥷',
+  stalker: '🕷️',
+  titan: '🗿',
+  sentinel: '📡',
+  tank: '🛞',
   catapult: '💣',
   scuttling: '🐛',
   hive_scout: '👁️',
   reaper: '🦅',
   scab: '⚗️',
+  vindrace: '🦏',
+  seercaust: '🔮',
+  wyrm: '🪱',
   ironclad_berserker: '🪓',
   ironclad_siege_tower: '🏰',
   sylvan_ranger: '🌿',
@@ -48,11 +56,16 @@ export function MapView() {
     if (terrain.id === 'forest') notes.push('+20% defence for light units');
     if (terrain.defenceBonus > 0 && terrain.id !== 'forest') notes.push(`+${Math.round(terrain.defenceBonus * 100)}% defence`);
     if (tile.isRuin) notes.push('Ruin — a scout can found a city here');
+    // "Spray Bile" (infected tile): buffs/debuffs + a turns-left counter.
+    const bile = tile.bile
+      ? { owner: tile.bile.owner, turnsLeft: Math.max(0, tile.bile.expiresTurn - visibleState.turn) }
+      : null;
     return {
       icon: terrain.icon,
       name: terrain.name,
       resource: tile.resourceKind ? (RESOURCE_LABEL[tile.resourceKind] ?? tile.resourceKind) : null,
       notes,
+      bile,
       coord: inspectedTile,
     };
   }, [inspectedTile, visibleState, registry]);
@@ -150,6 +163,16 @@ export function MapView() {
           {tileInfo.notes.map((n, i) => (
             <div key={i} className="tile-info-note">{n}</div>
           ))}
+          {tileInfo.bile && (
+            <div className="tile-info-bile">
+              <div className="tile-info-bile-head">
+                🟣 Infected (Bile) · P{tileInfo.bile.owner + 1}'s ·{' '}
+                {tileInfo.bile.turnsLeft} turn{tileInfo.bile.turnsLeft === 1 ? '' : 's'} left
+              </div>
+              <div className="tile-info-note">Owner's units: +20% ATK, +20% DEF</div>
+              <div className="tile-info-note">Enemy units: −20% DEF · movement penalty (TBD)</div>
+            </div>
+          )}
           <div className="tile-info-note tile-info-coord">({tileInfo.coord.x}, {tileInfo.coord.y})</div>
         </div>
       )}
@@ -169,20 +192,25 @@ export function MapView() {
           {recruitOptions.map(opt => {
             const ut = registry.unitTypes[opt.unitTypeId];
             if (!ut) return null;
-            const cls = `recruit-card${opt.affordable ? '' : ' recruit-card--unaffordable'}`;
+            const cls = `recruit-card${opt.locked ? ' recruit-card--locked' : opt.affordable ? '' : ' recruit-card--unaffordable'}`;
+            const title = opt.locked
+              ? `Locked — research ${opt.lockedBy && opt.lockedBy.length ? opt.lockedBy.join(' / ') : 'the required tech'} to unlock`
+              : opt.affordable ? undefined : 'Not enough resources';
             return (
               <div
                 key={opt.unitTypeId}
                 className={cls}
-                title={opt.affordable ? undefined : 'Not enough resources'}
+                title={title}
                 onClick={() => {
-                  if (!opt.affordable) return;
+                  if (opt.locked || !opt.affordable) return;
                   executeAction({ type: 'recruit', unitTypeId: opt.unitTypeId, cityPosition: selectedCity });
                   setShowRecruit(false);
                 }}
               >
                 <div className="name">{UNIT_ICONS[opt.unitTypeId] || '●'} {ut.name}</div>
-                <div className="cost">{opt.cost}◈{opt.plasmaCost > 0 ? ` ${opt.plasmaCost}✦` : ''}</div>
+                {opt.locked
+                  ? <div className="cost">🔒 {opt.lockedBy && opt.lockedBy.length ? opt.lockedBy.join(' / ') : 'Locked'}</div>
+                  : <div className="cost">{opt.cost}◈{opt.plasmaCost > 0 ? ` ${opt.plasmaCost}✦` : ''}</div>}
                 <div className="stats">
                   HP:{ut.maxHP} ATK:{ut.attack} DEF:{ut.defence} MOV:{ut.movement} RNG:{ut.attackRange}
                 </div>

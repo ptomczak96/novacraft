@@ -47,6 +47,9 @@ interface GameStore {
   hoveredTile: Coord | null;
   inspectedTile: Coord | null; // tile whose info box is shown (terrain/resource)
   setInspectedTile: (c: Coord | null) => void;
+  // Active ability targeting: the unit + ability awaiting a target click (or null).
+  abilityMode: { unitId: number; abilityId: string } | null;
+  setAbilityMode: (m: { unitId: number; abilityId: string } | null) => void;
   legalActions: Action[];
 
   // Territory-expansion picker (L4 reward): active while the player ticks tiles.
@@ -105,7 +108,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   units: [...defaultUnits] as UnitType[],
   factions: [...defaultFactions] as FactionDef[],
   techs: [...defaultTechs] as TechDef[],
-  config: { ...defaultConfig },
+  config: { ...defaultConfig, techTreeEnabled: false }, // tech tree OFF by default (all unlocked) until we engage it
   registry: buildRegistry(),
 
   rebuildRegistry: () => {
@@ -168,10 +171,12 @@ export const useGameStore = create<GameStore>((set, get) => ({
     });
   },
 
-  selectUnit: (unitId) => set({ selectedUnitId: unitId, selectedCity: null, inspectedTile: null }),
-  setSelectedCity: (c) => set({ selectedCity: c, selectedUnitId: null, inspectedTile: null }),
+  selectUnit: (unitId) => set({ selectedUnitId: unitId, selectedCity: null, inspectedTile: null, abilityMode: null }),
+  setSelectedCity: (c) => set({ selectedCity: c, selectedUnitId: null, inspectedTile: null, abilityMode: null }),
   setHoveredTile: (c) => set({ hoveredTile: c }),
   setInspectedTile: (c) => set({ inspectedTile: c }),
+  abilityMode: null,
+  setAbilityMode: (m) => set({ abilityMode: m }),
   setTerritorySelect: (v) => set({ territorySelect: v, selectedUnitId: null, selectedCity: null, inspectedTile: null }),
 
   executeAction: (action) => {
@@ -233,6 +238,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       selectedUnitId: null,
       territorySelect: null,
       inspectedTile: null,
+      abilityMode: null,
       showInterstitial,
       lastCombatResult: combatLogEntry ?? get().lastCombatResult,
     });

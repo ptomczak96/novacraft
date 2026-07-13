@@ -1,8 +1,9 @@
 // Public API
 export { createGame, getLegalActions, getRecruitOptions, applyAction, getVisibleState, getResult, replayGame, computeScores } from './game.js';
-export { resolveCombat, previewCombat, calculateDamage, computeForces, getDefenseMultiplier } from './combat.js';
+export { resolveCombat, previewCombat, calculateDamage, computeForces, getDefenseMultiplier, effectiveAttackRange } from './combat.js';
 export type { CombatResult, CombatBreakdown } from './combat.js';
 export { getReachableTiles, distance, inRange } from './pathfinding.js';
+export { getSlashArc, slashHitDamage } from './slash.js';
 export { computeVisibility } from './fog.js';
 export { getModifier, ownedCityCount, techCost, techCostForPlayer, isTechAvailable, isUnitUnlocked } from './tech.js';
 export {

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { TECH_TREES, treeTiers, isTierUnlocked } from '../data/techTrees.js';
-import type { TechTreeDef, TechNode } from '../data/techTrees.js';
+import { TECH_TREES, layoutTree, nodeState, NODE_W, NODE_H } from '../data/techTrees.js';
+import type { TechNode } from '../data/techTrees.js';
 
 interface TechTreeViewProps {
   factionName: string;
@@ -41,36 +41,49 @@ export function TechTreeView({ factionName, researched, onResearch, onClose }: T
             ))}
           </div>
 
-          {/* Active tree's cards, grouped by tier */}
+          {/* Active tree — Polytopia-style DAG: levels on rows, connector lines between prereqs */}
           <div className="tech-content">
             {active.blank ? (
               <div className="tech-blank">
                 <p>This research line is not available yet.</p>
               </div>
-            ) : (
-              treeTiers(active).map(tier => {
-                const unlocked = isTierUnlocked(active, tier, researched);
-                const tierNodes = active.nodes.filter(n => n.tier === tier);
-                return (
-                  <div className="tech-tier" key={tier}>
-                    <div className="tech-tier-label">
-                      <span>{tier === 0 ? 'BASE' : `TIER ${tier}`}</span>
-                      {!unlocked && <span className="tech-tier-lock">LOCKED</span>}
-                    </div>
-                    <div className="tech-cards">
-                      {tierNodes.map(node => (
-                        <TechCard
-                          key={node.id}
-                          node={node}
-                          state={cardState(node, active, researched)}
-                          onResearch={() => onResearch(node.id)}
-                        />
+            ) : (() => {
+              const layout = layoutTree(active);
+              return (
+                <div className="tech-dag-scroll">
+                  <div className="tech-dag" style={{ width: layout.width + 56, height: layout.height + 24 }}>
+                    {/* level labels + row guides */}
+                    {layout.rows.map(r => (
+                      <div key={r.tier} className="tech-row-label" style={{ top: r.y + NODE_H / 2 - 10 }}>
+                        {r.tier === 0 ? 'BASE' : `LVL ${r.tier}`}
+                      </div>
+                    ))}
+                    {/* connector lines (behind the nodes) */}
+                    <svg className="tech-edges" width={layout.width + 56} height={layout.height + 24}>
+                      {layout.edges.map((e, i) => (
+                        <line key={i}
+                          x1={e.x1 + 44} y1={e.y1 + 8} x2={e.x2 + 44} y2={e.y2 + 8}
+                          stroke={e.dashed ? 'rgba(120,200,255,0.55)' : 'rgba(120,200,255,0.4)'}
+                          strokeWidth={2} strokeDasharray={e.dashed ? '5 4' : undefined} />
                       ))}
-                    </div>
+                    </svg>
+                    {/* nodes */}
+                    {layout.nodes.map(p => {
+                      const state = nodeState(p.node, active, researched);
+                      return (
+                        <TechCard
+                          key={p.node.id}
+                          node={p.node}
+                          state={state}
+                          style={{ left: p.x + 44, top: p.y + 8 }}
+                          onResearch={() => onResearch(p.node.id)}
+                        />
+                      );
+                    })}
                   </div>
-                );
-              })
-            )}
+                </div>
+              );
+            })()}
           </div>
         </div>
       </div>
@@ -80,35 +93,26 @@ export function TechTreeView({ factionName, researched, onResearch, onClose }: T
 
 type CardState = 'researched' | 'available' | 'locked';
 
-function cardState(node: TechNode, tree: TechTreeDef, researched: Set<string>): CardState {
-  if (researched.has(node.id)) return 'researched';
-  if (isTierUnlocked(tree, node.tier, researched)) return 'available';
-  return 'locked';
-}
-
 function TechCard({
-  node, state, onResearch,
+  node, state, style, onResearch,
 }: {
   node: TechNode;
   state: CardState;
+  style: React.CSSProperties;
   onResearch: () => void;
 }) {
   return (
     <button
-      className={`tech-card ${state}`}
+      className={`tech-node ${state}`}
+      style={{ ...style, width: NODE_W, minHeight: NODE_H }}
       disabled={state !== 'available'}
       onClick={onResearch}
+      title={node.desc}
     >
-      <div className="tech-card-icon">
-        <img src={ICON_BASE + node.icon} alt="" />
-      </div>
-      <div className="tech-card-name">
-        {node.name}
-        {node.tentative && <span className="tech-card-tentative" title="Tier not finalised">?</span>}
-      </div>
-      <div className="tech-card-desc">{node.desc}</div>
-      <div className="tech-card-status">
-        {state === 'researched' ? 'RESEARCHED' : state === 'available' ? 'RESEARCH' : 'LOCKED'}
+      <div className="tech-node-icon"><img src={ICON_BASE + node.icon} alt="" /></div>
+      <div className="tech-node-name">{node.name}</div>
+      <div className="tech-node-status">
+        {state === 'researched' ? '✓ DONE' : state === 'available' ? 'RESEARCH' : '🔒'}
       </div>
     </button>
   );

@@ -117,6 +117,12 @@ export function SetupScreen() {
         </div>
 
         <div className="checkbox-row">
+          <input type="checkbox" id="tech-tree" checked={config.techTreeEnabled === true}
+            onChange={e => setConfig({ ...config, techTreeEnabled: e.target.checked })} />
+          <label htmlFor="tech-tree">Tech Tree</label>
+        </div>
+
+        <div className="checkbox-row">
           <input type="checkbox" id="wc-cities" checked={config.winConditions.captureAllCities}
             onChange={e => setConfig({ ...config, winConditions: { ...config.winConditions, captureAllCities: e.target.checked } })} />
           <label htmlFor="wc-cities">Win: Capture All Cities</label>

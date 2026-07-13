@@ -118,8 +118,11 @@ export function drawUnitAt(
   }
 
   // ── Draw figure by type (scaled up around the feet so it stays planted) ──
+  // Cloaked units (only ever shown to their owner) render ghosted so you can tell.
+  const cloaked = registry.unitTypes[unit.typeId]?.conditions?.includes('cloak') ?? false;
   const drawFn = UNIT_DRAWERS[unit.typeId] ?? drawGenericUnit;
   ctx.save();
+  if (cloaked) ctx.globalAlpha = 0.5;
   ctx.translate(cx, cy + FOOT_Y);
   ctx.scale(UNIT_SCALE, UNIT_SCALE);
   drawFn(ctx, 0, -FOOT_Y, color, dark, light);
@@ -156,6 +159,12 @@ const UNIT_DRAWERS: Record<string, UnitDrawFn> = {
   warrior: drawWarrior,
   archer: drawArcher,
   defender: drawDefender,
+  wraith: drawWraith,
+  stalker: drawStalker,
+  sentinel: drawSentinel,
+  titan: drawTitan,
+  tank: drawTank,
+  tank_assault: drawTank,
   catapult: drawCatapult,
   ironclad_berserker: drawBerserker,
   ironclad_siege_tower: drawSiegeTower,
@@ -166,7 +175,294 @@ const UNIT_DRAWERS: Record<string, UnitDrawFn> = {
   reaper: drawReaper,
   lancer: drawLancer,
   hive_scout: drawHiveScout,
+  vindrace: drawVindrace,
+  seercaust: drawSeercaust,
+  wyrm: drawWyrm,
+  wyrm_burrowed: drawWyrmBurrowed,
 };
+
+// The Stalker — a six-legged walker with a ranged cannon. Placeholder art (Patrick to
+// replace with a painted six-legged walker sprite — see docs/overlap.md).
+function drawStalker(
+  ctx: CanvasRenderingContext2D,
+  cx: number, cy: number,
+  color: string, dark: string, light: string,
+) {
+  const by = cy + FOOT_Y;
+
+  // ── Six legs (3 per side): angled struts from body joints down to the ground ──
+  ctx.strokeStyle = METAL_DARK; ctx.lineWidth = 1.4; ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(cx - 3, by - 9); ctx.lineTo(cx - 9, by);   // left, outer
+  ctx.moveTo(cx - 3, by - 8); ctx.lineTo(cx - 6, by);   // left, mid
+  ctx.moveTo(cx - 3, by - 7); ctx.lineTo(cx - 3, by);   // left, inner
+  ctx.moveTo(cx + 3, by - 9); ctx.lineTo(cx + 9, by);   // right, outer
+  ctx.moveTo(cx + 3, by - 8); ctx.lineTo(cx + 6, by);   // right, mid
+  ctx.moveTo(cx + 3, by - 7); ctx.lineTo(cx + 3, by);   // right, inner
+  ctx.stroke();
+
+  // ── Chassis (boxy body) ──
+  outlined(ctx, METAL_MID, () => { ctx.rect(cx - 7, by - 15, 14, 8); }, 1.2);
+  filled(ctx, METAL_LIGHT, () => { ctx.rect(cx - 5, by - 14.5, 10, 2.5); }); // top plate
+
+  // ── Cockpit / sensor dome (player colour) ──
+  outlined(ctx, color, () => { ctx.arc(cx - 1, by - 12.5, 2.6, 0, Math.PI * 2); }, 1);
+  filled(ctx, light, () => { ctx.arc(cx - 1.8, by - 13.2, 1, 0, Math.PI * 2); });
+
+  // ── Cannon barrel (the range weapon) pointing right ──
+  outlined(ctx, METAL_DARK, () => { ctx.rect(cx + 5, by - 13, 7, 2.4); }, 0.9);
+  filled(ctx, dark, () => { ctx.rect(cx + 11.5, by - 12.8, 1.4, 1.8); }); // muzzle
+}
+
+// Wyrm — a Dune-sandworm-style beast: a thick segmented body rearing up with a
+// toothy maw. Placeholder art (Patrick — see docs/overlap.md).
+function drawWyrm(
+  ctx: CanvasRenderingContext2D,
+  cx: number, cy: number,
+  color: string, dark: string, light: string,
+) {
+  const by = cy + FOOT_Y;
+  // Coiled base on the ground
+  outlined(ctx, dark, () => { ctx.ellipse(cx, by - 2, 8, 3, 0, 0, Math.PI * 2); }, 1);
+  // Rearing segmented body (curves up to the right)
+  const segs: [number, number, number][] = [
+    [cx - 3, by - 4, 4.5],
+    [cx - 1, by - 8, 4.2],
+    [cx + 1.5, by - 12, 3.8],
+    [cx + 4, by - 15.5, 3.3],
+  ];
+  for (const [sx, sy, r] of segs) {
+    outlined(ctx, color, () => { ctx.ellipse(sx, sy, r, r * 0.85, 0.3, 0, Math.PI * 2); }, 1.1);
+    filled(ctx, light, () => { ctx.ellipse(sx - r * 0.35, sy - r * 0.4, r * 0.35, r * 0.22, 0.3, 0, Math.PI * 2); });
+  }
+  // Head + gaping maw at the top
+  const hx = cx + 6.5, hy = by - 18;
+  outlined(ctx, color, () => { ctx.ellipse(hx, hy, 3.4, 3, 0.2, 0, Math.PI * 2); }, 1.2);
+  filled(ctx, '#3a0d10', () => { ctx.ellipse(hx + 1, hy - 0.5, 1.9, 2.2, 0.2, 0, Math.PI * 2); }); // maw
+  // Ring of teeth
+  ctx.strokeStyle = METAL_LIGHT; ctx.lineWidth = 0.9; ctx.lineCap = 'round';
+  ctx.beginPath();
+  for (let a = 0; a < Math.PI * 2; a += Math.PI / 3) {
+    ctx.moveTo(hx + Math.cos(a) * 2, hy + Math.sin(a) * 2.3);
+    ctx.lineTo(hx + Math.cos(a) * 3.1, hy + Math.sin(a) * 3.4);
+  }
+  ctx.stroke();
+}
+
+// The burrowed Wyrm renders as a dirt mound (owner-only; enemies don't see it at all).
+function drawWyrmBurrowed(
+  ctx: CanvasRenderingContext2D,
+  cx: number, cy: number,
+  color: string, dark: string, _light: string,
+) {
+  const by = cy + FOOT_Y;
+  // Mound of disturbed earth
+  outlined(ctx, '#7a5a3a', () => {
+    ctx.moveTo(cx - 8, by);
+    ctx.quadraticCurveTo(cx - 4, by - 7, cx, by - 7.5);
+    ctx.quadraticCurveTo(cx + 4, by - 7, cx + 8, by);
+    ctx.closePath();
+  }, 1);
+  filled(ctx, '#9c7448', () => { ctx.ellipse(cx - 1.5, by - 4.5, 3, 1.4, -0.2, 0, Math.PI * 2); }); // highlight
+  // Cracks / clods
+  ctx.strokeStyle = '#4e3821'; ctx.lineWidth = 0.8; ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(cx - 3, by - 2); ctx.lineTo(cx - 1, by - 5);
+  ctx.moveTo(cx + 2, by - 1.5); ctx.lineTo(cx + 3.5, by - 4.5);
+  ctx.stroke();
+  // A small team-coloured tint at the peak (so you can tell whose mound it is)
+  filled(ctx, color, () => { ctx.arc(cx, by - 6.5, 1.1, 0, Math.PI * 2); });
+}
+
+// Vindrace — a hulking ultralisk-style beast: heavy armoured carapace on four legs
+// with two huge forward blades/tusks. Placeholder art (Patrick — see docs/overlap.md).
+function drawVindrace(
+  ctx: CanvasRenderingContext2D,
+  cx: number, cy: number,
+  color: string, dark: string, light: string,
+) {
+  const by = cy + FOOT_Y;
+
+  // Four heavy legs
+  ctx.strokeStyle = dark; ctx.lineWidth = 2; ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(cx - 6, by - 6); ctx.lineTo(cx - 8, by);
+  ctx.moveTo(cx - 2, by - 6); ctx.lineTo(cx - 3, by);
+  ctx.moveTo(cx + 3, by - 6); ctx.lineTo(cx + 4, by);
+  ctx.moveTo(cx + 6, by - 6); ctx.lineTo(cx + 8, by);
+  ctx.stroke();
+
+  // Bulky armoured carapace
+  outlined(ctx, color, () => { ctx.ellipse(cx - 1, by - 9, 9, 5.5, 0, 0, Math.PI * 2); }, 1.4);
+  filled(ctx, dark, () => { ctx.ellipse(cx - 2, by - 11, 4.5, 1.7, -0.2, 0, Math.PI * 2); });   // ridge shadow
+  filled(ctx, light, () => { ctx.ellipse(cx - 3, by - 11.6, 2.4, 0.9, -0.2, 0, Math.PI * 2); }); // ridge highlight
+
+  // Low head at the front
+  outlined(ctx, dark, () => { ctx.ellipse(cx + 8, by - 7, 3.6, 3, 0, 0, Math.PI * 2); }, 1);
+  filled(ctx, '#ff5544', () => { ctx.arc(cx + 8.5, by - 7.5, 0.9, 0, Math.PI * 2); }); // eye
+
+  // Two huge curved blades/tusks jutting forward
+  filled(ctx, METAL_LIGHT, () => {
+    ctx.moveTo(cx + 9, by - 9.5);
+    ctx.quadraticCurveTo(cx + 18, by - 14, cx + 21, by - 8.5);
+    ctx.quadraticCurveTo(cx + 16, by - 10, cx + 10, by - 7.5);
+    ctx.closePath();
+  });
+  filled(ctx, METAL_MID, () => {
+    ctx.moveTo(cx + 9, by - 5.5);
+    ctx.quadraticCurveTo(cx + 18, by - 2, cx + 21, by - 8);
+    ctx.quadraticCurveTo(cx + 15, by - 5, cx + 10, by - 4);
+    ctx.closePath();
+  });
+}
+
+// Seercaust — a zerg-queen-style caster: tall, slender, crowned, with raised
+// tendril-arms channelling a glowing spell orb. Placeholder art (Patrick).
+function drawSeercaust(
+  ctx: CanvasRenderingContext2D,
+  cx: number, cy: number,
+  color: string, dark: string, light: string,
+) {
+  const by = cy + FOOT_Y;
+
+  // Tapered lower body (planted)
+  outlined(ctx, dark, () => {
+    ctx.moveTo(cx - 3.5, by);
+    ctx.lineTo(cx - 2, by - 10);
+    ctx.lineTo(cx + 2, by - 10);
+    ctx.lineTo(cx + 3.5, by);
+    ctx.closePath();
+  }, 1);
+  // Upper torso
+  outlined(ctx, color, () => { ctx.ellipse(cx, by - 12.5, 3.2, 4.5, 0, 0, Math.PI * 2); }, 1.2);
+  filled(ctx, light, () => { ctx.ellipse(cx - 1, by - 13.5, 1.3, 2, -0.2, 0, Math.PI * 2); });
+
+  // Head + crown crest (the "queen")
+  outlined(ctx, color, () => { ctx.ellipse(cx, by - 17.5, 2.4, 2.6, 0, 0, Math.PI * 2); }, 1);
+  filled(ctx, '#ffdd44', () => { ctx.arc(cx - 0.9, by - 17.5, 0.5, 0, Math.PI * 2); ctx.arc(cx + 0.9, by - 17.5, 0.5, 0, Math.PI * 2); });
+  ctx.strokeStyle = dark; ctx.lineWidth = 1.2; ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(cx - 1.8, by - 19); ctx.lineTo(cx - 3.5, by - 21.5);
+  ctx.moveTo(cx, by - 19.5); ctx.lineTo(cx, by - 22.5);
+  ctx.moveTo(cx + 1.8, by - 19); ctx.lineTo(cx + 3.5, by - 21.5);
+  ctx.stroke();
+
+  // Raised casting tendril-arms
+  ctx.strokeStyle = dark; ctx.lineWidth = 1.4;
+  ctx.beginPath();
+  ctx.moveTo(cx - 2.5, by - 13.5); ctx.quadraticCurveTo(cx - 8, by - 15, cx - 6.5, by - 20.5);
+  ctx.moveTo(cx + 2.5, by - 13.5); ctx.quadraticCurveTo(cx + 8, by - 15, cx + 6.5, by - 20.5);
+  ctx.stroke();
+
+  // Glowing spell orb between the hands
+  filled(ctx, 'rgba(150, 90, 230, 0.45)', () => { ctx.arc(cx, by - 21, 3.4, 0, Math.PI * 2); }); // aura
+  filled(ctx, '#c89cff', () => { ctx.arc(cx, by - 21, 1.9, 0, Math.PI * 2); });
+  filled(ctx, '#ffffff', () => { ctx.arc(cx - 0.5, by - 21.5, 0.7, 0, Math.PI * 2); });
+}
+
+// A hooded stealth operative with a long-barrel weapon (range 3). Owner sees it
+// ghosted while cloaked (handled in drawUnitAt); enemies don't see it at all.
+function drawWraith(
+  ctx: CanvasRenderingContext2D,
+  cx: number, cy: number,
+  color: string, dark: string, light: string,
+) {
+  const by = cy + FOOT_Y;
+  // Legs
+  ctx.strokeStyle = dark; ctx.lineWidth = 1.6; ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(cx - 1.5, by - 6); ctx.lineTo(cx - 2.5, by);
+  ctx.moveTo(cx + 1.5, by - 6); ctx.lineTo(cx + 2.5, by);
+  ctx.stroke();
+  // Cloak / body (a tapered hooded robe)
+  outlined(ctx, dark, () => {
+    ctx.moveTo(cx - 4, by - 6);
+    ctx.lineTo(cx - 2.5, by - 15);
+    ctx.lineTo(cx + 2.5, by - 15);
+    ctx.lineTo(cx + 4, by - 6);
+    ctx.closePath();
+  }, 1);
+  // Hood
+  outlined(ctx, color, () => { ctx.arc(cx, by - 15, 2.8, 0, Math.PI * 2); }, 1);
+  filled(ctx, OUTLINE, () => { ctx.ellipse(cx, by - 14.5, 1.6, 1.1, 0, 0, Math.PI * 2); }); // shadowed face
+  filled(ctx, '#7fe0ff', () => { ctx.arc(cx + 0.6, by - 14.6, 0.6, 0, Math.PI * 2); }); // visor glint
+  // Long weapon across the body (points right)
+  ctx.strokeStyle = METAL_LIGHT; ctx.lineWidth = 1.2;
+  ctx.beginPath(); ctx.moveTo(cx - 4, by - 9); ctx.lineTo(cx + 8, by - 11); ctx.stroke();
+}
+
+// Sentinel — a hovering satellite dish (air unit). Placeholder art (Patrick).
+function drawSentinel(
+  ctx: CanvasRenderingContext2D,
+  cx: number, cy: number,
+  color: string, dark: string, light: string,
+) {
+  const by = cy + FOOT_Y;
+  // Hover shadow gap: draw a little support strut + floating body
+  ctx.strokeStyle = dark; ctx.lineWidth = 1.4; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(cx, by - 5); ctx.lineTo(cx, by); ctx.stroke();
+  // Base pod
+  outlined(ctx, dark, () => { ctx.ellipse(cx, by - 6, 4, 2, 0, 0, Math.PI * 2); }, 1);
+  // Dish (an open parabola facing up-right)
+  outlined(ctx, METAL_LIGHT, () => { ctx.ellipse(cx + 1, by - 12, 6, 4.5, -0.5, 0, Math.PI * 2); }, 1.1);
+  filled(ctx, METAL_MID, () => { ctx.ellipse(cx + 1.5, by - 12.5, 4, 3, -0.5, 0, Math.PI * 2); });
+  // Feed horn + team-colour sensor light
+  ctx.strokeStyle = dark; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(cx + 1, by - 12); ctx.lineTo(cx + 5, by - 16); ctx.stroke();
+  filled(ctx, color, () => { ctx.arc(cx + 5, by - 16, 1.4, 0, Math.PI * 2); });
+  filled(ctx, '#9fe8ff', () => { ctx.arc(cx + 5, by - 16, 0.6, 0, Math.PI * 2); });
+}
+
+// Titan — a hulking bipedal war-mech. Placeholder art (Patrick).
+function drawTitan(
+  ctx: CanvasRenderingContext2D,
+  cx: number, cy: number,
+  color: string, dark: string, light: string,
+) {
+  const by = cy + FOOT_Y;
+  // Two heavy legs
+  outlined(ctx, dark, () => { ctx.rect(cx - 5, by - 6, 3.5, 6); }, 1);
+  outlined(ctx, dark, () => { ctx.rect(cx + 1.5, by - 6, 3.5, 6); }, 1);
+  // Massive torso
+  outlined(ctx, color, () => { ctx.rect(cx - 7, by - 17, 14, 11); }, 1.4);
+  filled(ctx, light, () => { ctx.rect(cx - 5.5, by - 16, 11, 2); }); // chest highlight
+  filled(ctx, dark, () => { ctx.rect(cx - 2, by - 13, 4, 4); });     // core
+  filled(ctx, '#ffcf6b', () => { ctx.rect(cx - 1, by - 12, 2, 2); }); // reactor glow
+  // Shoulder cannons
+  outlined(ctx, METAL_DARK, () => { ctx.rect(cx - 11, by - 16, 5, 3); }, 0.9);
+  outlined(ctx, METAL_DARK, () => { ctx.rect(cx + 6, by - 16, 5, 3); }, 0.9);
+  // Head
+  outlined(ctx, dark, () => { ctx.rect(cx - 2.5, by - 21, 5, 4); }, 1);
+  filled(ctx, '#ff6a5a', () => { ctx.rect(cx - 1.5, by - 20, 3, 1.3); }); // visor
+}
+
+// A tracked tank with a turret + long cannon. Placeholder art (Patrick to replace
+// with painted normal + assault-mode sprites — see docs/overlap.md).
+function drawTank(
+  ctx: CanvasRenderingContext2D,
+  cx: number, cy: number,
+  color: string, dark: string, light: string,
+) {
+  const by = cy + FOOT_Y;
+
+  // ── Track band + wheel ticks ──
+  outlined(ctx, METAL_DARK, () => { ctx.rect(cx - 11, by - 4, 22, 4); }, 1);
+  ctx.strokeStyle = METAL_MID; ctx.lineWidth = 0.8;
+  ctx.beginPath();
+  for (let i = -9; i <= 9; i += 3) { ctx.moveTo(cx + i, by - 4); ctx.lineTo(cx + i, by); }
+  ctx.stroke();
+
+  // ── Hull ──
+  outlined(ctx, color, () => { ctx.rect(cx - 9, by - 9, 18, 5); }, 1.2);
+  filled(ctx, light, () => { ctx.rect(cx - 8, by - 8.5, 16, 1.3); }); // top highlight
+
+  // ── Turret ──
+  outlined(ctx, dark, () => { ctx.rect(cx - 4, by - 13, 8, 4.5); }, 1);
+  filled(ctx, light, () => { ctx.rect(cx - 3, by - 12.5, 3, 1); });
+
+  // ── Cannon barrel (points right) ──
+  outlined(ctx, METAL_DARK, () => { ctx.rect(cx + 3, by - 11.6, 11, 1.8); }, 0.8);
+}
 
 // ═══════════════════════════════════════
 // SCOUT — lean runner with hood & dagger

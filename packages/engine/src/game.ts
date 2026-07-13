@@ -1,13 +1,15 @@
 import type {
-  GameState, GameConfig, GameResult, Action, MoveAction, AttackAction,
+  GameState, GameConfig, GameResult, Action, MoveAction, AttackAction, SlashAction, UseAbilityAction,
   RecruitAction, ResearchAction, BuildAction, UpgradeBuildingAction, FoundCityAction,
   CaptureCityAction, LevelUpCityAction, ExpandTerritoryAction, EndTurnAction, Unit, PlayerId, CityState,
-  VisibleState, DataRegistry, Coord, PlayerState, TileVisibility, RecruitOption,
+  VisibleState, DataRegistry, Coord, PlayerState, TileVisibility, RecruitOption, UnitType,
 } from './types.js';
 import { createPRNG, nextInt } from './prng.js';
 import { generateMap } from './mapgen.js';
 import { getReachableTiles, distance, inRange } from './pathfinding.js';
-import { resolveCombat, previewCombat } from './combat.js';
+import { resolveCombat, previewCombat, effectiveAttackRange } from './combat.js';
+import { getSlashArc, slashHitDamage } from './slash.js';
+import { resolvePush, pushDir } from './push.js';
 import { computeVisibility, recordSight, makePlayerMemory, revealTowardEnemy } from './fog.js';
 import {
   settleEconomy, calculateOreIncome, calculatePlasmaIncome, recomputeCities,
@@ -15,7 +17,7 @@ import {
   canBuild, canUpgradeBuilding, upgradeCostFor, buildingCost, canFoundCity,
   cityCanLevelUp, levelUpChoices, validateExpansion,
 } from './economy.js';
-import { getModifier, isTechAvailable, techCostForPlayer, isUnitUnlocked } from './tech.js';
+import { getModifier, isTechAvailable, techCostForPlayer, isUnitUnlocked, techsUnlockingUnit } from './tech.js';
 
 // ── Deep clone helper (JSON round-trip, since state is JSON-serializable) ──
 function clone<T>(obj: T): T {
@@ -47,6 +49,15 @@ export function createGame(
     plasma: startPlasma,
     researchedTechs: [],
   }));
+
+  // Tech tree OFF (config.techTreeEnabled === false): unlock everything by pre-
+  // researching all (non-locked) techs. All existing gating (isUnitUnlocked,
+  // getModifier, isTechAvailable) then works unchanged — tech→unit links stay
+  // intact, they're just already satisfied. (Undefined/true keeps normal gating.)
+  if (config.techTreeEnabled === false) {
+    const allTechs = Object.entries(registry.techs).filter(([, t]) => !t.locked).map(([id]) => id);
+    for (const p of players) p.researchedTechs = [...allTechs];
+  }
 
   // Build city state from the map. Each player's starting city is a capital;
   // any other city tiles begin as neutral level-1 cities.
@@ -121,6 +132,7 @@ export function createGame(
     unitHomeCity,
     memory: players.map(() => makePlayerMemory(map.width, map.height)),
     revealedTiles: players.map(() => []),
+    combinedArmsHits: {},
     currentPlayer: 0,
     turn: 1,
     nextUnitId,
@@ -170,6 +182,8 @@ export function getLegalActions(state: GameState, registry: DataRegistry, player
     if (unit.owner !== playerId) continue;
     const unitType = registry.unitTypes[unit.typeId];
     if (!unitType) continue;
+    // "Stunned" (Infiltrator's Stun): the unit can't move or act this turn.
+    if (unit.statuses?.includes('stunned')) continue;
 
     // Capture: standing on an enemy/neutral city, but only when the unit didn't
     // move onto it this turn (so capture becomes available the FOLLOWING turn).
@@ -185,28 +199,97 @@ export function getLegalActions(state: GameState, registry: DataRegistry, player
     const canBump = unitType.conditions?.includes('blind') ?? false;
     const dash = unit.dashRemaining ?? 0;
     if (!unit.hasMoved && !unit.hasAttacked) {
-      const reachable = getReachableTiles(unit, unitType, state.map, state.units, registry, movementBonus, canBump);
+      const bumps = new Map<string, string>();
+      const reachable = getReachableTiles(unit, unitType, state.map, state.units, registry, movementBonus, canBump, state.buildings, bumps);
       for (const [key] of reachable) {
         const [x, y] = key.split(',').map(Number);
         actions.push({ type: 'move', unitId: unit.id, to: { x, y } });
       }
+      // Bump moves: land on the valid tile, reveal the impassable tile as fog.
+      for (const [impassableKey, landKey] of bumps) {
+        const [ix, iy] = impassableKey.split(',').map(Number);
+        const [lx, ly] = landKey.split(',').map(Number);
+        actions.push({ type: 'move', unitId: unit.id, to: { x: lx, y: ly }, bumpReveal: { x: ix, y: iy } });
+      }
     } else if (unit.hasAttacked && dash > 0) {
-      const reachable = getReachableTiles(unit, { ...unitType, movement: dash }, state.map, state.units, registry, 0, canBump);
+      const reachable = getReachableTiles(unit, { ...unitType, movement: dash }, state.map, state.units, registry, 0, canBump, state.buildings);
       for (const [key] of reachable) {
         const [x, y] = key.split(',').map(Number);
         actions.push({ type: 'move', unitId: unit.id, to: { x, y } });
       }
     }
 
-    // Attack actions
-    if (!unit.hasAttacked) {
-      // Check noMoveAndAttack trait
+    // Attack actions — burrowed units and attack-0 units (e.g. Sentinel) can't attack.
+    if (!unit.hasAttacked && !unitType.conditions?.includes('burrowed') && unitType.attack > 0) {
+      // Check noMoveAndAttack trait.
       if (unitType.traits.includes('noMoveAndAttack') && unit.hasMoved) continue;
 
-      for (const target of state.units) {
-        if (target.owner === playerId) continue;
-        if (inRange(unit.position, target.position, unitType.attackRange)) {
-          actions.push({ type: 'attack', unitId: unit.id, targetId: target.id });
+      if (unitType.conditions?.includes('slash')) {
+        // Slash units attack a 3-tile arc instead of a single target. Offer one
+        // Slash per neighbouring central tile whose arc contains ≥1 enemy. The
+        // Slash replaces the normal single-target attack (it's the only attack).
+        for (let dy = -1; dy <= 1; dy++) {
+          for (let dx = -1; dx <= 1; dx++) {
+            if (dx === 0 && dy === 0) continue;
+            const center = { x: unit.position.x + dx, y: unit.position.y + dy };
+            if (center.y < 0 || center.y >= state.map.height || center.x < 0 || center.x >= state.map.width) continue;
+            const arc = getSlashArc(unit.position, center);
+            const hitsEnemy = arc.some(({ coord }) =>
+              state.units.some(u => u.owner !== playerId && u.position.x === coord.x && u.position.y === coord.y));
+            if (hitsEnemy) actions.push({ type: 'slash', unitId: unit.id, target: center });
+          }
+        }
+      } else {
+        // Banded range: attack only if minAttackRange ≤ Chebyshev dist ≤ effective max.
+        // Effective max accounts for "Mountain shooter 2" (+1 range on a mountain) and
+        // "Overwatch Network I" (+1 range for a RANGED unit next to a friendly Sentinel).
+        const atkTile = state.map.tiles[unit.position.y]?.[unit.position.x];
+        const overwatch = unitType.attackRange >= 2 && state.units.some(o =>
+          o.owner === playerId && o.id !== unit.id
+          && registry.unitTypes[o.typeId]?.conditions?.includes('overwatch_network_1')
+          && Math.max(Math.abs(o.position.x - unit.position.x), Math.abs(o.position.y - unit.position.y)) <= 1);
+        const maxRange = effectiveAttackRange(unitType, atkTile) + (overwatch ? 1 : 0);
+        const minRange = unitType.minAttackRange ?? 1;
+        for (const target of state.units) {
+          if (target.owner === playerId) continue;
+          const d = Math.max(Math.abs(unit.position.x - target.position.x), Math.abs(unit.position.y - target.position.y));
+          if (d >= minRange && d <= maxRange) {
+            actions.push({ type: 'attack', unitId: unit.id, targetId: target.id });
+          }
+        }
+      }
+    }
+
+    // Active abilities (cast) — like the attack action, casting spends the unit's
+    // turn, so it's gated on !hasAttacked and on the ability's cooldown being ready.
+    if (!unit.hasAttacked && unitType.abilities.length > 0) {
+      for (const ability of unitType.abilities) {
+        if (ability.disabled) continue; // greyed-out placeholder — never offered
+        if ((unit.abilityCooldowns[ability.id] ?? 0) > 0) continue;
+        const range = ability.range ?? 0;
+        if (ability.targetKind === 'unit') {
+          for (const target of state.units) {
+            if (target.id === unit.id) continue;
+            if (ability.targetEnemy && target.owner === playerId) continue;
+            if (ability.targetAlly && target.owner !== playerId) continue;
+            if (ability.targetClass && registry.unitTypes[target.typeId]?.unitClass !== ability.targetClass) continue;
+            if (inRange(unit.position, target.position, range)) {
+              actions.push({ type: 'useAbility', unitId: unit.id, abilityId: ability.id, target: { ...target.position } });
+            }
+          }
+        } else if (ability.targetKind === 'tile') {
+          for (let dy = -range; dy <= range; dy++) {
+            for (let dx = -range; dx <= range; dx++) {
+              const tx = unit.position.x + dx, ty = unit.position.y + dy;
+              if (ty < 0 || ty >= state.map.height || tx < 0 || tx >= state.map.width) continue;
+              actions.push({ type: 'useAbility', unitId: unit.id, abilityId: ability.id, target: { x: tx, y: ty } });
+            }
+          }
+        } else {
+          // Self-target ability (no targetKind), e.g. Assault Mode — targets own tile.
+          // The Wyrm can't Burrow/Erupt on a city, mountain, or building tile.
+          if ((ability.id === 'burrow' || ability.id === 'erupt') && !canBurrowEruptAt(state, unit.position, registry)) continue;
+          actions.push({ type: 'useAbility', unitId: unit.id, abilityId: ability.id, target: { ...unit.position } });
         }
       }
     }
@@ -301,15 +384,21 @@ export function getRecruitOptions(
   for (const unitTypeId of faction.unitTypes) {
     const ut = registry.unitTypes[unitTypeId];
     if (!ut) continue;
-    if (!isUnitUnlocked(state, playerId, unitTypeId, registry)) continue;
-    const addedPop = (ut.popCost ?? 1) * (ut.recruitCount ?? 1);
-    if (!cityHasCapacityFor(state, city, registry, addedPop)) continue;
+    // Tech-locked units are SHOWN (greyed) rather than hidden. Unlocked units still
+    // respect the city's pop capacity (a pop-full unit is hidden, as before).
+    const locked = !isUnitUnlocked(state, playerId, unitTypeId, registry);
+    if (!locked) {
+      const addedPop = (ut.popCost ?? 1) * (ut.recruitCount ?? 1);
+      if (!cityHasCapacityFor(state, city, registry, addedPop)) continue;
+    }
     const plasmaCost = getUnitPlasmaCost(unitTypeId, registry);
     options.push({
       unitTypeId,
       cost: ut.cost,
       plasmaCost,
       affordable: ut.cost <= player.ore && plasmaCost <= player.plasma,
+      locked,
+      lockedBy: locked ? techsUnlockingUnit(unitTypeId, registry) : undefined,
     });
   }
   return options;
@@ -339,6 +428,10 @@ function dispatchAction(newState: GameState, action: Action, registry: DataRegis
       return applyMove(newState, action, registry);
     case 'attack':
       return applyAttack(newState, action, registry);
+    case 'slash':
+      return applySlash(newState, action, registry);
+    case 'useAbility':
+      return applyUseAbility(newState, action, registry);
     case 'recruit':
       return applyRecruit(newState, action, registry);
     case 'research':
@@ -382,6 +475,19 @@ function applyMove(state: GameState, action: MoveAction, registry: DataRegistry)
     return checkWinConditions(state, registry);
   }
 
+  // Terrain bump: a blind/burrowed unit moved onto a hidden impassable tile. It lands
+  // on `to` (the last valid tile) and reveals `bumpReveal` as fog, wasting the move.
+  if (action.bumpReveal) {
+    unit.position = { ...action.to };
+    unit.hasMoved = true;
+    const p = unit.owner;
+    const { x: bx, y: by } = action.bumpReveal;
+    (state.revealedTiles[p] ??= []).push({ x: bx, y: by });
+    const mem = state.memory?.[p];
+    if (mem) mem.tiles[by][bx] = clone(state.map.tiles[by][bx]); // tile → fog memory (grey)
+    return checkWinConditions(state, registry);
+  }
+
   unit.position = { ...action.to };
   // A move after attacking is a one-shot "Dash" (consume it); a normal pre-attack
   // move spends the unit's movement for the turn.
@@ -413,26 +519,45 @@ function applyAttack(state: GameState, action: AttackAction, registry: DataRegis
   const defenderType = registry.unitTypes[defender.typeId];
   if (!attackerType || !defenderType) return state;
 
+  // "Combined Arms" (tech): a LIGHT unit's 2nd+ attack on the SAME enemy this turn
+  // gets ×1.2 (does not stack). Tracked per target in state.combinedArmsHits.
+  let attackMult = 1;
+  if (attackerType.unitClass === 'light' && state.players[attacker.owner]?.researchedTechs.includes('combined_arms')) {
+    const hits = state.combinedArmsHits[defender.id] ?? 0;
+    if (hits >= 1) attackMult = 1.2;
+    state.combinedArmsHits[defender.id] = hits + 1;
+  }
+
   const result = resolveCombat(
     attacker, attackerType, defender, defenderType,
-    state.map, registry, state.config.combatConfig, state.prng,
+    state.map, registry, state.config.combatConfig, state.prng, attackMult,
   );
   state.prng = result.prng;
 
-  // Apply damage
-  defender.hp -= result.attackerDamage;
-  attacker.hp -= result.defenderRetaliation;
+  // Apply damage — Kinetic Shield (Sentinel) absorbs 100% of one hit, then is spent.
+  let attackerDamage = result.attackerDamage;
+  let defenderKilled = result.defenderKilled;
+  if (attackerDamage > 0 && tryAbsorbShield(defender)) { attackerDamage = 0; defenderKilled = false; }
+  defender.hp -= attackerDamage;
 
-  // Remove killed units
-  if (result.defenderKilled) {
-    state.units = state.units.filter(u => u.id !== defender.id);
-  }
-  if (result.attackerKilled) {
-    state.units = state.units.filter(u => u.id !== attacker.id);
+  let retaliation = result.defenderRetaliation;
+  let attackerKilled = result.attackerKilled;
+  if (retaliation > 0 && tryAbsorbShield(attacker)) { retaliation = 0; attackerKilled = false; }
+  attacker.hp -= retaliation;
+
+  // Remove killed units, then resolve any infected-death scuttling spawns (which
+  // may fill the vacated tiles) BEFORE the melee advance checks occupancy.
+  const dead: Unit[] = [];
+  if (defenderKilled) dead.push(defender);
+  if (attackerKilled) dead.push(attacker);
+  if (dead.length > 0) {
+    const deadIds = new Set(dead.map(d => d.id));
+    state.units = state.units.filter(u => !deadIds.has(u.id));
+    for (const d of dead) spawnScuttlingsFromInfected(state, d, registry);
   }
 
   // Mark attacker as having attacked.
-  if (!result.attackerKilled) {
+  if (!attackerKilled) {
     attacker.hasAttacked = true;
     // Default: a unit can't move after attacking. The "Dash N" condition is the
     // exception — it grants a post-attack move of up to N tiles (see applyMove).
@@ -441,21 +566,233 @@ function applyAttack(state: GameState, action: AttackAction, registry: DataRegis
     else attacker.hasMoved = true;
 
     if (attackerType.traits.includes('noMoveAndAttack')) attacker.hasMoved = true;
-    // Melee units advance into the tile of a unit they kill (Polytopia-style).
-    if (result.defenderKilled && attackerType.attackRange === 1) {
-      attacker.position = { ...defender.position };
-      if (dashN <= 0) attacker.hasMoved = true; // dash units keep their dash after advancing
+    // Melee units advance into the tile of a unit they kill (Polytopia-style) —
+    // unless it's now occupied (e.g. an infected victim spawned a scuttling there).
+    if (defenderKilled && attackerType.attackRange === 1) {
+      const blocked = state.units.some(u => u.position.x === defender.position.x && u.position.y === defender.position.y);
+      if (!blocked) {
+        attacker.position = { ...defender.position };
+        if (dashN <= 0) attacker.hasMoved = true; // dash units keep their dash after advancing
+      }
     }
 
-    // "Corrosive": the attacker's hit leaves a corrosive status on a surviving
-    // defender (−20% defence). Doesn't stack.
-    if (attackerType.conditions?.includes('corrosive') && !result.defenderKilled) {
+    // "Corrosive" (passive ability): the attacker's hit leaves the corrosive_1
+    // condition on a surviving defender (−20% defence). Doesn't stack.
+    if (attackerType.conditions?.includes('corrosive') && !defenderKilled) {
       defender.statuses ??= [];
-      if (!defender.statuses.includes('corrosive')) defender.statuses.push('corrosive');
+      if (!defender.statuses.includes('corrosive_1')) defender.statuses.push('corrosive_1');
     }
   }
 
   return checkWinConditions(state, registry);
+}
+
+/** Kinetic Shield: if the unit is shielded, consume it and report the hit absorbed. */
+function tryAbsorbShield(unit: Unit): boolean {
+  if (unit.statuses?.includes('shielded')) {
+    unit.statuses = unit.statuses.filter(s => s !== 'shielded');
+    return true;
+  }
+  return false;
+}
+
+/** Remove hp≤0 units (with infected-death scuttling spawns + home-city cleanup). */
+function sweepDead(state: GameState, registry: DataRegistry): void {
+  const dead = state.units.filter(u => u.hp <= 0);
+  if (!dead.length) return;
+  const ids = new Set(dead.map(d => d.id));
+  for (const id of ids) delete state.unitHomeCity[id];
+  state.units = state.units.filter(u => !ids.has(u.id));
+  for (const d of dead) spawnScuttlingsFromInfected(state, d, registry);
+}
+
+const NEIGHBORS8: [number, number][] = [[-1, -1], [0, -1], [1, -1], [-1, 0], [1, 0], [-1, 1], [0, 1], [1, 1]];
+
+// Titan "Percussive Shells": impact any tile — a LIGHT unit there takes a normal Titan
+// hit; every LIGHT unit in the 8 surrounding tiles is pushed radially outward (see push.ts).
+function applyPercussiveShells(state: GameState, titan: Unit, titanType: UnitType, impact: Coord, registry: DataRegistry): void {
+  const center = state.units.find(u => u.position.x === impact.x && u.position.y === impact.y);
+  if (center && registry.unitTypes[center.typeId]?.unitClass === 'light') {
+    const ct = registry.unitTypes[center.typeId]!;
+    const result = resolveCombat(titan, titanType, center, ct, state.map, registry, state.config.combatConfig, state.prng);
+    if (!(result.attackerDamage > 0 && tryAbsorbShield(center))) center.hp -= result.attackerDamage;
+  }
+  // Snapshot the neighbours first (a push moves them 2 tiles out, but be safe).
+  const toPush: { u: Unit; dx: number; dy: number }[] = [];
+  for (const [dx, dy] of NEIGHBORS8) {
+    const u = state.units.find(un => un.position.x === impact.x + dx && un.position.y === impact.y + dy);
+    if (u) toPush.push({ u, dx, dy });
+  }
+  for (const { u, dx, dy } of toPush) resolvePush(state, u, dx, dy, registry);
+  sweepDead(state, registry);
+}
+
+// Slash (Vindrace): an AoE swing at a 3-tile arc. `action.target` is the central
+// tile; the two side tiles are derived. Central takes 100% damage, sides 50%.
+// Hits ENEMIES ONLY, and provokes NO retaliation (see docs/conditions.md).
+function applySlash(state: GameState, action: SlashAction, registry: DataRegistry): GameState {
+  const attacker = state.units.find(u => u.id === action.unitId);
+  if (!attacker) return state;
+  const attackerType = registry.unitTypes[attacker.typeId];
+  if (!attackerType) return state;
+
+  const arc = getSlashArc(attacker.position, action.target);
+  const killed = new Set<number>();
+
+  for (const { coord, isCenter } of arc) {
+    const victim = state.units.find(u =>
+      u.owner !== attacker.owner && u.position.x === coord.x && u.position.y === coord.y);
+    if (!victim) continue;
+    const victimType = registry.unitTypes[victim.typeId];
+    if (!victimType) continue;
+
+    // Reuse the normal force-ratio formula per target (so each victim's own
+    // defence/terrain/corrosion count), then take damage only — no retaliation.
+    const result = resolveCombat(
+      attacker, attackerType, victim, victimType,
+      state.map, registry, state.config.combatConfig, state.prng,
+    );
+    const dmg = slashHitDamage(result.attackerDamage, isCenter, state.config.combatConfig.minimumDamage);
+    victim.hp -= dmg;
+    if (victim.hp <= 0) killed.add(victim.id);
+  }
+
+  if (killed.size > 0) {
+    const dead = state.units.filter(u => killed.has(u.id));
+    state.units = state.units.filter(u => !killed.has(u.id));
+    for (const d of dead) spawnScuttlingsFromInfected(state, d, registry);
+  }
+
+  // Slashing spends the turn; the Vindrace stays put (an AoE swing, no advance)
+  // and has no Dash, so it can't move afterwards.
+  attacker.hasAttacked = true;
+  attacker.hasMoved = true;
+
+  return checkWinConditions(state, registry);
+}
+
+// Seercaust active abilities. Casting spends the unit's turn and starts a cooldown.
+function applyUseAbility(state: GameState, action: UseAbilityAction, registry: DataRegistry): GameState {
+  const unit = state.units.find(u => u.id === action.unitId);
+  if (!unit) return state;
+  const unitType = registry.unitTypes[unit.typeId];
+  const ability = unitType?.abilities.find(a => a.id === action.abilityId);
+  if (!unitType || !ability) return state;
+  // Burrow/Erupt are illegal on city, mountain, or building tiles.
+  if ((action.abilityId === 'burrow' || action.abilityId === 'erupt') && !canBurrowEruptAt(state, unit.position, registry)) return state;
+
+  if (action.abilityId === 'infect') {
+    // Infect a LIGHT unit (any owner). It gains the "infected" condition; when it
+    // dies it spawns 2 scuttlings for the caster (see spawnScuttlingsFromInfected).
+    const target = state.units.find(u => u.position.x === action.target.x && u.position.y === action.target.y);
+    const targetType = target && registry.unitTypes[target.typeId];
+    if (target && target.id !== unit.id && targetType?.unitClass === 'light') {
+      target.statuses ??= [];
+      if (!target.statuses.includes('infected')) target.statuses.push('infected');
+      target.infectedBy = unit.owner;
+    }
+  } else if (action.abilityId === 'spray_bile') {
+    // Mark the target tile as "infected" (bile) for `duration` rounds.
+    const tile = state.map.tiles[action.target.y]?.[action.target.x];
+    if (tile) tile.bile = { owner: unit.owner, expiresTurn: state.turn + (ability.duration ?? 5) };
+  } else if (action.abilityId === 'kinetic_shield') {
+    // Sentinel: shield a friendly unit — absorbs 100% of the next hit, then gone.
+    const target = state.units.find(u => u.owner === unit.owner && u.position.x === action.target.x && u.position.y === action.target.y);
+    if (target) { target.statuses ??= []; if (!target.statuses.includes('shielded')) target.statuses.push('shielded'); }
+  } else if (action.abilityId === 'percussive_shells') {
+    applyPercussiveShells(state, unit, unitType, action.target, registry);
+  } else if (action.abilityId === 'ram') {
+    // Vindrace: shove an adjacent enemy light unit one tile away.
+    const target = state.units.find(u => u.owner !== unit.owner && u.position.x === action.target.x && u.position.y === action.target.y);
+    if (target) {
+      const d = pushDir(unit.position, target.position);
+      resolvePush(state, target, d.dx, d.dy, registry);
+      sweepDead(state, registry);
+    }
+  } else if (action.abilityId === 'stun') {
+    // Stun (Infiltrator): applies "stunned" to an enemy — it can't move/act on its
+    // next turn (cleared at the end of the stunned unit's own turn, in applyEndTurn).
+    const target = state.units.find(u => u.owner !== unit.owner && u.position.x === action.target.x && u.position.y === action.target.y);
+    if (target) {
+      target.statuses ??= [];
+      if (!target.statuses.includes('stunned')) target.statuses.push('stunned');
+    }
+  } else if (action.abilityId === 'erupt') {
+    // Erupt (Wyrm): surface (morph back to `wyrm`) AND kill any enemy unit sharing
+    // this tile (the one it burrowed under). May also erupt on an empty tile. Ends
+    // the turn (below) — no further move/attack.
+    const victims = state.units.filter(u => u.owner !== unit.owner && u.id !== unit.id
+      && u.position.x === unit.position.x && u.position.y === unit.position.y);
+    if (victims.length > 0) {
+      const victimIds = new Set(victims.map(u => u.id));
+      for (const id of victimIds) delete state.unitHomeCity[id];
+      state.units = state.units.filter(u => !victimIds.has(u.id));
+      for (const v of victims) spawnScuttlingsFromInfected(state, v, registry);
+    }
+    const newType = ability.morphTo && registry.unitTypes[ability.morphTo];
+    if (ability.morphTo && newType) {
+      unit.typeId = ability.morphTo;
+      if (unit.hp > newType.maxHP) unit.hp = newType.maxHP;
+    }
+  } else if (ability.morphTo) {
+    // Mode toggle (e.g. Assault Mode): morph into another unit type, keeping id/hp/
+    // position. Clamp HP to the new type's max. Toggling spends the turn (below).
+    const newType = registry.unitTypes[ability.morphTo];
+    if (newType) {
+      unit.typeId = ability.morphTo;
+      if (unit.hp > newType.maxHP) unit.hp = newType.maxHP;
+    }
+  }
+
+  // Casting ends the turn and starts the cooldown.
+  unit.hasAttacked = true;
+  unit.hasMoved = true;
+  if (ability.cooldown) unit.abilityCooldowns[action.abilityId] = ability.cooldown;
+
+  return checkWinConditions(state, registry);
+}
+
+// When an "infected" unit dies, spawn 2 scuttlings for its infector: one on the
+// tile it died on, one on a random free tile in the surrounding 3×3. Call AFTER the
+// dead unit has been removed from state.units (so its tile reads as free).
+function spawnScuttlingsFromInfected(state: GameState, dead: Unit, registry: DataRegistry): void {
+  if (!dead.statuses?.includes('infected') || dead.infectedBy === undefined) return;
+  const scuttling = registry.unitTypes['scuttling'];
+  if (!scuttling) return;
+
+  const occupied = (c: Coord) => state.units.some(u => u.position.x === c.x && u.position.y === c.y);
+  const spots: Coord[] = [];
+  if (!occupied(dead.position)) spots.push({ ...dead.position });
+
+  // Random free tile in the 3×3 around the death tile (deterministic PRNG).
+  const candidates: Coord[] = [];
+  for (let dy = -1; dy <= 1; dy++) {
+    for (let dx = -1; dx <= 1; dx++) {
+      if (dx === 0 && dy === 0) continue;
+      const c = { x: dead.position.x + dx, y: dead.position.y + dy };
+      if (c.y < 0 || c.y >= state.map.height || c.x < 0 || c.x >= state.map.width) continue;
+      if (occupied(c) || spots.some(s => s.x === c.x && s.y === c.y)) continue;
+      candidates.push(c);
+    }
+  }
+  if (candidates.length > 0) {
+    const [idx, np] = nextInt(state.prng, 0, candidates.length - 1);
+    state.prng = np;
+    spots.push(candidates[idx]);
+  }
+
+  for (const pos of spots) {
+    state.units.push({
+      id: state.nextUnitId++,
+      typeId: 'scuttling',
+      owner: dead.infectedBy,
+      position: { ...pos },
+      hp: scuttling.maxHP,
+      hasMoved: true, // freshly spawned — can't act until the owner's next turn
+      hasAttacked: true,
+      abilityCooldowns: {},
+    });
+  }
 }
 
 function applyRecruit(state: GameState, action: RecruitAction, registry: DataRegistry): GameState {
@@ -624,7 +961,11 @@ function applyFoundCity(state: GameState, action: FoundCityAction, registry: Dat
       state.units = state.units.filter(u => u.id !== founder.id); // consumed by the founding
       delete state.unitHomeCity[founder.id];
     } else {
-      founder.hasMoved = true; // founding spends the turn (mirrors capture)
+      // Founding fully spends the turn — no move AND no attack afterwards (mirrors
+      // capture, which sets both). Previously only hasMoved was set, which let a
+      // founder still attack after founding a city.
+      founder.hasMoved = true;
+      founder.hasAttacked = true;
       state.unitHomeCity[founder.id] = newCityId;
     }
   }
@@ -735,13 +1076,21 @@ function applyExpandTerritory(state: GameState, action: ExpandTerritoryAction, r
 function applyEndTurn(state: GameState, registry: DataRegistry): GameState {
   // The bump reveals expire when the bumping player's turn ends (fog returns).
   if (state.revealedTiles[state.currentPlayer]) state.revealedTiles[state.currentPlayer] = [];
+  // "Combined Arms" per-target counts reset each turn.
+  state.combinedArmsHits = {};
 
-  // Reset all current player's units (statuses like "corrosive" persist).
+  // Reset all current player's units (conditions like "corrosive_1" persist).
   for (const unit of state.units) {
     if (unit.owner === state.currentPlayer) {
       unit.hasMoved = false;
       unit.hasAttacked = false;
       unit.dashRemaining = 0;
+      // "Stunned" lasts one of the unit's own turns — clear it as that turn ends.
+      if (unit.statuses?.includes('stunned')) unit.statuses = unit.statuses.filter(s => s !== 'stunned');
+      // Tick down ability cooldowns for the player whose turn just ended.
+      for (const k in unit.abilityCooldowns) {
+        if (unit.abilityCooldowns[k] > 0) unit.abilityCooldowns[k]--;
+      }
     }
   }
 
@@ -752,6 +1101,13 @@ function applyEndTurn(state: GameState, registry: DataRegistry): GameState {
   // If we wrapped around to player 0, it's a new turn
   if (nextPlayer === 0) {
     state.turn++;
+
+    // Clear expired "bile" (Spray Bile) tiles — they last `duration` rounds.
+    for (const row of state.map.tiles) {
+      for (const t of row) {
+        if (t.bile && state.turn >= t.bile.expiresTurn) delete t.bile;
+      }
+    }
 
     // Collect ore income (city production + ore buildings), settle upkeep
     // (dormant), then collect plasma income. See economy.ts for the rules.
@@ -877,9 +1233,40 @@ export function computeScores(state: GameState, registry: DataRegistry): Record<
 }
 
 // ── Visible State (Fog of War) ──
+// "Cloak" (Infiltrator): an enemy cloaked unit is hidden from `viewerId` unless it is
+// "marked" or a viewer-owned "detect" unit is adjacent (Chebyshev ≤ 1). Cloak is
+// separate from fog — it hides the unit even when fog is off. (Detect range is 1 for
+// now — flagged to revisit.) Returns true if the unit should be HIDDEN from the viewer.
+function unitHiddenByCloak(state: GameState, unit: Unit, viewerId: PlayerId, registry: DataRegistry): boolean {
+  if (unit.owner === viewerId) return false; // you always see your own units
+  const ut = registry.unitTypes[unit.typeId];
+  // Cloak (Infiltrator) and Burrow (Wyrm) both hide the unit from enemies unless detected.
+  if (!ut?.conditions?.includes('cloak') && !ut?.conditions?.includes('burrowed')) return false;
+  if (unit.statuses?.includes('marked')) return false; // marked/exposed → visible
+  // A viewer's detect unit reveals it within its detect range (detect = 1, detect_2 = 2).
+  const detected = state.units.some(d => {
+    if (d.owner !== viewerId) return false;
+    const dc = registry.unitTypes[d.typeId]?.conditions ?? [];
+    const range = dc.includes('detect_2') ? 2 : dc.includes('detect') ? 1 : 0;
+    if (range === 0) return false;
+    return Math.max(Math.abs(d.position.x - unit.position.x), Math.abs(d.position.y - unit.position.y)) <= range;
+  });
+  return !detected;
+}
+
+// The Wyrm may not Burrow or Erupt on a city, mountain, or building tile.
+function canBurrowEruptAt(state: GameState, pos: Coord, registry: DataRegistry): boolean {
+  const tile = state.map.tiles[pos.y]?.[pos.x];
+  if (!tile) return false;
+  if (tile.isCity) return false;
+  if (registry.terrainTypes[tile.terrain]?.id === 'mountain') return false;
+  if (state.buildings.some(b => b.position.x === pos.x && b.position.y === pos.y)) return false;
+  return true;
+}
+
 export function getVisibleState(state: GameState, playerId: PlayerId, registry: DataRegistry): VisibleState {
   if (!state.config.fogOfWar) {
-    // No fog — everything visible
+    // No fog — everything visible EXCEPT cloaked enemy units (cloak ≠ fog).
     const visibility: TileVisibility[][] = [];
     for (let y = 0; y < state.map.height; y++) {
       visibility[y] = [];
@@ -890,7 +1277,7 @@ export function getVisibleState(state: GameState, playerId: PlayerId, registry: 
     return {
       config: state.config,
       map: clone(state.map),
-      units: clone(state.units),
+      units: clone(state.units.filter(u => !unitHiddenByCloak(state, u, playerId, registry))),
       players: clone(state.players),
       cities: clone(state.cities),
       buildings: clone(state.buildings),
@@ -955,6 +1342,7 @@ export function getVisibleState(state: GameState, playerId: PlayerId, registry: 
   const isRevealed = (x: number, y: number) => revealed.some(t => t.x === x && t.y === y);
   const visibleUnits = state.units.filter(u => {
     if (u.owner === playerId) return true;
+    if (unitHiddenByCloak(state, u, playerId, registry)) return false; // cloak hides even on a visible tile
     return isVisible(u.position.x, u.position.y) || isRevealed(u.position.x, u.position.y);
   });
 

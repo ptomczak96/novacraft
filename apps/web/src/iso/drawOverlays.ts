@@ -146,6 +146,28 @@ export function drawAttackHighlight(
   drawHighlight(ctx, tx, ty, mapHeight, terrainId, ATTACK_HIGHLIGHT);
 }
 
+/** Purple tint for an "infected" (Spray Bile) tile. */
+export function drawBileOverlay(
+  ctx: CanvasRenderingContext2D,
+  tx: number,
+  ty: number,
+  mapHeight: number,
+  terrainId: string,
+) {
+  drawHighlight(ctx, tx, ty, mapHeight, terrainId, 'rgba(150, 60, 200, 0.30)');
+}
+
+/** Highlight for a valid ability-cast target tile (purple — distinct from attack red). */
+export function drawAbilityHighlight(
+  ctx: CanvasRenderingContext2D,
+  tx: number,
+  ty: number,
+  mapHeight: number,
+  terrainId: string,
+) {
+  drawHighlight(ctx, tx, ty, mapHeight, terrainId, 'rgba(190, 100, 240, 0.42)');
+}
+
 /**
  * Draw explored fog overlay (semi-transparent dark diamond).
  */

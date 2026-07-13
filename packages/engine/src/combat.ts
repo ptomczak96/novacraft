@@ -129,6 +129,19 @@ function getTerrainLabel(tile: Tile, terrain: { name: string } | undefined): str
   return tile.isCity ? `${name} (City)` : name;
 }
 
+/**
+ * A unit's effective attack range from a given tile. "Mountain shooter 2" grants
+ * +1 attack range while the unit stands on a mountain (see docs/conditions.md).
+ */
+export function effectiveAttackRange(
+  unitType: { attackRange: number; conditions?: string[] },
+  tile: { terrain: string } | undefined,
+): number {
+  const onMountain = tile?.terrain === 'mountain';
+  const bonus = onMountain && (unitType.conditions?.includes('mountain_shooter_2') ?? false) ? 1 : 0;
+  return unitType.attackRange + bonus;
+}
+
 export function resolveCombat(
   attacker: Unit,
   attackerType: UnitType,
@@ -138,20 +151,30 @@ export function resolveCombat(
   registry: DataRegistry,
   config: CombatConfig,
   prng: PRNGState,
+  attackMultiplier: number = 1, // e.g. Combined Arms repeat-shot ×1.2
 ): CombatResult {
   // Defender's tile gives the defense bonus (applied to defenseForce only).
   const defenderTile = map.tiles[defender.position.y][defender.position.x];
   const defenderTerrain = registry.terrainTypes[defenderTile.terrain];
   const defenderDefenseMultiplier = getDefenseMultiplier(defenderTile, defenderTerrain, defenderType);
 
-  // "Corrosive" status on the defender: −20% to its defence stat (see docs/conditions.md).
-  const corroded = defender.statuses?.includes('corrosive') ?? false;
-  const effectiveDefence = defenderType.defence * (corroded ? 0.8 : 1);
+  // "Corrosive" condition on the defender: cuts its defence stat (see docs/conditions.md).
+  // corrosive_1 → −20%, corrosive_2 → −30% (does not stack; the higher level wins).
+  const statuses = defender.statuses ?? [];
+  const corrosionMult = statuses.includes('corrosive_2') ? 0.7 : statuses.includes('corrosive_1') ? 0.8 : 1;
 
-  // "Mountain shooter": +20% attack while the attacker stands on a mountain.
+  // "Spray Bile" (infected tile): friendly units (owner === bile.owner) get DEF ×1.2;
+  // enemies get DEF ×0.8. See docs/conditions.md.
+  const defBileMult = defenderTile.bile ? (defenderTile.bile.owner === defender.owner ? 1.2 : 0.8) : 1;
+  const effectiveDefence = defenderType.defence * corrosionMult * defBileMult;
+
+  // "Mountain shooter" / "Mountain shooter 2": +20% attack while on a mountain.
   const attackerTile = map.tiles[attacker.position.y]?.[attacker.position.x];
-  const mountainShooter = attackerTile?.terrain === 'mountain' && (attackerType.conditions?.includes('mountain_shooter') ?? false);
-  const effectiveAttack = attackerType.attack * (mountainShooter ? 1.2 : 1);
+  const attackerOnMountain = attackerTile?.terrain === 'mountain';
+  const mountainShooter = attackerOnMountain && ((attackerType.conditions?.includes('mountain_shooter') || attackerType.conditions?.includes('mountain_shooter_2')) ?? false);
+  // Bile attack buff: friendly units on an infected tile get ATK ×1.2 (enemies: no change).
+  const atkBileMult = attackerTile?.bile && attackerTile.bile.owner === attacker.owner ? 1.2 : 1;
+  const effectiveAttack = attackerType.attack * (mountainShooter ? 1.2 : 1) * atkBileMult * attackMultiplier;
 
   // ONE force split yields both the attack damage and the retaliation, from the
   // sides' current (pre-damage) HP. Canonical Polytopia: retaliation = defenseResult
@@ -189,7 +212,10 @@ export function resolveCombat(
     Math.abs(attacker.position.x - defender.position.x),
     Math.abs(attacker.position.y - defender.position.y),
   );
-  const attackerInDefenderRange = dist <= defenderType.attackRange;
+  // Banded range: the defender can only retaliate if the attacker is within its
+  // [minAttackRange, effective max] band (a range-3–4 assault Tank can't hit adjacent).
+  const defenderMinRange = defenderType.minAttackRange ?? 1;
+  const attackerInDefenderRange = dist >= defenderMinRange && dist <= effectiveAttackRange(defenderType, defenderTile);
 
   if (!defenderKilled && attackerInDefenderRange && f.defenseResult > 0) {
     damageToAttacker = f.defenseResult;

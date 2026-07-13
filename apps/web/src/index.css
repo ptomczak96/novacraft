@@ -417,6 +417,11 @@ label {
   border-radius: 8px;
   padding: 12px;
   display: flex;
+  flex-wrap: wrap;              /* wrap to multiple rows so cards never clip off-screen */
+  justify-content: center;
+  max-width: min(92vw, 900px);  /* stay within the viewport */
+  max-height: 60vh;
+  overflow-y: auto;
   gap: 8px;
   z-index: 10;
   box-shadow: 0 8px 30px rgba(0,0,0,0.4);
@@ -447,6 +452,15 @@ label {
 .recruit-card--unaffordable .name,
 .recruit-card--unaffordable .stats { color: #e08a8a; opacity: 0.85; }
 .recruit-card--unaffordable .cost { color: #ff6b6b; font-weight: 700; }
+
+/* Tech-locked units: greyed out, not clickable. */
+.recruit-card--locked {
+  opacity: 0.5;
+  cursor: not-allowed;
+  filter: grayscale(0.7);
+}
+.recruit-card--locked:hover { border-color: var(--border); }
+.recruit-card--locked .cost { color: var(--text-muted); font-weight: 600; }
 
 .recruit-card .name {
   font-size: 12px;
@@ -530,6 +544,19 @@ label {
   margin-top: 4px;
   opacity: 0.6;
   font-variant-numeric: tabular-nums;
+}
+.tile-info-bile {
+  margin-top: 6px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: rgba(150, 60, 200, 0.14);
+  border: 1px solid rgba(190, 100, 240, 0.5);
+}
+.tile-info-bile-head {
+  color: #d9a8ff;
+  font-size: 12px;
+  font-weight: 700;
+  margin-bottom: 2px;
 }
 
 /* ── Economy breakdown (income tooltips + city-info) ── */
@@ -991,8 +1018,7 @@ label {
   box-shadow: 0 6px 20px rgba(0,0,0,0.55);
   pointer-events: none;
 }
-.unit-sheet-condition:hover .cond-tip,
-.unit-sheet-status:hover .cond-tip { display: block; }
+.unit-sheet-chip:hover .cond-tip { display: block; }
 
 .unit-sheet-trait {
   font-size: 10px;
@@ -1004,22 +1030,61 @@ label {
   font-weight: 600;
 }
 
-/* Conditions are hoverable (native title tooltip) — hint with a help cursor. */
-.unit-sheet-condition {
-  cursor: help;
-  border-style: dashed;
-}
-
-/* Active status effects (e.g. corrosive) — tinted as a debuff. */
-.unit-sheet-status {
+/* Shared base for the three ability/condition chips — all hoverable. */
+.unit-sheet-chip {
   font-size: 10px;
   padding: 2px 8px;
   border-radius: 4px;
   font-weight: 700;
   cursor: help;
+}
+
+/* Conditions (limits / debuffs) — red tint. */
+.unit-sheet-condition-chip {
   color: #ff8a8a;
   background: rgba(150, 40, 40, 0.18);
   border: 1px solid rgba(214, 69, 69, 0.6);
+}
+
+/* Active abilities (opt-in) — gold tint. */
+.unit-sheet-active {
+  color: #ffd479;
+  background: rgba(150, 110, 30, 0.18);
+  border: 1px solid rgba(214, 160, 60, 0.6);
+}
+
+/* Passive abilities (always-on) — green tint. */
+.unit-sheet-passive {
+  color: #7fdca0;
+  background: rgba(40, 120, 70, 0.18);
+  border: 1px solid rgba(70, 180, 110, 0.55);
+}
+
+/* Locked upgrades — greyed chips; hover shows the required tech chain + effect. */
+.unit-sheet-locked-upgrade {
+  font-size: 10px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-weight: 600;
+  cursor: help;
+  color: var(--text-muted);
+  background: rgba(120, 130, 150, 0.12);
+  border: 1px dashed var(--border);
+}
+.unit-sheet-locked-upgrade:hover .cond-tip { display: block; }
+
+/* Active-ability cast buttons — clickable chips; armed = awaiting a target. */
+.unit-sheet-ability-btn {
+  font-family: inherit;
+  cursor: pointer;
+}
+.unit-sheet-ability-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.unit-sheet-ability-btn.armed {
+  outline: 2px solid #d68cff;
+  box-shadow: 0 0 8px rgba(190, 100, 240, 0.6);
 }
 
 /* Terrain info */
@@ -1173,90 +1238,47 @@ label {
   letter-spacing: 1px;
 }
 
-.tech-tier { margin-bottom: 22px; }
-.tech-tier-label {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 10px;
-  font-size: 12px;
-  letter-spacing: 3px;
-  color: var(--text-muted);
-}
-.tech-tier-label::after {
-  content: '';
-  flex: 1;
-  height: 1px;
-  background: linear-gradient(90deg, var(--border), transparent);
-}
-.tech-tier-lock {
-  color: var(--warning);
-  letter-spacing: 2px;
-  font-size: 10px;
+/* ── DAG tech layout (levels on rows, connector lines) ── */
+.tech-dag-scroll { width: 100%; height: 100%; overflow: auto; }
+.tech-dag { position: relative; margin: 8px 0 8px 0; }
+.tech-edges { position: absolute; top: 0; left: 0; pointer-events: none; z-index: 0; overflow: visible; }
+.tech-row-label {
+  position: absolute; left: -2px; width: 40px;
+  font-size: 11px; letter-spacing: 1px; color: var(--text-muted);
+  text-align: left; transform: rotate(0deg);
 }
 
-.tech-cards {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 14px;
-}
-
-/* Tech card */
-.tech-card {
-  width: 156px;
-  padding: 14px 12px 10px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
+/* Tech node */
+.tech-node {
+  position: absolute; z-index: 1;
+  padding: 10px 8px 8px;
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
   text-align: center;
-  background: rgba(22, 33, 62, 0.7);
+  background: rgba(22, 33, 62, 0.92);
   border: 1px solid var(--border);
   color: var(--text);
-  clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 12px));
+  border-radius: 8px;
   transition: transform 0.1s, box-shadow 0.12s, border-color 0.12s;
 }
-.tech-card-icon {
-  width: 52px;
-  height: 52px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid var(--border);
-  border-radius: 50%;
+.tech-node-icon {
+  width: 40px; height: 40px;
+  display: flex; align-items: center; justify-content: center;
+  border: 1px solid var(--border); border-radius: 50%;
   background: rgba(10, 16, 32, 0.6);
 }
-.tech-card-icon img { width: 34px; height: 34px; image-rendering: pixelated; }
-.tech-card-name { font-size: 13px; font-weight: 600; letter-spacing: 0.5px; }
-.tech-card-tentative {
-  display: inline-block;
-  margin-left: 4px;
-  color: var(--warning);
-  font-weight: 700;
-}
-.tech-card-desc { font-size: 11px; color: var(--text-muted); line-height: 1.35; min-height: 30px; }
-.tech-card-status {
-  font-size: 10px;
-  letter-spacing: 2px;
-  padding: 3px 0;
-  width: 100%;
-  border-top: 1px solid var(--border);
-}
+.tech-node-icon img { width: 26px; height: 26px; image-rendering: pixelated; }
+.tech-node-name { font-size: 12px; font-weight: 600; letter-spacing: 0.3px; line-height: 1.2; }
+.tech-node-status { font-size: 10px; letter-spacing: 1.5px; padding-top: 3px; width: 100%; border-top: 1px solid var(--border); }
 
-/* Card states */
-.tech-card.available { cursor: pointer; border-color: var(--accent-dim); }
-.tech-card.available:hover {
-  transform: translateY(-2px);
-  border-color: var(--accent);
-  box-shadow: 0 0 16px rgba(79, 195, 247, 0.28);
-}
-.tech-card.available .tech-card-icon { border-color: var(--accent); box-shadow: 0 0 10px rgba(79, 195, 247, 0.4); }
-.tech-card.available .tech-card-status { color: var(--accent); }
+.tech-node.available { cursor: pointer; border-color: var(--accent-dim); }
+.tech-node.available:hover { transform: translateY(-2px); border-color: var(--accent); box-shadow: 0 0 16px rgba(79, 195, 247, 0.28); }
+.tech-node.available .tech-node-icon { border-color: var(--accent); box-shadow: 0 0 10px rgba(79, 195, 247, 0.4); }
+.tech-node.available .tech-node-status { color: var(--accent); }
 
-.tech-card.researched { border-color: var(--success); background: rgba(102, 187, 106, 0.10); }
-.tech-card.researched .tech-card-icon { border-color: var(--success); box-shadow: 0 0 10px rgba(102, 187, 106, 0.4); }
-.tech-card.researched .tech-card-status { color: var(--success); }
+.tech-node.researched { border-color: var(--success); background: rgba(102, 187, 106, 0.12); }
+.tech-node.researched .tech-node-icon { border-color: var(--success); box-shadow: 0 0 10px rgba(102, 187, 106, 0.4); }
+.tech-node.researched .tech-node-status { color: var(--success); }
 
-.tech-card.locked { opacity: 0.45; }
-.tech-card.locked .tech-card-icon img { filter: grayscale(1); }
-.tech-card.locked .tech-card-status { color: var(--text-muted); }
+.tech-node.locked { opacity: 0.5; }
+.tech-node.locked .tech-node-icon img { filter: grayscale(1); }
+.tech-node.locked .tech-node-status { color: var(--text-muted); }

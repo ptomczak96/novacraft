@@ -65,6 +65,10 @@ export function isTechAvailable(state: GameState, playerId: PlayerId, tech: Tech
   if (tech.prerequisites && tech.prerequisites.length > 0) {
     if (!tech.prerequisites.every(p => player.researchedTechs.includes(p))) return false;
   }
+  // OR-prereqs: at least one must be researched (e.g. Composite Plating ← Crucible OR Mech Bay).
+  if (tech.prerequisitesAny && tech.prerequisitesAny.length > 0) {
+    if (!tech.prerequisitesAny.some(p => player.researchedTechs.includes(p))) return false;
+  }
 
   return true;
 }
@@ -75,6 +79,15 @@ export function isTechAvailable(state: GameState, playerId: PlayerId, tech: Tech
  * once the player has researched at least one tech that unlocks it. Units named
  * by no tech (e.g. Warrior, Scout) are always available.
  */
+/** Names of the tech(s) whose `unlockUnit` effect names this unit (for UI tooltips). */
+export function techsUnlockingUnit(unitTypeId: string, registry: DataRegistry): string[] {
+  const names: string[] = [];
+  for (const tech of Object.values(registry.techs)) {
+    if (tech.effects.some(e => e.type === 'unlockUnit' && e.params['unit'] === unitTypeId)) names.push(tech.name);
+  }
+  return names;
+}
+
 export function isUnitUnlocked(state: GameState, playerId: PlayerId, unitTypeId: string, registry: DataRegistry): boolean {
   const unlockers: string[] = [];
   for (const [techId, tech] of Object.entries(registry.techs)) {

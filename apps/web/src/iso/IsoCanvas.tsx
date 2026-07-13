@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useCallback, useState } from 'react';
 import { useGameStore } from '../store/gameStore.js';
-import { previewCombat, isExpansionTileEligible, buildingBlocked, canBuildLocation } from '@tactica/engine';
+import { previewCombat, isExpansionTileEligible, buildingBlocked, canBuildLocation, getSlashArc, slashHitDamage } from '@tactica/engine';
 import type { Coord, Unit, Action, BuildingKind } from '@tactica/engine';
 
 import type { GameState, DataRegistry, CityState } from '@tactica/engine';
@@ -32,6 +32,8 @@ import { loadTileSprites } from './tileSprites.js';
 import {
   drawMoveHighlight,
   drawAttackHighlight,
+  drawBileOverlay,
+  drawAbilityHighlight,
   drawFogExplored,
   drawCloud,
   drawDamagePreview,
@@ -93,6 +95,7 @@ export function IsoCanvas({ mode, onPaint }: IsoCanvasProps) {
     selectedUnitId, hoveredTile, legalActions, inspectedTile,
     selectUnit, setSelectedCity, setHoveredTile, executeAction, setInspectedTile,
     territorySelect, setTerritorySelect,
+    abilityMode, setAbilityMode,
     mapEditorState,
   } = useGameStore();
 
@@ -166,13 +169,20 @@ export function IsoCanvas({ mode, onPaint }: IsoCanvasProps) {
   useEffect(() => () => { if (rafRef.current !== undefined) cancelAnimationFrame(rafRef.current); }, []);
 
   // ── Compute move/attack targets ──
-  const { moveTargets, attackTargets } = React.useMemo(() => {
+  // `slashTargets` is keyed by the CENTRAL tile of each Slash arc (that's the
+  // clickable tile); the two side tiles are derived at draw time via getSlashArc.
+  const { moveTargets, attackTargets, slashTargets } = React.useMemo(() => {
     const moveTargets = new Set<string>();
     const attackTargets = new Map<string, Action>();
-    if (mode !== 'game' || selectedUnitId == null) return { moveTargets, attackTargets };
+    const slashTargets = new Map<string, Action>();
+    if (mode !== 'game' || selectedUnitId == null) return { moveTargets, attackTargets, slashTargets };
     for (const action of legalActions) {
       if (action.type === 'move' && action.unitId === selectedUnitId) {
-        moveTargets.add(`${action.to.x},${action.to.y}`);
+        // A bump move highlights the IMPASSABLE tile (bumpReveal) it targets, not the
+        // land tile — that's the cloud tile the player clicks. See docs/conditions.md.
+        moveTargets.add(action.bumpReveal
+          ? `${action.bumpReveal.x},${action.bumpReveal.y}`
+          : `${action.to.x},${action.to.y}`);
       }
       if (action.type === 'attack' && action.unitId === selectedUnitId) {
         const target = units.find(u => u.id === action.targetId);
@@ -180,16 +190,34 @@ export function IsoCanvas({ mode, onPaint }: IsoCanvasProps) {
           attackTargets.set(`${target.position.x},${target.position.y}`, action);
         }
       }
+      if (action.type === 'slash' && action.unitId === selectedUnitId) {
+        slashTargets.set(`${action.target.x},${action.target.y}`, action);
+      }
     }
-    return { moveTargets, attackTargets };
+    return { moveTargets, attackTargets, slashTargets };
   }, [mode, selectedUnitId, legalActions, units]);
+
+  // Ability-cast targets: valid target tiles for the armed ability (abilityMode).
+  const abilityTargets = React.useMemo(() => {
+    const m = new Map<string, Action>();
+    if (mode !== 'game' || !abilityMode) return m;
+    for (const action of legalActions) {
+      if (action.type === 'useAbility' && action.unitId === abilityMode.unitId && action.abilityId === abilityMode.abilityId) {
+        m.set(`${action.target.x},${action.target.y}`, action);
+      }
+    }
+    return m;
+  }, [mode, abilityMode, legalActions]);
 
   // Blind units (e.g. scuttlings) reveal nothing but may move into cloud tiles —
   // so their move targets are highlighted even on undiscovered (cloud) tiles.
   const selectedUnitBlind = React.useMemo(() => {
     if (selectedUnitId == null) return false;
     const u = units.find(uu => uu.id === selectedUnitId);
-    return !!(u && registry.unitTypes[u.typeId]?.conditions?.includes('blind'));
+    const conds = u && registry.unitTypes[u.typeId]?.conditions;
+    // Blind (scuttling) and burrowed (Wyrm) both see only their own tile, so their
+    // move/bump targets are highlighted on cloud tiles too.
+    return !!(conds?.includes('blind') || conds?.includes('burrowed'));
   }, [selectedUnitId, units, registry]);
 
   // ── Render the full scene ──
@@ -212,6 +240,24 @@ export function IsoCanvas({ mode, onPaint }: IsoCanvasProps) {
     // Clear
     ctx.fillStyle = BG_COLOR;
     ctx.fillRect(0, 0, width, height);
+
+    // ── Hovered Slash arc ──
+    // When the cursor is over a Slash central tile, resolve its 3-tile arc so we
+    // can highlight the side tiles and preview the 100%/50% damage split.
+    const slashArcTiles = new Map<string, boolean>(); // tileKey → isCenter
+    if (hoveredTile) {
+      const hoveredSlash = slashTargets.get(`${hoveredTile.x},${hoveredTile.y}`);
+      if (hoveredSlash && hoveredSlash.type === 'slash') {
+        const slasher = units.find(u => u.id === hoveredSlash.unitId);
+        if (slasher) {
+          for (const { coord, isCenter } of getSlashArc(slasher.position, hoveredSlash.target)) {
+            if (coord.y >= 0 && coord.y < map.height && coord.x >= 0 && coord.x < map.width) {
+              slashArcTiles.set(`${coord.x},${coord.y}`, isCenter);
+            }
+          }
+        }
+      }
+    }
 
     // ── Painter's algorithm: row 0→H, col 0→W ──
     for (let y = 0; y < map.height; y++) {
@@ -237,12 +283,25 @@ export function IsoCanvas({ mode, onPaint }: IsoCanvasProps) {
           drawFogExplored(ctx, x, y, map.height, tile.terrain);
         }
 
+        // ── 2b. "Infected" (Spray Bile) tile: purple tint ──
+        if (tile.bile) {
+          drawBileOverlay(ctx, x, y, map.height, tile.terrain);
+        }
+
         // ── 3. Move/attack highlights ──
         if (moveTargets.has(key)) {
           drawMoveHighlight(ctx, x, y, map.height, tile.terrain);
         }
         if (attackTargets.has(key)) {
           drawAttackHighlight(ctx, x, y, map.height, tile.terrain);
+        }
+        // Slash: highlight the central tiles always; light up the whole arc on hover.
+        if (slashTargets.has(key) || slashArcTiles.has(key)) {
+          drawAttackHighlight(ctx, x, y, map.height, tile.terrain);
+        }
+        // Ability cast: purple highlight on valid target tiles for the armed ability.
+        if (abilityTargets.has(key)) {
+          drawAbilityHighlight(ctx, x, y, map.height, tile.terrain);
         }
 
         // ── 4. Unit ──
@@ -275,6 +334,20 @@ export function IsoCanvas({ mode, onPaint }: IsoCanvasProps) {
             if (at && dt) {
               const result = previewCombat(attacker, at, unit, dt, map, registry, config.combatConfig);
               drawDamagePreview(ctx, x, y, map.height, tile.terrain, result.attackerDamage);
+            }
+          }
+        }
+
+        // ── 5b. Slash damage preview (per arc tile, 100% centre / 50% sides) ──
+        if (mode === 'game' && slashArcTiles.has(key) && selectedUnitId != null) {
+          const slasher = units.find(u => u.id === selectedUnitId);
+          if (slasher && unit && unit.owner !== slasher.owner) {
+            const at = registry.unitTypes[slasher.typeId];
+            const dt = registry.unitTypes[unit.typeId];
+            if (at && dt) {
+              const full = previewCombat(slasher, at, unit, dt, map, registry, config.combatConfig).attackerDamage;
+              const dmg = slashHitDamage(full, slashArcTiles.get(key)!, config.combatConfig.minimumDamage);
+              drawDamagePreview(ctx, x, y, map.height, tile.terrain, dmg);
             }
           }
         }
@@ -381,7 +454,7 @@ export function IsoCanvas({ mode, onPaint }: IsoCanvasProps) {
     }
   }, [
     map, visibility, registry, config, units, unitByPos, buildings, buildingByPos, cities,
-    selectedUnitId, hoveredTile, legalActions, moveTargets, attackTargets, mode,
+    selectedUnitId, hoveredTile, legalActions, moveTargets, attackTargets, slashTargets, abilityTargets, mode,
     buildPromptTile, spriteTick, animTick, territorySelect, gameState, selectedUnitBlind, inspectedTile,
     buildKindAt, currentPlayer,
   ]);
@@ -464,14 +537,33 @@ export function IsoCanvas({ mode, onPaint }: IsoCanvasProps) {
     const key = `${tile.x},${tile.y}`;
     const unit = unitByPos.get(key);
 
+    // Ability targeting takes priority: a valid target tile casts; any other click
+    // cancels the armed ability and falls through to normal handling.
+    if (abilityMode) {
+      if (abilityTargets.has(key)) {
+        executeAction(abilityTargets.get(key)!);
+        setBuildPromptTile(null);
+        return;
+      }
+      setAbilityMode(null);
+    }
+
     if (selectedUnitId != null && moveTargets.has(key)) {
-      const moveAction = legalActions.find(
-        a => a.type === 'move' && a.unitId === selectedUnitId && a.to.x === tile.x && a.to.y === tile.y,
-      );
+      // Match a normal move (to === tile) OR a bump move (bumpReveal === tile).
+      const moveAction = legalActions.find(a => a.type === 'move' && a.unitId === selectedUnitId && (
+        a.bumpReveal ? (a.bumpReveal.x === tile.x && a.bumpReveal.y === tile.y)
+                     : (a.to.x === tile.x && a.to.y === tile.y)
+      ));
       if (moveAction) { executeAction(moveAction); setBuildPromptTile(null); return; }
     }
     if (selectedUnitId != null && attackTargets.has(key)) {
       executeAction(attackTargets.get(key)!);
+      setBuildPromptTile(null);
+      return;
+    }
+    // Slash: clicking a central tile executes that 3-tile swing.
+    if (selectedUnitId != null && slashTargets.has(key)) {
+      executeAction(slashTargets.get(key)!);
       setBuildPromptTile(null);
       return;
     }
@@ -513,7 +605,7 @@ export function IsoCanvas({ mode, onPaint }: IsoCanvasProps) {
     setBuildPromptTile(buildable ? tile : null);
   }, [
     mode, getTileFromEvent, map, unitByPos, selectedUnitId, currentPlayer,
-    moveTargets, attackTargets, legalActions, executeAction, selectUnit, setSelectedCity, onPaint,
+    moveTargets, attackTargets, slashTargets, abilityTargets, abilityMode, setAbilityMode, legalActions, executeAction, selectUnit, setSelectedCity, onPaint,
     territorySelect, setTerritorySelect, gameState, registry, setInspectedTile, buildKindAt,
   ]);
 

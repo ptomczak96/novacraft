@@ -872,3 +872,595 @@ grinding economy first. Implemented as an optional top-level `GameConfig.richSta
 flag (runtime UI toggle, carried straight to `createGame`; like `mapgen.doubleResources`
 it isn't part of the validated config.json schema). `createGame` overrides the starting
 ore/plasma when set. Test added.
+
+---
+
+## 2026-07-01 — David — Unit rules split into three semantic groups (Conditions / Active / Passive)
+
+The Unit Info panel previously showed a flat "Status" + "Special Conditions" + "Traits"
+list, which conflated two different kinds of named rule: genuine **debuffs/limits**
+(blind, frazzled, impotent_founder…) and **abilities the unit has** (mountain bonuses,
+dash, corrosive). We reorganised the display into **three groups**, matching how the
+game actually reasons about units:
+
+- **Conditions** — limits/debuffs, either *inherent* (in the unit's `conditions[]`) or
+  *applied during play* by another unit (in `unit.statuses`, e.g. `corrosive_1`). Both
+  now render together under Conditions.
+- **Active Abilities** — opt-in abilities a unit MAY use. Registered as **placeholders**
+  for now: `infect`, `spray_bile`, `slash`, `burrow`, `erupt` (mechanics TBD). Semantic
+  rule established: an active that *applies* a condition (e.g. Infect) shows as an active
+  on the user and as the resulting **condition** on the victim — the same
+  ability-produces-condition split we made explicit for corrosive (below).
+- **Passive Abilities** — always-on abilities: `dash_N`, the `mountain_*` passives,
+  `detect`, `corrosive`.
+
+Implementation is registry-driven, not a data-model change: the single `conditions[]`
+opt-in array in `units.json` is unchanged; a new `ABILITY_REGISTRY` in
+`apps/web/src/components/UnitSheet.tsx` tags each id with its `category` and the panel
+groups by it. Engine enforcement never needed the category, so keeping the taxonomy in
+the UI avoided touching engine data shapes.
+
+**Corrosive rename (engine + data):** the applied debuff was renamed `corrosive` →
+`corrosive_1` (−20% DEF) to make room for `corrosive_2` (−30% DEF, reserved) and to
+separate it cleanly from the **`corrosive` passive** (the ability that *causes* it). The
+scab keeps the `corrosive` passive; `applyAttack` now writes `corrosive_1`; `resolveCombat`
+reads `corrosive_1`→×0.8 / `corrosive_2`→×0.7 (higher level wins, no stacking). Tests
+(`combat.test.ts`, `hive.test.ts`) updated. Displays as **"Corrosive 1 (−20% DEF)"**.
+
+**New passives:** `mountain_movement` — pure mountain *access* with no combat/sight bonus
+(added to the mountain-access check in `pathfinding.ts`); this is now the default way to
+let a unit climb without a bonus. `detect` — reserved passive to reveal cloaked/burrowed
+units; **registered but not yet enforced** (no cloak/burrow units exist), to be wired
+when the first cloak/burrow ability ships. `dash_2` needs no new code — the `dash_N`
+parser already supports it; it's just now available to assign.
+
+TTR: none — no economy stats changed.
+
+---
+
+## 2026-07-01 — David — Hive unit "Vindrace" + the Slash AoE attack (1st of 3 new Hive units)
+
+Added the **Vindrace** (Hive, heavy): cost 100, HP 20, ATK 4, DEF 2, MOV 2, range 1,
+vis 1, `conditions: ["slash"]`. First of three new Hive units the user is adding (other
+two TBD).
+
+**Slash** was promoted from an active-ability *placeholder* to a real **passive** — it is
+the Vindrace's *only* attack ("main attack"). Mechanic: a swing at a **3-tile arc**. The
+player targets a **central tile** (one of the 8 neighbours); the two side tiles are the
+central tile's neighbours **along the 8-tile ring** around the unit. Central takes **100%**
+damage, sides **50%** (floored at `minimumDamage`).
+
+Key design decisions (user's calls, via prompt):
+- **Enemies only** — friendly units in the arc are untouched (kinder to the Hive swarm).
+- **No retaliation** — unlike a normal single-target attack, a Slash provokes no counter.
+- **Slash-only** — it replaces the normal attack; a Slash unit is never offered a plain
+  single-target attack in `getLegalActions`.
+
+Geometry note: the side tiles are the **ring-neighbours** of the central tile, NOT every
+tile adjacent to both the unit and the centre — the latter over-selects (4 tiles instead
+of 2). Encoded as a fixed 8-entry ring in `getSlashArc`.
+
+Implementation: new pure module `packages/engine/src/slash.ts` (`getSlashArc` +
+`slashHitDamage`, both exported from the engine index and reused by the UI so the
+damage-split preview matches the engine exactly). New `SlashAction` (`{type:'slash',
+unitId, target}` where `target` is the central tile — the two sides are derived, so the
+action stays minimal). `applySlash` in `game.ts` resolves each victim with the normal
+force-ratio formula (respecting each target's own defence/terrain/corrosion) then applies
+the 100/50 split, no retaliation; the unit stays put (AoE swing, no advance, no Dash).
+UI (`IsoCanvas.tsx`): the central tiles highlight as attack targets; hovering one lights
+the full 3-tile arc and previews the per-tile damage; clicking the central tile swings.
+8 engine tests added (geometry incl. the over-selection guard, the 100/50 split,
+enemies-only, no-retaliation, kill-removal, Slash-replaces-attack). 109 tests pass.
+
+TTR: none — no economy stats changed.
+
+---
+
+## 2026-07-01 — David — Hive unit "Seercaust" + the active-ability system (Infect, Spray Bile, Detect)
+
+Added the **Seercaust** (Hive, light support caster): cost 150, HP 15, ATK 2, DEF 1,
+MOV 1, range 1, **vis 3**, `conditions: ["detect"]`, `abilities: [infect, spray_bile]`.
+2nd of the three new Hive units.
+
+**Built the active-ability (cast) system** — it was previously unimplemented (the
+`UseAbilityAction` type existed but had no engine handler; existing ability data was inert).
+Design decisions (all data-driven where they're balance numbers):
+- **Casting model:** an active spends the unit's turn (gated like the attack action on
+  `!hasAttacked`) and starts a per-unit **cooldown** (`unit.abilityCooldowns`, ticked down
+  at end of the owner's turn). Chosen over free-action/plasma-cost (user's call).
+- Ability metadata (`range`, `targetKind`, `targetClass`, `duration`, `cooldown`) added to
+  `AbilityDefSchema` / the `AbilityDef` type so ranges/durations stay in JSON, not code.
+- Effect logic is keyed by ability id in `applyUseAbility` (like conditions), not a generic
+  effect-primitive VM — clearer for these specific, bespoke abilities.
+
+**Infect** (`range 3`, target `light` unit, cd 2): user chose it can target **any** light
+unit (not just enemies). Applies the **`infected`** condition + records `infectedBy`. On the
+infected unit's **death**, `spawnScuttlingsFromInfected` spawns **2 scuttlings for the
+infector** — one on the death tile, one on a random free 3×3 tile (deterministic PRNG).
+Hooked into both `applyAttack` and `applySlash` after unit removal; the melee advance now
+checks occupancy so it won't stack onto a spawned scuttling.
+
+**Spray Bile** (`range 2`, target tile, `duration 5`, cd 2): marks a tile
+`bile = {owner, expiresTurn}` for **5 rounds** (user chose rounds over player-turns; uses the
+`state.turn` round counter, cleared in `applyEndTurn`). Combat effects in `resolveCombat`:
+friendly (owner === bile.owner) ATK ×1.2 & DEF ×1.2; enemy DEF ×0.8. The **enemy movement
+penalty is a deliberate placeholder** — it ties into the not-yet-built pathing system; a
+memory note captures that the user will explain the pathing hookup later. Bile tiles get a
+**purple tint**; clicking one shows the buffs/debuffs + a turns-left counter.
+
+**Detect** — the previously-registered passive, now actually assigned (Seercaust). Still a
+display/registration stub (no cloak/burrow units yet).
+
+Also **corrosive_2** groundwork: `resolveCombat` already reads it (added with Vindrace);
+bile stacks multiplicatively on the defence stat alongside corrosion and terrain.
+
+UI: the Unit Info panel's **Active Abilities** group now sources from `unitType.abilities`
+(not `conditions`) and renders **clickable cast buttons** (disabled when the unit has acted
+or the ability is on cooldown, showing the cooldown counter; "armed" state highlights the
+button). New store field `abilityMode` drives canvas targeting: valid target tiles get a
+purple highlight, click to cast, click elsewhere cancels. 6 engine tests added; 115 pass.
+
+TTR: none — no economy stats changed.
+
+---
+
+## 2026-07-01 — David — Fix: new units must be added to the faction roster to be recruitable
+
+Vindrace and Seercaust weren't appearing in the Hive recruit menu (stuck at 4). Root cause:
+recruitment is gated by each faction's **`unitTypes` roster** in `factions.json`, not by a
+unit's own `faction` field. A unit with `"faction": "hive"` is still unrecruitable unless its
+id is also listed in the hive faction's `unitTypes`. Added `vindrace` and `seercaust` to the
+hive roster. **Checklist for any future unit:** (1) add to `units.json`, (2) add its id to the
+owning faction's `unitTypes` in `factions.json`.
+
+TTR: none.
+
+---
+
+## 2026-07-01 — David — Show the Spray Bile debuff under a unit's Conditions when it stands on a hostile bile tile
+
+Bile effects are computed positionally in `resolveCombat` from `tile.bile` and are never
+stored on the unit, so the Unit Info "Conditions" group (which reads `unit.statuses` +
+inherent conditions) showed nothing when an enemy stood on an infected tile. Added a
+**synthetic condition chip** (`bile_enemy`, "On Infected Tile", −20% DEF) that the
+`UnitSheet` derives from the unit's current tile when `tile.bile.owner !== unit.owner`. It
+isn't persisted — it appears while the unit is on the tile and disappears when it moves off,
+which matches the actual mechanic. UI-only; no engine change.
+
+Scope decision: only the **enemy debuff** is surfaced under Conditions (per the group's
+definition = debuffs/limits). The **friendly buff** (ATK/DEF ×1.2) is intentionally NOT a
+"condition" — it's already shown in the tile-info box; a positive effect doesn't belong in
+the red debuff list.
+
+TTR: none.
+
+---
+
+## 2026-07-04 — David — Vanguard unit "Mech" + Mountain Shooter 2 + Mobile (placeholder)
+
+Added the **Mech** (Vanguard, heavy): cost 100, HP 25, ATK 3, DEF 1, MOV 2, range 2, vis 2,
+`conditions: ["mountain_movement", "mountain_shooter_2", "mobile"]`. Also added to the
+vanguard `unitTypes` roster (recruitable — per the two-step checklist from the prior fix).
+
+**New passive `mountain_shooter_2`** — a superset of `mountain_shooter`: while on a mountain,
+×1.2 attack (same) **plus +1 attack range**. The range bonus is modelled as an
+**effective attack range** (`effectiveAttackRange(unitType, tile)` in `combat.ts`, exported):
+base range off a mountain, +1 on one. It's applied in **both** directions — `game.ts`
+`getLegalActions` uses it to offer attacks (so a peak-standing Mech reaches range 3), and
+`resolveCombat`'s retaliation range check uses it (so it retaliates at the widened range
+too). `mountain_shooter_2` also grants mountain access (added to the `pathfinding.ts` access
+set) and the ×1.2 attack (added alongside `mountain_shooter` in `resolveCombat`).
+
+**New passive `mobile`** — "ignores terrain movement penalties for forest & mountains." This
+is a **deliberate placeholder**: `pathfinding.ts` currently charges a flat cost of 1 per
+passable tile (no terrain move penalties exist), so `mobile` has no effect yet. Registered
+for display + docs; a memory note captures the pathing hookup for later (same track as the
+bile movement penalty). User explicitly asked to "make a note, will tidy this up in pathing."
+
+Art: the Mech gets a **code-drawn placeholder sprite** `drawMech` (6-legged walker + cannon)
+in `drawUnit.ts` and a 🕷️ recruit-menu emoji — flagged for Patrick in `overlap.md` (along
+with the still-generic Vindrace/Seercaust sprites). UI registry entries added for both new
+passives in `UnitSheet.tsx`. 4 engine tests added (effective-range math, range-3-only-on-
+mountain, ×1.2-on-mountain, mountain access); 119 pass.
+
+TTR: none — no economy stats changed.
+
+---
+
+## 2026-07-04 — David — Vindrace gains the Mountain Movement passive
+
+Added `mountain_movement` to the Vindrace's `conditions` (now `["slash", "mountain_movement"]`)
+so it can climb mountains (access only, no combat/sight bonus). Data-only change; the passive
+is already fully implemented in `pathfinding.ts`.
+
+TTR: none.
+
+---
+
+## 2026-07-04 — David — Vanguard unit "Tank" + Assault Mode toggle + banded attack range
+
+Added the **Tank** (Vanguard, heavy): cost 150, HP 30, ATK 2, DEF 3, MOV 2, range 2, VIS 1
+(added to the vanguard roster). Introduces two new engine mechanics:
+
+**Banded attack range (`minAttackRange`).** New optional unit-type stat (default 1). A unit
+with min > 1 can only fire in the band `[minAttackRange, attackRange]` — it cannot hit
+*closer* than the minimum. Wired into `getLegalActions` (attack offering) and
+`resolveCombat` (retaliation gate). Notation `range[min–max]`; shown as "min–max" in the
+Unit Info Range stat. **Confirmed via a scan that the assault Tank is the FIRST banded unit**
+— every existing ranged unit (scab/archer/lancer/catapult/siege-tower/ranger/mech, ranges
+2–3) had no min and could already fire at range 1; `inRange` was a plain Chebyshev `≤ max`.
+
+**Assault Mode (mode toggle).** Modelled as a **typeId morph** rather than an effective-stats
+layer: enabling assault morphs `tank` → `tank_assault` (a companion unit type, NOT in the
+recruit roster) and back, keeping id/HP/position. This leverages the data-driven design — all
+existing code reads stats by `typeId`, so no combat/pathfinding/fog refactor was needed; the
+assault stat profile lives entirely in `units.json`. Assault stats: ATK 5, DEF 2, MOV 0,
+range **3–4 (banded)**, VIS 3. **Each toggle spends the turn** (it's an ability, gated like
+attack; no cooldown, since the turn cost is the balance lever). Implemented via
+`AbilityDef.morphTo` + a `morphTo` branch in `applyUseAbility`; offered as a **self-target**
+ability (new branch in `getLegalActions` for abilities with no `targetKind`). UI: the
+`UnitSheet` cast button fires self-cast abilities immediately (no target step).
+
+Consequence worth noting: an assault Tank (min range 3) takes **no retaliation** from an
+adjacent attacker — a deliberate trade-off of the deployed glass-cannon.
+
+Art: code-drawn placeholder `drawTank` (both forms share it) + 🛞 recruit emoji; flagged for
+Patrick in `overlap.md` (a distinct assault-form sprite would be nice). 5 engine tests added
+(morph both ways + turn cost, the 3–4 band incl. no-retaliation, normal-tank range 1–2);
+124 pass.
+
+TTR: none — no economy stats changed.
+
+---
+
+## 2026-07-04 — David — Vanguard unit "Infiltrator" (Cloak, Detect, Stun; explosives + building-HP deferred)
+
+Added the **Infiltrator** (Vanguard, light): HP 15, ATK 2, DEF 1, MOV 2, range 3, VIS 3.
+**Cost 120 — a guess (user didn't specify); trivially tunable in `units.json`.** Added to the
+vanguard roster.
+
+**Cloak (passive).** A cloaked unit is filtered out of enemy players' `getVisibleState`
+entirely — **even with fog OFF** (cloak ≠ fog; implemented as a separate `unitHiddenByCloak`
+filter applied in both the fog-on and fog-off unit lists). Revealed only when (a) an enemy
+`detect` unit is **adjacent** (range 1) or (b) the unit is **marked** (`statuses` includes
+`marked` — a forward hook; no ability applies it yet). The owner always sees their own
+cloaked units, rendered **ghosted** (0.5 alpha).
+
+**Detect (passive) — now real.** Previously a no-op stub (Seercaust). Now un-hides adjacent
+cloaked enemies. **Detect range = 1 (adjacent) "for now" per the user, flagged to revisit**
+(may become the detector's sight radius later) — memory note + conditions.md capture this.
+
+**Stun (active).** Clarified with the user: NOT a passive — it's a **special attack used
+instead of attacking**. Select Stun → target an enemy within **range 3** (no cooldown) →
+applies the **`stunned`** condition (can't move or attack for 1 turn; `getLegalActions` skips
+a stunned unit, cleared at the end of its own turn). Does **not** reveal the Infiltrator.
+Needed two new ability-data flags: **`targetEnemy`** (restrict unit-target to enemies) — Stun
+uses it, whereas Infect targets any light unit.
+
+**Plant Explosives (active) — DISABLED placeholder.** Per the user, left **greyed out**.
+Added a general **`disabled`** ability flag: `getLegalActions` skips disabled abilities and
+the UnitSheet renders them greyed ("(soon)"). Intended effect (2-turn fuse, 15 dmg to units /
+2 hits to buildings) is unimplemented; open questions (does it follow a moving unit? how is it
+removed?) noted for later.
+
+**Building destruction — DEFERRED (hit-count model).** Per the user, buildings will NOT use
+HP/force combat but a **hit count** (mine/extractor = 2 hits; each hit = 1 regardless of
+damage). Hidden for now; captured in a memory note + a cross-module `overlap.md` entry
+(buildings/economy module) + here.
+
+UI: 🥷 recruit emoji + a code-drawn `drawInfiltrator` placeholder (flagged for Patrick).
+7 engine tests added (cloak hidden/owner-visible/detect-adjacent/detect-far/marked; stun
+targeting + 1-turn skip + recovery; disabled-ability not offered). 131 tests pass.
+
+TTR: none — no economy stats changed.
+
+---
+
+## 2026-07-04 — David — Tank stays tech-gated behind "Forge" (name collision resolved) + recruit-panel wrap fix
+
+The new `tank` unit's id collided with a pre-existing tech-tree plan: the **Forge** tech
+(Armory L2) already had `unlockUnit: "tank"`. So `isUnitUnlocked` correctly hid the Tank from
+recruit until Forge is researched — which read as "tank not showing" (Mech/Infiltrator have no
+such tech, so they appeared). **Decision (user): keep the Tank gated behind Forge** — do NOT
+make it base-recruitable. No code/data change: the gating already works (verified: with
+`forge` researched, recruit returns `…mech, tank, infiltrator`). Path to unlock in-game:
+research Small Arms (Armory L1) → Forge (L2) → Tank appears. Supersedes the implication in the
+prior Tank entry that it was immediately recruitable — it's intentionally tech-gated.
+(Reminder: the other `unlockUnit` techs point at not-yet-built units — `marksman`, `medic`,
+`stalker` — so the tech tree still reserves those names.)
+
+Separately, fixed a **latent recruit-panel bug** found while investigating: the panel was a
+non-wrapping, centre-anchored (`translateX(-50%)`) flex row, so once a faction had enough
+recruitable units the row overflowed and clipped cards off both screen edges — the same
+"unit not showing" symptom. Added `flex-wrap: wrap`, `justify-content: center`,
+`max-width: min(92vw, 900px)`, and `max-height/overflow-y` so cards wrap and stay on-screen.
+
+TTR: none.
+
+---
+
+## 2026-07-04 — David — "Tech Tree on/off" setup toggle (default OFF = everything unlocked)
+
+Per the user: keep the existing tech→unit links intact (Tank stays linked to Forge/Armory,
+etc.), but add a **setup-screen toggle "Tech Tree (research to unlock — off = all unlocked)"**.
+- **OFF** (default for now): the entire tech tree is unlocked from the start — every player
+  begins with all **non-locked** techs pre-researched, so all units/tech/abilities are
+  available immediately (the Tank shows in recruit without researching Forge).
+- **ON**: normal research-gating (units unlock as their tech is researched).
+
+Implemented as `GameConfig.techTreeEnabled`. Crucially, the engine treats gating as **ON
+unless the flag is explicitly `false`** (undefined/true = gated). This means:
+- `createGame` pre-researches all non-locked techs **only** when `techTreeEnabled === false`.
+  All existing gating code (`isUnitUnlocked`, `getModifier`, `isTechAvailable`) then works
+  unchanged — the tech→unit links are just pre-satisfied, not removed.
+- Every existing test uses `defaultConfig` (flag undefined → gated), so **no test's behaviour
+  changed** — no need to touch the tech/economy/combat suites. `tech.test.ts` keeps testing
+  real gating; one new test covers the OFF path.
+
+The web store defaults the config to `techTreeEnabled: false` (OFF), so games created from the
+menu are unlocked by default; the checkbox (`checked = techTreeEnabled === true`) turns gating
+ON. Locked/preview techs (`reactive_plating`, `tracer_rounds`, `replicator`) are excluded from
+the OFF pre-research (they're not "active" tech yet).
+
+This supersedes the practical concern from the prior Tank entry (a Forge-gated Tank being
+unreachable without the tech UI): with the tree OFF by default, the Tank — and every other
+tech-linked unit — is available now, while the linkage stays ready for when the tree is ON.
+
+TTR: none.
+
+---
+
+## 2026-07-13 — David — Placeholder sprites/icons for Vindrace & Seercaust
+
+Replaced the generic fallback figures with code-drawn placeholder sprites in `drawUnit.ts`
+and gave them recruit-menu emoji in `MapView.tsx`:
+- **Vindrace** → `drawVindrace` (ultralisk-style hulking armoured beast on four legs with two
+  huge forward blades/tusks) + emoji 🦏.
+- **Seercaust** → `drawSeercaust` (zerg-queen-style crowned caster with raised tendril-arms
+  channelling a glowing purple spell orb) + emoji 🔮.
+
+Web-only (canvas drawers + emoji map); still placeholders pending Patrick's real sprites
+(overlap.md updated). No engine/data change.
+
+TTR: none.
+
+---
+
+## 2026-07-13 — David — Bugfix: founding a city now fully ends the founder's turn (no attack after)
+
+Reported: a Mech attacked after founding a city. Confirmed oversight. `applyFoundCity` set
+only `founder.hasMoved = true` (its comment claimed it "mirrors capture"), but the attack
+action is gated on `!hasAttacked` — so a founder could still attack after founding. Capture
+(`applyCaptureCity`) correctly sets `hasAttacked = true`. Fixed founding to set BOTH
+`hasMoved` and `hasAttacked`, so founding fully spends the turn (no move, no attack) for any
+unit. Added a regression test (founder + adjacent enemy → no attack offered after founding).
+Sacrificial founders (Scuttlings) are unaffected — they're consumed by founding.
+
+TTR: none.
+
+---
+
+## 2026-07-13 — David — Hive unit "Wyrm" — Stage A: Burrow/Erupt, co-tile occupancy, hidden/detect (+ Tank MOV fix)
+
+Added the **Wyrm** (Hive, heavy, cost 200): surface `wyrm` HP 30 / ATK 3 / DEF 3 / MOV 1 /
+range 1 / VIS 1; burrowed `wyrm_burrowed` HP 30 / ATK 0 / DEF 0 / MOV 2 / VIS 0. Added to the
+hive roster (only the surface form is recruitable). This is a big, multi-system unit built in
+stages — **Stage A** (this entry) is Burrow/Erupt + co-tile occupancy + hidden/detect; **Stage
+B** (the surface 2-tile "chain" attack) is deferred (memory note `wyrm-chain-attack-pending`).
+
+User-confirmed rules:
+- **Burrow** (self-cast, spends turn) morphs `wyrm` → `wyrm_burrowed` (reuses the Tank's
+  `morphTo` mechanism). Burrowed = the Hive's cloak: hidden from enemies unless an adjacent
+  enemy `detect` unit (range 1) or `marked` — reuses `unitHiddenByCloak` (now also triggers on
+  `burrowed`). ATK/DEF 0 → very fragile if revealed (the counterplay). Can't attack (only Erupt).
+- **Co-tile occupancy** (the hard part): a burrowed Wyrm may move **onto/under an enemy** unit
+  (co-occupying), but not a friendly. Other units treat a burrowed **enemy** as invisible/
+  non-blocking (they may unknowingly step on it) but a burrowed **friendly** still blocks.
+  Implemented in `getReachableTiles` via an `isBurrowed` flag + excluding burrowed enemies from
+  the blocking set. Burrowed can't move under buildings/resource tiles/cities/mountains (added a
+  `buildings` arg to `getReachableTiles`; provisional — see `wyrm-burrowed-movement-future`).
+- **Erupt** (self-cast, spends turn) morphs back to `wyrm` **and instantly kills any enemy on
+  the Wyrm's tile** (regardless of HP — user's "for now" call), or just surfaces on an empty
+  tile. Dedicated branch in `applyUseAbility` (kill co-located enemies + infected-death spawns,
+  then morph).
+- **Dirt mound:** the burrowed form renders as an owner-only dirt mound (`drawWyrmBurrowed`);
+  enemies see nothing (it's filtered from their view), so the mound never gives it away.
+
+Also per the user: **Tank normal-form movement 2 → 1** (assault form stays 0).
+
+Deferred/noted: Stage B chain attack (100%/50%, **no retaliation — flagged for later review**),
+burrowed-vs-building interactions (may attack REBs later), instant-kill-vs-damage on Erupt.
+9 engine tests added (morph, hidden/detect, no-attack, co-tile both directions, terrain
+restrictions, erupt kill/empty, tank MOV). 142 tests pass.
+
+Known minor gap: two units co-located on one tile (burrowed Wyrm + enemy on top) share a
+render slot — only relevant in the brief pre-Erupt window; acceptable for Stage A.
+
+TTR: none — no economy stats changed.
+
+---
+
+## 2026-07-13 — David — Wyrm tweak: Burrow/Erupt forbidden on city/mountain/building tiles
+
+Per the user: the Wyrm may not **Burrow** or **Erupt** while standing on a **city, mountain,
+or building** tile. Added `canBurrowEruptAt` (checks `tile.isCity`, mountain terrain, and any
+`state.buildings` on the tile); gates the `burrow`/`erupt` self-cast offers in
+`getLegalActions` and is re-checked defensively in `applyUseAbility`. (Assault Mode and other
+morphs are unaffected.) Tests added.
+
+Separately flagged for the user (not yet built): the **blind/burrowed "bump into impassable
+terrain" movement mechanic** — all cloud tiles show selectable, and moving onto a hidden
+impassable tile makes the unit bump (stay/stop-short, reveal that tile as fog, waste the
+movement), extended to scuttlings too. **The design logic is to penalise blind movement into
+clouds** (blindly rushing into fog risks wasting moves on unseen mountains/buildings). Holding
+implementation pending one clarification: the spec both says burrowed movement is "stopped at
+a mountain (like scuttlings)" AND that the Wyrm "can move freely under" an impassable
+intermediate tile — those conflict, and it determines the whole implementation.
+
+TTR: none.
+
+---
+
+## 2026-07-13 — David — Blind/burrowed "bump into impassable terrain" movement + Wyrm pass-under
+
+Built the movement mechanic for blind (scuttling) and burrowed (Wyrm) units. **Design logic:
+penalise blind movement into clouds.** Because these units see only their own tile, showing
+only *passable* cloud tiles as blue leaks terrain (you'd infer where mountains are). So now
+**all** cloud tiles in range are selectable, and moving onto a hidden impassable tile
+**bumps**: the unit lands on the last valid tile, the impassable tile is revealed as fog, and
+remaining movement is wasted.
+
+User-confirmed rules (two clarifying rounds):
+- **Wyrm passes UNDER** impassable intermediate tiles (mountain/building/resource/city) to
+  reach a valid tile beyond — those aren't revealed. It only **bumps** when the impassable
+  tile is its actual **destination**. Scuttlings (surface) can't pass through, so they bump
+  the first impassable tile.
+- **Bump lands on the last valid tile** (partial advance). A MOV-1 scuttling bumping an
+  adjacent mountain stays put; a MOV-2 Wyrm bumping a far mountain advances one tile first.
+
+Implementation: `getReachableTiles` was reworked around **occupiable** (can stop) vs
+**traversable** (can path through) predicates — burrowed traverses everything (passes under)
+but can't stop on impassables/friendlies; others traverse only what they could occupy. A new
+optional `bumps` out-param collects impassable-tile→land-tile pairs. `getLegalActions` turns
+those into move actions carrying `bumpReveal` (new optional field on `MoveAction`: `to` = land
+tile, `bumpReveal` = the tile to reveal). `applyMove` handles it (land + reveal to fog memory /
+revealedTiles). UI: bump tiles highlight on their impassable (cloud) tile and are clickable;
+`selectedUnitBlind` now also covers `burrowed` so the Wyrm's targets draw on clouds.
+
+Also fixed the earlier note: burrowed movement is NOT "can't move under" impassables — it's
+"passes under but can't stop on" them.
+
+9 new engine tests (5 earlier + 4 bump: destination-bump, pass-under vs a blocked normal unit,
+scuttling adjacent bump, apply-bump lands+reveals). 148 tests pass.
+
+TTR: none.
+
+---
+
+## 2026-07-13 — David — Vanguard Armory tech-tree revamp + renames (Infiltrator→Wraith, Mech→Stalker)
+
+**Renames (all references updated; old names deleted):** `infiltrator` → **`wraith`** and
+`mech` → **`stalker`** across units.json, factions.json, the canvas drawers
+(`drawInfiltrator`→`drawWraith`, `drawMech`→`drawStalker`), `UNIT_ICONS`, `UnitSheet`
+descriptions, engine tests (files renamed to `wraith.test.ts` / `stalker.test.ts`),
+conditions.md, overlap.md, and the memory notes. ("Mech Bay" the tech keeps its name.)
+
+**Armory tech tree** (`packages/data/json/tech-tree.json`) rebuilt as two prerequisite
+branches (Polytopia-style DAG via the per-node `prerequisites` field):
+- **Small Arms** (L1) → unlocks Bulwark + Lancer. → **Combined Arms** (L1, needs Small Arms;
+  repeat-shot ×1.2 upgrade — combat logic TBD). → **Infiltration** (L2) unlocks Wraith. →
+  **Raiding** (L2, needs Infiltration; TBD).
+- **Forge** (L1, pure prereq) → **Mech Bay** (L2) unlocks Stalker; → **Tracer Rounds** (L2,
+  TBD), **Precision Targeting** (L2, grants Stalker Mountain Shooter 2 — TBD), **Sentinel**
+  (L3, unlocks a missing Sentinel unit). **Crucible** (L2, needs Forge) unlocks Tank; →
+  **Titan** (L3, missing unit), **Advanced Projectiles** (L3, Tank assault range 2–3→2–4 —
+  TBD). **Composite Plating** (L3) needs **Crucible OR Mech Bay** → Stalker+Tank ×1.2 DEF (TBD).
+
+**Engine changes to support it:**
+- New **`prerequisitesAny`** field (OR-prereqs) + check in `isTechAvailable` — for Composite
+  Plating (Crucible OR Mech Bay), which the AND-only `prerequisites` couldn't express.
+- **Tank assault range default 3–4 → 2–3** (min 2, max 3), per spec; Advanced Projectiles will
+  later bump the max to 4.
+- **Tank/Bulwark/Lancer/Stalker/Wraith are now tech-gated** (via `unlockUnit` on their techs).
+  With the Tech Tree toggle OFF (default), all are available; ON, they gate correctly.
+
+**Removed** (not in the new spec): `triage`/medic, `marksman`, `reactive_plating`, `replicator`.
+
+**Placeholders / missing** captured in memory note `vanguard-tech-tree-pending`: the Sentinel
+& Titan units don't exist; Combined Arms / Raiding / Tracer Rounds / Precision Targeting /
+Advanced Projectiles / Composite Plating effects aren't wired (need a general "tech grants an
+ability/stat to specific units" mechanic). The tech-tree **UI** still renders tier-gated, not
+the prereq DAG — a follow-up (its node ids were also realigned to the engine tech ids).
+
+Tests: rewrote the Armory `tech.test.ts` cases to the new DAG (Mech Bay needs Forge; Composite
+Plating OR-prereq; Small Arms → Lancer/Bulwark; Crucible → Tank); fixed a recruit test to run
+tech-off. 148 tests pass.
+
+TTR: none — no economy stats changed.
+
+---
+
+## 2026-07-13 — David — Recruit shows tech-locked units (greyed); Wraith tweaks; Roman numerals; dropped techs
+
+Batch of tweaks alongside the Armory revamp:
+- **Recruit menu shows ALL roster units**, greying out tech-locked ones (Tech Tree ON) instead
+  of hiding them. `getRecruitOptions` now returns locked units with `locked: true` + `lockedBy`
+  (the unlocking tech names); the panel renders them greyed/non-clickable with a "research X"
+  tooltip + 🔒. Recruit *legality* (`getLegalActions`) still excludes locked units, so they
+  can't be built. (Pop-full non-locked units are still hidden, as before.)
+- **Tech Tree** setup toggle relabelled to just "Tech Tree" (dropped the explainer text).
+- **Wraith:** visibility 3 → 2; added the **`impotent_founder`** condition (can't found cities).
+- **Roman numerals:** levelled ability display names now use Roman numerals (Corrosive I/II,
+  Mountain Shooter II, Dash I/II, …). Display-only — internal ids stay `corrosive_1` etc.
+- **Dropped techs confirmed:** Triage/Medic, Marksman, Reactive Plating removed. **Replicator**
+  also removed for now — the user may **bring it back in later testing**.
+
+TTR: none.
+
+---
+
+## 2026-07-13 — David — Tech-tree UI redone as a Polytopia-style DAG (levels on rows + connector lines)
+
+Rebuilt `TechTreeView` from tier-row card lists into a **branching DAG**: each level (L1/L2/L3)
+sits on its own horizontal row, and **connector lines** are drawn from each tech to its
+prerequisites (Small Arms → Infiltration, Forge → Mech Bay/Crucible, etc.). OR-prereqs
+(Composite Plating ← Crucible OR Mech Bay) draw as **dashed** lines.
+
+Implementation: `techTrees.ts` nodes gained `col` / `prereqs` / `prereqsAny`; new `layoutTree()`
+computes absolute x/y per node (col × 152, row × 152) and edge endpoints (node centres);
+`nodeState()` derives researched/available/locked from prereqs (falling back to tier-gating for
+nodes without prereq data). `TechTreeView` renders an absolutely-positioned node layer over an
+SVG line layer, with LVL labels down the left.
+
+**Also fixed a latent disconnect:** the UI node ids were `arm_smallarms` etc. and never matched
+the engine tech ids, so research state/among the tree was cosmetic. Aligned the Armory node ids
+to the **engine ids** (`small_arms`, `mech_bay`, …), so `researched` and the `research` dispatch
+now work end-to-end for Vanguard. (The Refinement tree still uses its old placeholder ids —
+cosmetic — a follow-up. Node cost/affordability isn't shown yet; the engine still validates the
+research action.)
+
+TTR: none — UI only.
+
+---
+
+## 2026-07-13 — David — Vanguard #2–#5: push engine (Titan/Ram), Sentinel, Combined Arms, greyed upgrades
+
+Built four interlocking Vanguard features.
+
+**Shared push engine (`push.ts`).** `resolvePush` pushes a LIGHT unit one tile away
+(heavy/air immune): empty passable tile → slides; obstacle (mountain/unit/building/map-edge)
+→ 2 dmg and stays (a bumped LIGHT unit also takes 2, heavy 0); void terrain (water/lava,
+`passable:false`) → dies. Used by:
+- **Titan** (`titan`, HP 40) **Percussive Shells** — impact any tile in range 2: a light unit
+  there takes a normal Titan hit, then the 8 surrounding light units are pushed radially out
+  (`applyPercussiveShells`, snapshots neighbours first).
+- **Vindrace `Ram`** — shove one adjacent enemy light unit away.
+
+**Sentinel** (`sentinel`, air, ATK 0, cost 200) — `flying` trait (already handles water/lava
+in pathfinding); can't attack (added an `attack > 0` gate in `getLegalActions`). Abilities:
+- **Detect II** (`detect_2`) — `unitHiddenByCloak` now reads per-detector range (detect=1,
+  detect_2=2).
+- **Kinetic Shield** (`kinetic_shield` → `shielded` status) — absorbs 100% of the next hit;
+  `tryAbsorbShield` in `applyAttack` (and the Percussive centre) zeroes the damage + un-kills.
+  New `targetAlly` ability flag (friendly-only targeting).
+- **Overwatch Network I** (`overwatch_network_1`) — a ranged friendly unit adjacent to it gets
+  +1 attack range (aura bonus in the attack-offering range calc).
+
+**Combined Arms** (tech `combined_arms`) — a LIGHT unit's 2nd+ attack on the SAME enemy this
+turn gets **×1.2** (no stack). New `GameState.combinedArmsHits` (targetId→count, reset each
+end-turn); `resolveCombat` gained an `attackMultiplier` param; `applyAttack` computes/tracks it.
+
+**Greyed locked upgrades (#5)** — the Unit Info panel now shows a "Locked Upgrades" section for
+your own units listing abilities gated behind un-researched tech (e.g. Stalker → Mountain
+Shooter II), greyed, with a hover tooltip showing the required tech **chain** (Forge › Mech Bay
+› Precision Targeting) + the effect. Driven by a `GATED_UPGRADES` map in `UnitSheet`, filtered
+by the viewer's `researchedTechs`.
+
+Titan/Sentinel added to units.json + the vanguard roster (gated by their L3 techs, so they
+appear greyed in recruit until researched). Placeholder sprites: `drawTitan` (war-mech, 🗿) and
+`drawSentinel` (satellite dish, 📡). 10 new engine tests (`vanguard2.test.ts`); 159 pass.
+
+Known small gaps: Kinetic Shield only absorbs attack-path damage (not push-bump/percussive
+splash); Raiding/Tracer Rounds/other tech upgrades still TBD (memory notes).
+
+TTR: none — no economy stats changed.

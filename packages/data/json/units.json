@@ -113,6 +113,94 @@
     "traits": []
   },
   {
+    "id": "vindrace",
+    "name": "Vindrace",
+    "faction": "hive",
+    "unitClass": "heavy",
+    "cost": 100,
+    "maxHP": 20,
+    "attack": 4,
+    "defence": 2,
+    "movement": 2,
+    "attackRange": 1,
+    "visibility": 1,
+    "conditions": ["slash", "mountain_movement"],
+    "abilities": [
+      { "id": "ram", "name": "Ram", "range": 1, "targetKind": "unit", "targetEnemy": true, "effects": [] }
+    ],
+    "traits": []
+  },
+  {
+    "id": "seercaust",
+    "name": "Seercaust",
+    "faction": "hive",
+    "unitClass": "light",
+    "cost": 150,
+    "maxHP": 15,
+    "attack": 2,
+    "defence": 1,
+    "movement": 1,
+    "attackRange": 1,
+    "visibility": 3,
+    "conditions": ["detect"],
+    "abilities": [
+      {
+        "id": "infect",
+        "name": "Infect",
+        "range": 3,
+        "targetKind": "unit",
+        "targetClass": "light",
+        "cooldown": 2,
+        "effects": [{ "type": "applyStatus", "params": { "status": "infected" } }]
+      },
+      {
+        "id": "spray_bile",
+        "name": "Spray Bile",
+        "range": 2,
+        "targetKind": "tile",
+        "duration": 5,
+        "cooldown": 2,
+        "effects": [{ "type": "applyStatus", "params": { "status": "bile", "duration": 5 } }]
+      }
+    ],
+    "traits": []
+  },
+  {
+    "id": "wyrm",
+    "name": "Wyrm",
+    "faction": "hive",
+    "unitClass": "heavy",
+    "cost": 200,
+    "maxHP": 30,
+    "attack": 3,
+    "defence": 3,
+    "movement": 1,
+    "attackRange": 1,
+    "visibility": 1,
+    "abilities": [
+      { "id": "burrow", "name": "Burrow", "morphTo": "wyrm_burrowed", "effects": [] }
+    ],
+    "traits": []
+  },
+  {
+    "id": "wyrm_burrowed",
+    "name": "Wyrm (Burrowed)",
+    "faction": "hive",
+    "unitClass": "heavy",
+    "cost": 200,
+    "maxHP": 30,
+    "attack": 0,
+    "defence": 0,
+    "movement": 2,
+    "attackRange": 1,
+    "visibility": 0,
+    "conditions": ["burrowed"],
+    "abilities": [
+      { "id": "erupt", "name": "Erupt", "morphTo": "wyrm", "effects": [] }
+    ],
+    "traits": []
+  },
+  {
     "id": "archer",
     "name": "Archer",
     "faction": "shared",
@@ -140,6 +228,76 @@
     "visibility": 1,
     "conditions": ["mountain_defense"],
     "abilities": [],
+    "traits": []
+  },
+  {
+    "id": "stalker",
+    "name": "Stalker",
+    "faction": "vanguard",
+    "unitClass": "heavy",
+    "cost": 100,
+    "maxHP": 25,
+    "attack": 3,
+    "defence": 1,
+    "movement": 2,
+    "attackRange": 2,
+    "visibility": 2,
+    "conditions": ["mountain_movement", "mountain_shooter_2", "mobile"],
+    "abilities": [],
+    "traits": []
+  },
+  {
+    "id": "wraith",
+    "name": "Wraith",
+    "faction": "vanguard",
+    "unitClass": "light",
+    "cost": 120,
+    "maxHP": 15,
+    "attack": 2,
+    "defence": 1,
+    "movement": 2,
+    "attackRange": 3,
+    "visibility": 2,
+    "conditions": ["cloak", "impotent_founder"],
+    "abilities": [
+      { "id": "stun", "name": "Stun", "range": 3, "targetKind": "unit", "targetEnemy": true, "effects": [] },
+      { "id": "plant_explosives", "name": "Plant Explosives", "disabled": true, "effects": [] }
+    ],
+    "traits": []
+  },
+  {
+    "id": "tank",
+    "name": "Tank",
+    "faction": "vanguard",
+    "unitClass": "heavy",
+    "cost": 150,
+    "maxHP": 30,
+    "attack": 2,
+    "defence": 3,
+    "movement": 1,
+    "attackRange": 2,
+    "visibility": 1,
+    "abilities": [
+      { "id": "assault_mode", "name": "Enter Assault Mode", "morphTo": "tank_assault", "effects": [] }
+    ],
+    "traits": []
+  },
+  {
+    "id": "tank_assault",
+    "name": "Tank (Assault Mode)",
+    "faction": "vanguard",
+    "unitClass": "heavy",
+    "cost": 150,
+    "maxHP": 30,
+    "attack": 5,
+    "defence": 2,
+    "movement": 0,
+    "attackRange": 3,
+    "minAttackRange": 2,
+    "visibility": 3,
+    "abilities": [
+      { "id": "assault_mode", "name": "Exit Assault Mode", "morphTo": "tank", "effects": [] }
+    ],
     "traits": []
   },
   {
@@ -238,5 +396,40 @@
       }
     ],
     "traits": []
+  },
+  {
+    "id": "titan",
+    "name": "Titan",
+    "faction": "vanguard",
+    "unitClass": "heavy",
+    "cost": 300,
+    "maxHP": 40,
+    "attack": 4,
+    "defence": 3,
+    "movement": 1,
+    "attackRange": 2,
+    "visibility": 2,
+    "abilities": [
+      { "id": "percussive_shells", "name": "Percussive Shells", "range": 2, "targetKind": "tile", "effects": [] }
+    ],
+    "traits": []
+  },
+  {
+    "id": "sentinel",
+    "name": "Sentinel",
+    "faction": "vanguard",
+    "unitClass": "air",
+    "cost": 200,
+    "maxHP": 20,
+    "attack": 0,
+    "defence": 2,
+    "movement": 2,
+    "attackRange": 1,
+    "visibility": 2,
+    "conditions": ["detect_2", "overwatch_network_1"],
+    "abilities": [
+      { "id": "kinetic_shield", "name": "Kinetic Shield", "range": 2, "targetKind": "unit", "targetAlly": true, "effects": [] }
+    ],
+    "traits": ["flying"]
   }
 ]
