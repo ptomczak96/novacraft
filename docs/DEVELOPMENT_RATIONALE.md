@@ -2758,3 +2758,14 @@ Contracts rebuilt, registry metrics updated (on-screen body heights unchanged).
 (2) The ownership rim ellipse is deleted from the sprite path — shadow, white
 selection ring, glow, and HP bar remain; ownership reads from the HP-bar side
 and territory colors. Verified live in both facings.
+
+## 2026-07-14 — Patrick Tomczak
+
+**Merged `economy` (David) into `main`.** One conflict in
+`apps/web/src/iso/drawUnit.ts`: main's unit-art-v2 commit added a `flip` flag to
+the sprite lookup (Polytopia-style mirroring for the missing SE/SW facings),
+while economy added an owner-colored rim ellipse under sprite units (the sprite
+art isn't team-colored, so without it you can't tell whose unit it is). The two
+changes are orthogonal — resolution keeps both: the rim draws first, then the
+sprite is destructured with `flip` and mirrored as before. Verified with the
+full test suite (159 passing), `validate-data`, and a web-app typecheck.
