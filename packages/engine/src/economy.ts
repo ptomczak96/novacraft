@@ -1,6 +1,7 @@
 import type {
   GameState, PlayerId, DataRegistry, Unit, Coord,
   CityState, CityId, BuildingState, BuildingKind, BuildingDef, ResourceKind, LevelUpChoice,
+  EconomySource, CityEconomy,
 } from './types.js';
 import { getModifier } from './tech.js';
 
@@ -144,6 +145,20 @@ export function buildingOutput(state: GameState, building: BuildingState, regist
     return { resource: def.output, amount: per * adjacentSameCity(state, building.position, def.adjacentTo, building.cityId) };
   }
   return { resource: def.output, amount: 0 };
+}
+
+/**
+ * A REB's *output* is blocked while an ENEMY unit stands on its tile (an enemy
+ * occupying your mine/extractor/refinery stops you collecting its ore/plasma that
+ * turn). Supply/leveling is NOT affected — only income. See docs/ECONOMY.md.
+ */
+export function buildingBlocked(state: GameState, building: BuildingState): boolean {
+  const owner = cityById(state, building.cityId)?.owner;
+  if (owner === undefined || owner === null) return false;
+  const occupant = state.units.find(
+    u => u.position.x === building.position.x && u.position.y === building.position.y,
+  );
+  return !!occupant && occupant.owner !== owner;
 }
 
 /** Supply contributed to its city by a building. */
@@ -320,10 +335,48 @@ function buildingIncome(state: GameState, playerId: PlayerId, resource: Resource
   for (const building of state.buildings) {
     const city = cityById(state, building.cityId);
     if (!city || city.owner !== playerId) continue;
+    if (buildingBlocked(state, building)) continue; // enemy sitting on the REB
     const out = buildingOutput(state, building, registry);
     if (out.resource === resource) total += out.amount;
   }
   return total;
+}
+
+/**
+ * Structured, per-city income breakdown for a player — what each city produces and
+ * the individual sources feeding it (base city production + each REB). Used by the
+ * income tooltips and the city-info box. Blocked REBs are listed (with their would-be
+ * amount) but excluded from the city/resource totals. Deterministic ordering (by id).
+ */
+export function playerEconomy(state: GameState, playerId: PlayerId, registry: DataRegistry): CityEconomy[] {
+  const cities = state.cities.filter(c => c.owner === playerId).sort((a, b) => a.id - b.id);
+  const result: CityEconomy[] = [];
+  let cityIndex = 0;
+  for (const city of cities) {
+    cityIndex++;
+    const ore = { total: 0, sources: [] as EconomySource[] };
+    const plasma = { total: 0, sources: [] as EconomySource[] };
+
+    // Base city production is ore.
+    const prod = cityProduction(city, registry);
+    ore.sources.push({ kind: 'city', index: 1, amount: prod, blocked: false });
+    ore.total += prod;
+
+    const kindCount: Partial<Record<BuildingKind, number>> = {};
+    const cityBuildings = state.buildings.filter(b => b.cityId === city.id).sort((a, b) => a.id - b.id);
+    for (const b of cityBuildings) {
+      kindCount[b.kind] = (kindCount[b.kind] ?? 0) + 1; // number every REB of a kind in order
+      const out = buildingOutput(state, b, registry);
+      if (out.amount === 0) continue; // nothing to show (e.g. refinery with no adjacency)
+      const blocked = buildingBlocked(state, b);
+      const bucket = out.resource === 'plasma' ? plasma : ore;
+      bucket.sources.push({ kind: b.kind, index: kindCount[b.kind]!, amount: out.amount, blocked });
+      if (!blocked) bucket.total += out.amount;
+    }
+
+    result.push({ cityId: city.id, isCapital: city.isCapital, cityIndex, ore, plasma });
+  }
+  return result;
 }
 
 // ── Unit costs ──
@@ -349,8 +402,14 @@ function countCityBuildings(state: GameState, cityId: CityId, kind: BuildingKind
   return state.buildings.filter(b => b.cityId === cityId && b.kind === kind).length;
 }
 
-/** Whether `playerId` may build `kind` at `pos` right now (predicate shared by legal-actions + apply). */
-export function canBuild(state: GameState, registry: DataRegistry, playerId: PlayerId, kind: BuildingKind, pos: Coord): boolean {
+/**
+ * Whether `pos` is a valid place for `playerId` to build `kind` — every check EXCEPT
+ * whether they can currently afford it (tile/terrain, territory ownership, per-city
+ * limit, tech, resource-tile gate). The UI uses this to surface a build site with its
+ * cost even when the player is short on resources (shown unaffordable), while
+ * `canBuild` (= location + affordability) governs legal actions and apply.
+ */
+export function canBuildLocation(state: GameState, registry: DataRegistry, playerId: PlayerId, kind: BuildingKind, pos: Coord): boolean {
   const def = registry.economy.buildings[kind];
   if (!def) return false;
 
@@ -367,14 +426,22 @@ export function canBuild(state: GameState, registry: DataRegistry, playerId: Pla
   if (def.on === 'ore' || def.on === 'plasma') {
     if (resourceKindAt(state, pos) !== def.on) return false;
   } else {
-    // 'land': a passable, non-resource tile that has at least one same-city
-    // REB1 of the kind it boosts adjacent to it (otherwise it does nothing).
+    // 'land' REB2: build on a plain (passable, non-resource) tile that has ≥1 same-city
+    // REB1 of the kind it boosts adjacent to it — a refinery needs an adjacent MINE, a
+    // purifier an adjacent EXTRACTOR (the actual building, not just the resource tile).
+    // Same-city adjacency inherently keeps it in this city's territory.
     const terrain = registry.terrainTypes[tile.terrain];
     if (!terrain || !terrain.passable) return false;
     if (resourceKindAt(state, pos) !== null) return false;
-    if (def.adjacentTo && adjacentSameCity(state, pos, def.adjacentTo, city.id) < 1) return false;
+    if (!def.adjacentTo || adjacentSameCity(state, pos, def.adjacentTo, city.id) < 1) return false;
   }
+  return true;
+}
 
+/** Whether `playerId` may build `kind` at `pos` right now (predicate shared by legal-actions + apply). */
+export function canBuild(state: GameState, registry: DataRegistry, playerId: PlayerId, kind: BuildingKind, pos: Coord): boolean {
+  if (!canBuildLocation(state, registry, playerId, kind, pos)) return false;
+  const def = registry.economy.buildings[kind];
   const cost = buildingCost(def, 1);
   const player = state.players[playerId];
   return player.ore >= cost.ore && player.plasma >= cost.plasma;

@@ -73,17 +73,27 @@ A building belongs to the one city whose territory contains it.
 
 ### REB1 — Mine (on ore tile) / Extractor (on plasma vent)
 Self output + supply, scaling with the building's own level. Upgradeable to L3.
+Mine output = **ore**; Extractor output = **plasma** (never ore). Mine and Extractor
+now have **different** cost/output curves (they only used to share). `costByLevel`
+values are the ore paid to build L1 / upgrade to L2 / upgrade to L3; TTR below is the
+payback of each step = step cost ÷ marginal output gained.
 
-Mine and Extractor share the **same cost & output** (TTR = cost ÷ marginal
-output/turn). They differ only in **supply** (their leveling contribution).
+**Mine** (ore):
 
-| Level | Cost (ore) | Output/turn | TTR | Mine supply | Extractor supply |
+| Level | Cost (ore) | Output/turn (total) | Marginal | TTR | Supply (total) |
 |---|---|---|---|---|---|
-| 1 | 50 | +10 | 5 | 1 | 2 |
-| 2 | 70 | +20 | 7 | 2 | 3 |
-| 3 | 90 | +30 | 9 | 4 | 4 |
+| 1 | 50 | 10 | +10 | 5 | 1 |
+| 2 | 70 | 20 | +10 | 7 | 2 |
+| 3 | 90 | 30 | +10 | 9 | 4 |
 
-- Mine output = ore; Extractor output = plasma.
+**Extractor** (plasma):
+
+| Level | Cost (ore) | Output/turn (total) | Marginal | TTR | Supply (total) |
+|---|---|---|---|---|---|
+| 1 | 100 | 5 | +5 | 20 | 2 |
+| 2 | 125 | 10 | +5 | 25 | 3 |
+| 3 | 200 | 20 | +10 | 20 | 4 |
+
 - Supply is each building's *total* contribution at that level (not incremental).
 - Mine & Extractor: unlimited per city (count is governed by ore/plasma tile spawns, not a hard cap).
 - **No tech gate** on either — a mine builds on any ore tile, an extractor on any
@@ -91,18 +101,41 @@ output/turn). They differ only in **supply** (their leveling contribution).
 - **Starting ore per team = 20** (a small opening buffer; starting plasma = 0).
 
 ### REB2 — Refinery (near mines) / Purifier (near extractors)
-Output + supply **per adjacent same-city REB1**, scaling with the REB2's level.
-Built on a land tile in the territory, adjacent to ≥1 same-city REB1. Upgradeable to L3.
+**Output** = per-adjacent-REB1 value × (count of same-city REB1s of its kind in its 3×3),
+scaling with the REB2's own level. The multiplier is **level-agnostic**: a REB2 next to
+a L1 REB1 counts it the same as a L3 one. **Supply is now a FLAT per-level total** (no
+longer per-adjacent). Upgradeable to L3.
 
-| Level | Cost (ore) | Output/turn per adj REB1 | Supply per adj REB1 |
-|---|---|---|---|
-| 1 | 50 | +10 | 1 |
-| 2 | 120 | +20 | 3 |
-| 3 | 200 | +30 | 5 |
+**Build gate:** built on a plain (passable, non-resource) **land tile in the city's
+territory** that has **≥1 same-city REB1 of the kind it boosts adjacent in its 3×3** —
+a refinery needs an adjacent **mine**, a purifier an adjacent **extractor** (the actual
+building, not just the ore/plasma tile). So the mine/extractor must be built *first*.
+Same-city adjacency keeps it in this city's territory (a REB1 in another city's
+territory doesn't count). **Limited to 1 per city** (both refinery and purifier, for now).
+(This supersedes an earlier "resource-tile" gate — see DEVELOPMENT_RATIONALE.)
 
-- Refinery output = ore (counts adjacent **mines**); Purifier output = plasma (counts adjacent **extractors**).
-- Refinery: unlimited per city. Purifier: max 1 per city.
-- **Same-city only:** a refinery never counts a mine in a different city's territory.
+**Refinery** (ore, counts adjacent **mines**):
+
+| Level | Cost (ore) | Output/turn per adj mine (total) | Marginal | TTR/adj | Supply (flat total) |
+|---|---|---|---|---|---|
+| 1 | 100 | 20 | +20 | 5 | 2 |
+| 2 | 150 | 40 | +20 | 7.5 | 3 |
+| 3 | 250 | 80 | +40 | 6.25 | 4 |
+
+**Purifier** (plasma, counts adjacent **extractors**):
+
+| Level | Cost (ore) | Output/turn per adj extractor (total) | Marginal | TTR/adj | Supply (flat total) |
+|---|---|---|---|---|---|
+| 1 | 300 | 5 | +5 | 60 | 3 |
+| 2 | 400 | 15 | +10 | 40 | 4 |
+| 3 | 750 | 30 | +15 | 50 | 5 |
+
+- TTR/adj is the step payback assuming **1** adjacent REB1; with N adjacent it divides
+  by N (e.g. a L1 refinery next to 2 mines → +40 ore/turn, TTR 2.5).
+- Neither REB2 has a tech gate now — both build as soon as their REB1 is adjacent.
+  (The refinery's old **Refineries** tech requirement was dropped for parity with the
+  purifier; the `refineries` tech still exists but no longer gates anything.)
+- **Same-city only:** a REB2 never counts a REB1 in a different city's territory.
 
 ## 4. Income (collected at turn rollover)
 
@@ -111,6 +144,26 @@ Built on a land tile in the territory, adjacent to ≥1 same-city REB1. Upgradea
 
 There is no plasma *base* from cities — plasma comes only from extractors/purifiers,
 which require plasma-vent tiles (see Map Contract).
+
+### REB blocking (enemy occupation)
+
+While an **enemy unit stands on one of your REBs** (mine / extractor / refinery /
+purifier), that REB's **output is not collected** for as long as it sits there —
+its ore/plasma is excluded from income. **Supply/leveling is unaffected** (income
+only). Predicate: `buildingBlocked(state, building)` (an occupant whose owner ≠ the
+building's city owner); `buildingIncome` skips blocked REBs. A friendly unit on your
+own REB never blocks it. UI: the REB shows a red **✕** at the tile's bottom-right on
+the map, and the income tooltips / city-info box strike it through (its would-be
+amount is still shown, tagged "blocked", but not added to the total).
+
+### Income breakdown for the UI
+
+`playerEconomy(state, playerId, registry): CityEconomy[]` returns a structured,
+per-city breakdown: each city lists its collected `ore`/`plasma` total plus the
+individual `sources` feeding it (`kind: 'city'` = base city production, else a REB
+with a 1-based per-kind `index` → "Mine 1"). Each source carries its gross `amount`
+and a `blocked` flag; city/resource totals exclude blocked sources. This one call
+feeds the top-bar ore & plasma hover tooltips and the city-info economy panel.
 
 ## 5. Units & recruiting
 

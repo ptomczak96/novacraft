@@ -64,6 +64,11 @@ interface GameStore {
   selectedUnitId: number | null;
   selectedCity: Coord | null;
   hoveredTile: Coord | null;
+  inspectedTile: Coord | null; // tile whose info box is shown (terrain/resource)
+  setInspectedTile: (c: Coord | null) => void;
+  // Active ability targeting: the unit + ability awaiting a target click (or null).
+  abilityMode: { unitId: number; abilityId: string } | null;
+  setAbilityMode: (m: { unitId: number; abilityId: string } | null) => void;
   legalActions: Action[];
 
   // Territory-expansion picker (L4 reward): active while the player ticks tiles.
@@ -124,7 +129,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   units: [...defaultUnits] as UnitType[],
   factions: [...defaultFactions] as FactionDef[],
   techs: [...defaultTechs] as TechDef[],
-  config: { ...defaultConfig },
+  config: { ...defaultConfig, techTreeEnabled: false }, // tech tree OFF by default (all unlocked) until we engage it
   registry: buildRegistry(),
   tileTheme: 'default',
   setTileTheme: (t) => set({ tileTheme: t }),
@@ -144,6 +149,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   stateHistory: [],
   selectedUnitId: null,
   selectedCity: null,
+  inspectedTile: null,
   territorySelect: null,
   hoveredTile: null,
   legalActions: [],
@@ -182,15 +188,20 @@ export const useGameStore = create<GameStore>((set, get) => ({
       legalActions: legal,
       stateHistory: [],
       selectedUnitId: null,
+      selectedCity: null,
+      inspectedTile: null,
       screen: 'game',
       showInterstitial: false,
     });
   },
 
-  selectUnit: (unitId) => set({ selectedUnitId: unitId, selectedCity: null }),
-  setSelectedCity: (c) => set({ selectedCity: c, selectedUnitId: null }),
+  selectUnit: (unitId) => set({ selectedUnitId: unitId, selectedCity: null, inspectedTile: null, abilityMode: null }),
+  setSelectedCity: (c) => set({ selectedCity: c, selectedUnitId: null, inspectedTile: null, abilityMode: null }),
   setHoveredTile: (c) => set({ hoveredTile: c }),
-  setTerritorySelect: (v) => set({ territorySelect: v, selectedUnitId: null, selectedCity: null }),
+  setInspectedTile: (c) => set({ inspectedTile: c }),
+  abilityMode: null,
+  setAbilityMode: (m) => set({ abilityMode: m }),
+  setTerritorySelect: (v) => set({ territorySelect: v, selectedUnitId: null, selectedCity: null, inspectedTile: null }),
 
   executeAction: (action) => {
     const { gameState, registry, config } = get();
@@ -263,6 +274,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
       stateHistory: [...get().stateHistory, gameState],
       selectedUnitId: null,
       territorySelect: null,
+      inspectedTile: null,
+      abilityMode: null,
       showInterstitial,
       lastCombatResult: combatLogEntry ?? get().lastCombatResult,
       lastCombatEvent: combatEvent ?? get().lastCombatEvent,
@@ -281,6 +294,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       legalActions: legal,
       stateHistory: stateHistory.slice(0, -1),
       selectedUnitId: null,
+      inspectedTile: null,
     });
   },
 

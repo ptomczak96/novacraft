@@ -10,6 +10,14 @@ export const AbilityDefSchema = z.object({
   name: z.string(),
   effects: z.array(EffectDefSchema),
   cooldown: z.number().optional(),
+  morphTo: z.string().optional(), // if set, casting morphs the unit into this unit type (e.g. assault mode)
+  range: z.number().optional(), // Chebyshev cast range (tiles). Omitted = self/no-target.
+  targetKind: z.enum(['unit', 'tile']).optional(), // what the cast targets
+  targetClass: z.string().optional(), // if targetKind 'unit', restrict to this unitClass (e.g. "light")
+  targetEnemy: z.boolean().optional(), // if targetKind 'unit', restrict to enemy units only
+  targetAlly: z.boolean().optional(), // if targetKind 'unit', restrict to friendly units only
+  disabled: z.boolean().optional(), // greyed-out placeholder ability — never offered/castable yet
+  duration: z.number().optional(), // effect duration in rounds (e.g. Spray Bile = 5)
 });
 
 export const TerrainTypeSchema = z.object({
@@ -33,7 +41,8 @@ export const UnitTypeSchema = z.object({
   attack: z.number().min(0),
   defence: z.number().min(0),
   movement: z.number().min(0),
-  attackRange: z.number().min(1),
+  attackRange: z.number().min(1), // max attack range (Chebyshev)
+  minAttackRange: z.number().min(1).optional(), // min attack range; >1 = a banded weapon that can't fire closer (default 1)
   visibility: z.number().min(0), // fog sight radius: 0=own tile, 1=3x3, 2=5x5 …
   unitClass: z.string().optional(), // e.g. "light" — flavour/grouping, not yet mechanical
   popCost: z.number().min(0).optional(), // pop weight per unit (default 1; scuttling 0.5)
@@ -63,7 +72,8 @@ export const TechDefSchema = z.object({
   branch: z.string(),
   level: z.number().min(1),
   effects: z.array(TechEffectSchema),
-  prerequisites: z.array(z.string()).optional(),
+  prerequisites: z.array(z.string()).optional(), // ALL must be researched
+  prerequisitesAny: z.array(z.string()).optional(), // at least ONE must be researched (e.g. Crucible OR Mech Bay)
   locked: z.boolean().optional(),
 });
 

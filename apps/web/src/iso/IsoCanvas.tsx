@@ -1,7 +1,7 @@
 import React, { useRef, useEffect, useCallback, useState } from 'react';
 import { useGameStore } from '../store/gameStore.js';
-import { previewCombat, isExpansionTileEligible } from '@tactica/engine';
-import type { Coord, Unit, Action } from '@tactica/engine';
+import { previewCombat, isExpansionTileEligible, buildingBlocked, canBuildLocation, getSlashArc, slashHitDamage } from '@tactica/engine';
+import type { Coord, Unit, Action, BuildingKind } from '@tactica/engine';
 
 import type { GameState, DataRegistry, CityState } from '@tactica/engine';
 import { ELEVATION, BG_COLOR } from './constants.js';
@@ -33,17 +33,29 @@ import { loadUnitSprites, facingFromDelta, DEFAULT_FACING, type Facing } from '.
 import {
   drawMoveHighlight,
   drawAttackHighlight,
+  drawBileOverlay,
+  drawAbilityHighlight,
   drawFogExplored,
   drawCloud,
   drawDamagePreview,
   drawGridLabel,
   drawTerritoryBorders,
   drawTerritoryPicker,
+  drawTileOutline,
 } from './drawOverlays.js';
 import {
   drawBuildingLabel, drawResourceLabel, drawActionBox, drawNameBadge, pointInRect,
+  drawBlockedMark,
   type ScreenRect,
 } from './drawEconomy.js';
+
+// Prompt labels for each buildable structure (shown in the on-canvas build box).
+const BUILD_LABELS: Record<string, string> = {
+  mine: 'Build Mine?',
+  extractor: 'Build Extractor?',
+  refinery: 'Build Refinery?',
+  purifier: 'Build Purifier?',
+};
 
 interface IsoCanvasProps {
   mode: 'game' | 'editor';
@@ -145,13 +157,14 @@ export function IsoCanvas({ mode, onPaint, pan, onPanChange }: IsoCanvasProps) {
   // Tile the player clicked an ore/plasma resource on → show its "Build …?" box.
   const [buildPromptTile, setBuildPromptTile] = useState<Coord | null>(null);
   // Action boxes drawn this frame (found-city / build), kept for click hit-testing.
-  const actionBoxesRef = useRef<{ rect: ScreenRect; action: Action }[]>([]);
+  const actionBoxesRef = useRef<{ rect: ScreenRect; action: Action; disabled?: boolean }[]>([]);
 
   const {
     gameState, visibleState, registry, config,
-    selectedUnitId, hoveredTile, legalActions,
-    selectUnit, setSelectedCity, setHoveredTile, executeAction,
+    selectedUnitId, hoveredTile, legalActions, inspectedTile,
+    selectUnit, setSelectedCity, setHoveredTile, executeAction, setInspectedTile,
     territorySelect, setTerritorySelect,
+    abilityMode, setAbilityMode,
     mapEditorState,
   } = useGameStore();
 
@@ -163,6 +176,16 @@ export function IsoCanvas({ mode, onPaint, pan, onPanChange }: IsoCanvasProps) {
   const buildings = mode === 'game' ? (visibleState?.buildings ?? []) : (mapEditorState?.buildings ?? []);
   const cities = mode === 'game' ? (visibleState?.cities ?? []) : (mapEditorState?.cities ?? []);
   const currentPlayer = state?.currentPlayer ?? 0;
+
+  // First structure the current player could build on a tile, ignoring whether they
+  // can currently afford it (so a valid site still shows its prompt when short on ore).
+  const buildKindAt = useCallback((pos: Coord): BuildingKind | null => {
+    if (mode !== 'game' || !gameState) return null;
+    for (const k of ['mine', 'extractor', 'refinery', 'purifier'] as const) {
+      if (canBuildLocation(gameState, registry, currentPlayer, k, pos)) return k;
+    }
+    return null;
+  }, [mode, gameState, registry, currentPlayer]);
 
   // ── Build unit position map ──
   const unitByPos = React.useMemo(() => {
@@ -288,13 +311,20 @@ export function IsoCanvas({ mode, onPaint, pan, onPanChange }: IsoCanvasProps) {
   useEffect(() => () => { if (rafRef.current !== undefined) cancelAnimationFrame(rafRef.current); }, []);
 
   // ── Compute move/attack targets ──
-  const { moveTargets, attackTargets } = React.useMemo(() => {
+  // `slashTargets` is keyed by the CENTRAL tile of each Slash arc (that's the
+  // clickable tile); the two side tiles are derived at draw time via getSlashArc.
+  const { moveTargets, attackTargets, slashTargets } = React.useMemo(() => {
     const moveTargets = new Set<string>();
     const attackTargets = new Map<string, Action>();
-    if (mode !== 'game' || selectedUnitId == null) return { moveTargets, attackTargets };
+    const slashTargets = new Map<string, Action>();
+    if (mode !== 'game' || selectedUnitId == null) return { moveTargets, attackTargets, slashTargets };
     for (const action of legalActions) {
       if (action.type === 'move' && action.unitId === selectedUnitId) {
-        moveTargets.add(`${action.to.x},${action.to.y}`);
+        // A bump move highlights the IMPASSABLE tile (bumpReveal) it targets, not the
+        // land tile — that's the cloud tile the player clicks. See docs/conditions.md.
+        moveTargets.add(action.bumpReveal
+          ? `${action.bumpReveal.x},${action.bumpReveal.y}`
+          : `${action.to.x},${action.to.y}`);
       }
       if (action.type === 'attack' && action.unitId === selectedUnitId) {
         const target = units.find(u => u.id === action.targetId);
@@ -302,16 +332,34 @@ export function IsoCanvas({ mode, onPaint, pan, onPanChange }: IsoCanvasProps) {
           attackTargets.set(`${target.position.x},${target.position.y}`, action);
         }
       }
+      if (action.type === 'slash' && action.unitId === selectedUnitId) {
+        slashTargets.set(`${action.target.x},${action.target.y}`, action);
+      }
     }
-    return { moveTargets, attackTargets };
+    return { moveTargets, attackTargets, slashTargets };
   }, [mode, selectedUnitId, legalActions, units]);
+
+  // Ability-cast targets: valid target tiles for the armed ability (abilityMode).
+  const abilityTargets = React.useMemo(() => {
+    const m = new Map<string, Action>();
+    if (mode !== 'game' || !abilityMode) return m;
+    for (const action of legalActions) {
+      if (action.type === 'useAbility' && action.unitId === abilityMode.unitId && action.abilityId === abilityMode.abilityId) {
+        m.set(`${action.target.x},${action.target.y}`, action);
+      }
+    }
+    return m;
+  }, [mode, abilityMode, legalActions]);
 
   // Blind units (e.g. scuttlings) reveal nothing but may move into cloud tiles —
   // so their move targets are highlighted even on undiscovered (cloud) tiles.
   const selectedUnitBlind = React.useMemo(() => {
     if (selectedUnitId == null) return false;
     const u = units.find(uu => uu.id === selectedUnitId);
-    return !!(u && registry.unitTypes[u.typeId]?.conditions?.includes('blind'));
+    const conds = u && registry.unitTypes[u.typeId]?.conditions;
+    // Blind (scuttling) and burrowed (Wyrm) both see only their own tile, so their
+    // move/bump targets are highlighted on cloud tiles too.
+    return !!(conds?.includes('blind') || conds?.includes('burrowed'));
   }, [selectedUnitId, units, registry]);
 
   // ── Render the full scene ──
@@ -374,11 +422,29 @@ export function IsoCanvas({ mode, onPaint, pan, onPanChange }: IsoCanvasProps) {
       ctx.clearRect(0, 0, width, height);
     }
 
+    // ── Hovered Slash arc ──
+    // When the cursor is over a Slash central tile, resolve its 3-tile arc so we
+    // can highlight the side tiles and preview the 100%/50% damage split.
+    const slashArcTiles = new Map<string, boolean>(); // tileKey → isCenter
+    if (hoveredTile) {
+      const hoveredSlash = slashTargets.get(`${hoveredTile.x},${hoveredTile.y}`);
+      if (hoveredSlash && hoveredSlash.type === 'slash') {
+        const slasher = units.find(u => u.id === hoveredSlash.unitId);
+        if (slasher) {
+          for (const { coord, isCenter } of getSlashArc(slasher.position, hoveredSlash.target)) {
+            if (coord.y >= 0 && coord.y < map.height && coord.x >= 0 && coord.x < map.width) {
+              slashArcTiles.set(`${coord.x},${coord.y}`, isCenter);
+            }
+          }
+        }
+      }
+    }
+
     // Terrain lookup for shore autotiling (null off-map).
     const terrainAt = (x: number, y: number): string | null =>
       (x >= 0 && y >= 0 && x < map.width && y < map.height) ? map.tiles[y][x].terrain : null;
 
-    // ── Painter's algorithm: row 0→W ──
+    // ── Painter's algorithm: row 0→H, col 0→W ──
     for (let y = 0; y < map.height; y++) {
       for (let x = 0; x < map.width; x++) {
         const tile = map.tiles[y][x];
@@ -402,12 +468,25 @@ export function IsoCanvas({ mode, onPaint, pan, onPanChange }: IsoCanvasProps) {
           drawFogExplored(ctx, x, y, map.height, tile.terrain);
         }
 
+        // ── 2b. "Infected" (Spray Bile) tile: purple tint ──
+        if (tile.bile) {
+          drawBileOverlay(ctx, x, y, map.height, tile.terrain);
+        }
+
         // ── 3. Move/attack highlights ──
         if (moveTargets.has(key)) {
           drawMoveHighlight(ctx, x, y, map.height, tile.terrain);
         }
         if (attackTargets.has(key)) {
           drawAttackHighlight(ctx, x, y, map.height, tile.terrain);
+        }
+        // Slash: highlight the central tiles always; light up the whole arc on hover.
+        if (slashTargets.has(key) || slashArcTiles.has(key)) {
+          drawAttackHighlight(ctx, x, y, map.height, tile.terrain);
+        }
+        // Ability cast: purple highlight on valid target tiles for the armed ability.
+        if (abilityTargets.has(key)) {
+          drawAbilityHighlight(ctx, x, y, map.height, tile.terrain);
         }
 
         // ── 4. Unit ──
@@ -458,6 +537,20 @@ export function IsoCanvas({ mode, onPaint, pan, onPanChange }: IsoCanvasProps) {
             if (at && dt) {
               const result = previewCombat(attacker, at, unit, dt, map, registry, config.combatConfig);
               drawDamagePreview(ctx, x, y, map.height, tile.terrain, result.attackerDamage);
+            }
+          }
+        }
+
+        // ── 5b. Slash damage preview (per arc tile, 100% centre / 50% sides) ──
+        if (mode === 'game' && slashArcTiles.has(key) && selectedUnitId != null) {
+          const slasher = units.find(u => u.id === selectedUnitId);
+          if (slasher && unit && unit.owner !== slasher.owner) {
+            const at = registry.unitTypes[slasher.typeId];
+            const dt = registry.unitTypes[unit.typeId];
+            if (at && dt) {
+              const full = previewCombat(slasher, at, unit, dt, map, registry, config.combatConfig).attackerDamage;
+              const dmg = slashHitDamage(full, slashArcTiles.get(key)!, config.combatConfig.minimumDamage);
+              drawDamagePreview(ctx, x, y, map.height, tile.terrain, dmg);
             }
           }
         }
@@ -516,14 +609,19 @@ export function IsoCanvas({ mode, onPaint, pan, onPanChange }: IsoCanvasProps) {
       for (let x = 0; x < map.width; x++) {
         if ((visibility?.[y]?.[x] ?? 'visible') === 'hidden') continue;
         const b = buildingByPos.get(`${x},${y}`);
-        if (b) { drawBuildingLabel(ctx, b, map.height); continue; }
+        if (b) {
+          drawBuildingLabel(ctx, b, map.height);
+          // Enemy sitting on a REB blocks its output → red ✕ on the bottom-right.
+          if (gameState && buildingBlocked(gameState, b)) drawBlockedMark(ctx, x, y, map.height);
+          continue;
+        }
         const tile = map.tiles[y][x];
         if (tile.resourceKind === 'plasma') drawResourceLabel(ctx, x, y, map.height, 'plasma');
       }
     }
 
     // ── Action boxes (found-city always; build-mine/extractor on prompt) ──
-    const boxes: { rect: ScreenRect; action: Action }[] = [];
+    const boxes: { rect: ScreenRect; action: Action; disabled?: boolean }[] = [];
     if (mode === 'game') {
       for (const a of legalActions) {
         if (a.type === 'foundCity') {
@@ -534,15 +632,23 @@ export function IsoCanvas({ mode, onPaint, pan, onPanChange }: IsoCanvasProps) {
           if (u) boxes.push({ rect: drawActionBox(ctx, u.position.x, u.position.y, map.height, 'Capture City?'), action: a });
         }
       }
-      if (buildPromptTile) {
+      if (buildPromptTile && gameState) {
         const { x, y } = buildPromptTile;
-        const a = legalActions.find(
-          ac => ac.type === 'build' && (ac.kind === 'mine' || ac.kind === 'extractor') && ac.position.x === x && ac.position.y === y,
-        );
-        const tile = map.tiles[y]?.[x];
-        if (a && tile && !buildingByPos.has(`${x},${y}`)) {
-          const label = tile.resourceKind === 'plasma' ? 'Build Extractor?' : 'Build Mine?';
-          boxes.push({ rect: drawActionBox(ctx, x, y, map.height, label), action: a });
+        const kind = buildKindAt({ x, y });
+        if (kind && !buildingByPos.has(`${x},${y}`)) {
+          const def = registry.economy.buildings[kind];
+          const ore = def?.costByLevel?.[0] ?? 0;
+          const plasma = def?.plasmaCostByLevel?.[0] ?? 0;
+          const player = gameState.players[currentPlayer];
+          const affordable = player.ore >= ore && player.plasma >= plasma;
+          const label = BUILD_LABELS[kind] ?? 'Build?';
+          const cost = `${ore}◈${plasma > 0 ? ` ${plasma}✦` : ''}`;
+          const action: Action = { type: 'build', kind, position: { x, y } };
+          boxes.push({
+            rect: drawActionBox(ctx, x, y, map.height, label, cost, !affordable),
+            action,
+            disabled: !affordable,
+          });
         }
       }
     }
@@ -568,6 +674,12 @@ export function IsoCanvas({ mode, onPaint, pan, onPanChange }: IsoCanvasProps) {
       }
     }
 
+    // ── Inspected-tile outline (the tile whose info box is open) ──
+    if (mode === 'game' && inspectedTile) {
+      const t = map.tiles[inspectedTile.y]?.[inspectedTile.x];
+      if (t) drawTileOutline(ctx, inspectedTile.x, inspectedTile.y, map.height, t.terrain, '#ffd24a');
+    }
+
     // ── Hover name tooltip (unit / building / resource / ruin) ──
     if (mode === 'game' && hoveredTile) {
       const { x, y } = hoveredTile;
@@ -583,9 +695,9 @@ export function IsoCanvas({ mode, onPaint, pan, onPanChange }: IsoCanvasProps) {
     }
   }, [
     map, visibility, registry, config, units, unitByPos, buildings, buildingByPos, cities, cityLevelByPos,
-    selectedUnitId, hoveredTile, legalActions, moveTargets, attackTargets, mode,
-    buildPromptTile, spriteTick, animTick, territorySelect, gameState, selectedUnitBlind,
-    renderZoom, viewTick,
+    selectedUnitId, hoveredTile, legalActions, moveTargets, attackTargets, slashTargets, abilityTargets, mode,
+    buildPromptTile, spriteTick, animTick, territorySelect, gameState, selectedUnitBlind, inspectedTile,
+    buildKindAt, currentPlayer, renderZoom, viewTick,
   ]);
 
   // Re-render whenever state changes
@@ -668,6 +780,7 @@ export function IsoCanvas({ mode, onPaint, pan, onPanChange }: IsoCanvasProps) {
       const my = (e.clientY - rect.top) * (height / rect.height);
       for (const box of actionBoxesRef.current) {
         if (pointInRect(mx, my, box.rect)) {
+          if (box.disabled) return; // valid build site but unaffordable → no-op, keep the prompt
           executeAction(box.action);
           setBuildPromptTile(null);
           return;
@@ -680,10 +793,23 @@ export function IsoCanvas({ mode, onPaint, pan, onPanChange }: IsoCanvasProps) {
     const key = `${tile.x},${tile.y}`;
     const unit = unitByPos.get(key);
 
+    // Ability targeting takes priority: a valid target tile casts; any other click
+    // cancels the armed ability and falls through to normal handling.
+    if (abilityMode) {
+      if (abilityTargets.has(key)) {
+        executeAction(abilityTargets.get(key)!);
+        setBuildPromptTile(null);
+        return;
+      }
+      setAbilityMode(null);
+    }
+
     if (selectedUnitId != null && moveTargets.has(key)) {
-      const moveAction = legalActions.find(
-        a => a.type === 'move' && a.unitId === selectedUnitId && a.to.x === tile.x && a.to.y === tile.y,
-      );
+      // Match a normal move (to === tile) OR a bump move (bumpReveal === tile).
+      const moveAction = legalActions.find(a => a.type === 'move' && a.unitId === selectedUnitId && (
+        a.bumpReveal ? (a.bumpReveal.x === tile.x && a.bumpReveal.y === tile.y)
+                     : (a.to.x === tile.x && a.to.y === tile.y)
+      ));
       if (moveAction) { executeAction(moveAction); setBuildPromptTile(null); return; }
     }
     if (selectedUnitId != null && attackTargets.has(key)) {
@@ -691,11 +817,31 @@ export function IsoCanvas({ mode, onPaint, pan, onPanChange }: IsoCanvasProps) {
       setBuildPromptTile(null);
       return;
     }
-    if (unit) {
-      // Select any visible unit (own or enemy) to inspect it. Own units also get
-      // their move/attack highlights; enemy selection is inspection-only.
-      selectUnit(unit.id === selectedUnitId ? null : unit.id);
+    // Slash: clicking a central tile executes that 3-tile swing.
+    if (selectedUnitId != null && slashTargets.has(key)) {
+      executeAction(slashTargets.get(key)!);
       setBuildPromptTile(null);
+      return;
+    }
+    // A tile can hold a build site (any REB — mine/extractor on a resource tile,
+    // refinery/purifier on a land tile). Shown even if currently unaffordable, and
+    // even when a unit stands on the tile.
+    const buildable = buildKindAt(tile) !== null;
+
+    if (unit) {
+      // Click-cycling: the FIRST click on a tile with a unit selects the unit
+      // (own units also get move/attack highlights; enemy selection is
+      // inspection-only). Clicking the SAME unit's tile AGAIN falls through to
+      // the tile itself — its terrain info box, and any resource build prompt —
+      // so a resource under a unit is still reachable. See docs/DEVELOPMENT_RATIONALE.md.
+      if (unit.id !== selectedUnitId) {
+        selectUnit(unit.id);
+        setBuildPromptTile(null);
+        return;
+      }
+      // second click on the already-selected unit → inspect its tile
+      setInspectedTile({ x: tile.x, y: tile.y });
+      setBuildPromptTile(buildable ? tile : null);
       return;
     }
 
@@ -708,18 +854,15 @@ export function IsoCanvas({ mode, onPaint, pan, onPanChange }: IsoCanvasProps) {
       return;
     }
 
-    // 2. Clicked an ore/plasma tile where a mine/extractor can be built → prompt.
-    const buildable = legalActions.some(
-      a => a.type === 'build' && (a.kind === 'mine' || a.kind === 'extractor') && a.position.x === tile.x && a.position.y === tile.y,
-    );
-    if (buildable) { setBuildPromptTile(tile); selectUnit(null); return; }
-
+    // Empty tile (no unit, no city): inspect it — show the terrain info box, and
+    // a build prompt if it's a buildable resource tile.
     selectUnit(null);
-    setBuildPromptTile(null);
+    setInspectedTile({ x: tile.x, y: tile.y });
+    setBuildPromptTile(buildable ? tile : null);
   }, [
     mode, getTileFromEvent, map, unitByPos, selectedUnitId, currentPlayer,
-    moveTargets, attackTargets, legalActions, executeAction, selectUnit, setSelectedCity, onPaint,
-    territorySelect, setTerritorySelect, gameState, registry,
+    moveTargets, attackTargets, slashTargets, abilityTargets, abilityMode, setAbilityMode, legalActions, executeAction, selectUnit, setSelectedCity, onPaint,
+    territorySelect, setTerritorySelect, gameState, registry, setInspectedTile, buildKindAt,
   ]);
 
   // ── Hover / drag-pan handler ──

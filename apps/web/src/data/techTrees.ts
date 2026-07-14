@@ -15,6 +15,9 @@ export interface TechNode {
   tier: Tier;
   desc: string;
   tentative?: boolean;
+  col?: number;          // horizontal slot within its tier row (for the DAG layout)
+  prereqs?: string[];    // ALL required (draws a connector line from each)
+  prereqsAny?: string[]; // at least ONE required (dashed connectors)
 }
 
 export interface TechTreeDef {
@@ -49,16 +52,27 @@ const armory: TechTreeDef = {
   id: 'armory',
   name: 'Armory',
   icon: 'Skillicon7_13.png',
+  // NOTE: node ids match the ENGINE tech ids (packages/data/json/tech-tree.json) so
+  // research state lines up; `tier` = engine level. This view is still tier-gated for
+  // display — the true per-node prerequisite DAG lives in the engine tree (TODO: draw
+  // the prereq links here).
   nodes: [
-    { id: 'arm_smallarms', tier: 1, name: 'Small Arms',          icon: 'Skillicon7_10.png', desc: 'Unlocks the Marksman ranged unit.' },
-    { id: 'arm_triage',    tier: 1, name: 'Triage',              icon: 'Skillicon7_11.png', desc: 'Unlocks the Medic unit.' },
-    { id: 'arm_combined',  tier: 1, name: 'Combined Arms',       icon: 'Skillicon7_07.png', desc: 'Focus fire: when 2+ of your units hit the same target in a turn, each extra shot deals +10% damage (2nd, 3rd, 4th… — does not stack per shot).' },
-    { id: 'arm_forge',     tier: 2, name: 'Forge',               icon: 'Skillicon7_16.png', desc: 'Unlocks the Tank unit.' },
-    { id: 'arm_mechbay',   tier: 2, name: 'Mech Bay',            icon: 'Skillicon7_17.png', desc: 'Unlocks the Stalker unit.' },
-    { id: 'arm_advproj',   tier: 2, name: 'Advanced Projectiles', icon: 'Skillicon7_18.png', desc: 'Tanks get +1 attack distance in siege mode (entering siege mode takes one turn).' },
-    { id: 'arm_reactive',  tier: 3, name: 'Reactive Plating',    icon: 'Skillicon7_13.png', desc: 'Tanks and mechs gain a 10% defensive bonus.' },
-    { id: 'arm_tracer',    tier: 3, name: 'Tracer Rounds',       icon: 'Skillicon7_01.png', desc: "Stalkers can fire a 'trace' round (separate from attack) revealing a target's position — including cloaked units — until healed." },
-    { id: 'arm_replicator', tier: 3, name: 'Replicator',         icon: 'Skillicon7_12.png', desc: 'Unlocks a building that builds one extra unit per turn. Takes 3 turns to complete. Max 1 per city.' },
+    // ── Level 1 (roots) ──
+    { id: 'combined_arms',       tier: 1, col: 0,   prereqs: ['small_arms'], name: 'Combined Arms',       icon: 'Skillicon7_07.png', desc: 'Requires Small Arms. Repeat shots on the SAME target by your LIGHT units gain ×1.2 attack (2nd, 3rd, 4th… — does not stack); resets each turn and on switching target. (Combat logic TBD.)' },
+    { id: 'small_arms',          tier: 1, col: 1,   name: 'Small Arms',          icon: 'Skillicon7_10.png', desc: 'Enables the Bulwark and Lancer units.' },
+    { id: 'forge',               tier: 1, col: 5.5, name: 'Forge',               icon: 'Skillicon7_16.png', desc: 'Prerequisite tech — enables Mech Bay and Crucible.' },
+    // ── Level 2 ──
+    { id: 'raiding',             tier: 2, col: 0,   prereqs: ['infiltration'], name: 'Raiding',             icon: 'Skillicon7_01.png', desc: 'Requires Infiltration. Wraiths steal resources from an enemy REB and damage/destroy it. (Details TBD.)' },
+    { id: 'infiltration',        tier: 2, col: 1,   prereqs: ['small_arms'], name: 'Infiltration',        icon: 'Skillicon7_11.png', desc: 'Requires Small Arms. Unlocks the Wraith unit.' },
+    { id: 'tracer_rounds',       tier: 2, col: 3,   prereqs: ['mech_bay'], name: 'Tracer Rounds',       icon: 'Skillicon7_18.png', desc: 'Requires Mech Bay. Lets you mark an enemy unit. (Details TBD.)' },
+    { id: 'mech_bay',            tier: 2, col: 4,   prereqs: ['forge'], name: 'Mech Bay',            icon: 'Skillicon7_17.png', desc: 'Requires Forge. Unlocks the Stalker unit.' },
+    { id: 'precision_targeting', tier: 2, col: 5,   prereqs: ['mech_bay'], name: 'Precision Targeting', icon: 'Skillicon7_04.png', desc: 'Requires Mech Bay. Grants the Stalker its Mountain Shooter II ability.' },
+    { id: 'crucible',            tier: 2, col: 7,   prereqs: ['forge'], name: 'Crucible',            icon: 'Skillicon7_13.png', desc: 'Requires Forge. Unlocks the Tank unit.' },
+    // ── Level 3 ──
+    { id: 'sentinel',            tier: 3, col: 4,   prereqs: ['mech_bay'], name: 'Sentinel',            icon: 'Skillicon7_09.png', desc: 'Requires Mech Bay. Unlocks the Sentinel — an air sensory unit with Detect II. (Stats TBD.)' },
+    { id: 'composite_plating',   tier: 3, col: 5.5, prereqsAny: ['crucible', 'mech_bay'], name: 'Composite Plating',   icon: 'Skillicon7_03.png', desc: 'Requires Crucible OR Mech Bay. Stalker and Tank gain a permanent ×1.2 defence. (Upgrade wiring TBD.)' },
+    { id: 'titan',               tier: 3, col: 6.5, prereqs: ['crucible'], name: 'Titan',              icon: 'Skillicon7_12.png', desc: 'Requires Crucible. Unlocks the Titan unit. (Stats TBD.)' },
+    { id: 'advanced_projectiles', tier: 3, col: 7.5, prereqs: ['crucible'], name: 'Advanced Projectiles', icon: 'Skillicon7_02.png', desc: 'Requires Crucible. Upgrades the Tank’s assault-mode range to 2–4 (default 2–3). (Upgrade wiring TBD.)' },
   ],
 };
 
@@ -90,4 +104,51 @@ export function isTierUnlocked(tree: TechTreeDef, tier: Tier, researched: Set<st
   if (idx <= 0) return true; // lowest tier always open
   const prevTier = tiers[idx - 1];
   return tree.nodes.some(n => n.tier === prevTier && researched.has(n.id));
+}
+
+// ── DAG layout (Polytopia-style: levels on rows, connector lines between prereqs) ──
+export const NODE_W = 132;
+export const NODE_H = 96;
+const COL_W = 152;
+const ROW_H = 152;
+
+export interface PositionedNode { node: TechNode; col: number; x: number; y: number; cx: number; cy: number; }
+export interface Edge { x1: number; y1: number; x2: number; y2: number; dashed: boolean }
+export interface TreeLayout { nodes: PositionedNode[]; edges: Edge[]; rows: { tier: Tier; y: number }[]; width: number; height: number }
+
+export function layoutTree(tree: TechTreeDef): TreeLayout {
+  const tiers = treeTiers(tree);
+  const minTier = tiers[0] ?? 0;
+  const perTier: Record<number, number> = {};
+  const nodes: PositionedNode[] = tree.nodes.map(node => {
+    const row = node.tier - minTier;
+    const autoCol = perTier[node.tier] ?? 0;
+    perTier[node.tier] = autoCol + 1;
+    const col = node.col ?? autoCol;
+    const x = col * COL_W;
+    const y = row * ROW_H;
+    return { node, col, x, y, cx: x + NODE_W / 2, cy: y + NODE_H / 2 };
+  });
+  const byId: Record<string, PositionedNode> = {};
+  for (const p of nodes) byId[p.node.id] = p;
+  const edges: Edge[] = [];
+  for (const p of nodes) {
+    for (const pr of p.node.prereqs ?? []) { const s = byId[pr]; if (s) edges.push({ x1: s.cx, y1: s.cy, x2: p.cx, y2: p.cy, dashed: false }); }
+    for (const pr of p.node.prereqsAny ?? []) { const s = byId[pr]; if (s) edges.push({ x1: s.cx, y1: s.cy, x2: p.cx, y2: p.cy, dashed: true }); }
+  }
+  const maxCol = Math.max(0, ...nodes.map(p => p.col));
+  const rows = tiers.map(t => ({ tier: t, y: (t - minTier) * ROW_H }));
+  return { nodes, edges, rows, width: maxCol * COL_W + NODE_W, height: (tiers.length - 1) * ROW_H + NODE_H };
+}
+
+/** Card state from per-node prereqs (falls back to tier-gating when a node has no prereq data). */
+export function nodeState(node: TechNode, tree: TechTreeDef, researched: Set<string>): 'researched' | 'available' | 'locked' {
+  if (researched.has(node.id)) return 'researched';
+  const hasPrereqData = (node.prereqs?.length ?? 0) > 0 || (node.prereqsAny?.length ?? 0) > 0;
+  if (hasPrereqData) {
+    const allReq = (node.prereqs ?? []).every(p => researched.has(p));
+    const anyReq = !node.prereqsAny?.length || node.prereqsAny.some(p => researched.has(p));
+    return allReq && anyReq ? 'available' : 'locked';
+  }
+  return isTierUnlocked(tree, node.tier, researched) ? 'available' : 'locked';
 }

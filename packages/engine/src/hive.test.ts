@@ -32,14 +32,14 @@ describe('Hive: Reaper (Dash) & Scab (Corrosive)', () => {
     expect(getLegalActions(s2, registry, 0).some(a => a.type === 'move' && a.unitId === 1)).toBe(false);
   });
 
-  it('Scab applies the corrosive status on hit (and never stacks)', () => {
+  it('Scab applies the corrosive_1 condition on hit (and never stacks)', () => {
     let state = createGame(cfg(), registry, ['vanguard', 'hive'], 7);
     state.units = []; state.unitHomeCity = {}; state.currentPlayer = 1; plains(state);
     state.units.push(mk(1, 'scab', 1, 3, 3), mk(2, 'warrior', 0, 5, 3)); // scab range 2
     state = applyAction(state, { type: 'attack', unitId: 1, targetId: 2 }, registry);
     const w = state.units.find(u => u.id === 2)!;
-    expect(w.statuses).toContain('corrosive');
-    expect(w.statuses!.filter(s => s === 'corrosive').length).toBe(1); // no stacking
+    expect(w.statuses).toContain('corrosive_1');
+    expect(w.statuses!.filter(s => s === 'corrosive_1').length).toBe(1); // no stacking
   });
 });
 

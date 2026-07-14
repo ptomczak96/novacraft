@@ -107,11 +107,11 @@ describe('Combat — Polytopia force formula (spec)', () => {
     expect(shooter).toBeGreaterThan(normal);
   });
 
-  it('the corrosive status cuts the defender’s effective defence (−20%)', () => {
+  it('the corrosive_1 condition cuts the defender’s effective defence (−20%)', () => {
     const map = plainsMap();
     const tough = ut({ defence: 10 }); // high def so the 20% cut survives rounding
     const normal = fight(ut(), tough, map, unit(0, 20, 0, 0), unit(1, 20, 1, 0)).attackerDamage;
-    const corroded = fight(ut(), tough, map, unit(0, 20, 0, 0), { ...unit(1, 20, 1, 0), statuses: ['corrosive'] }).attackerDamage;
+    const corroded = fight(ut(), tough, map, unit(0, 20, 0, 0), { ...unit(1, 20, 1, 0), statuses: ['corrosive_1'] }).attackerDamage;
     expect(corroded).toBeGreaterThan(normal);
   });
 

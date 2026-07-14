@@ -127,6 +127,12 @@ export function SetupScreen() {
         </div>
 
         <div className="checkbox-row">
+          <input type="checkbox" id="tech-tree" checked={config.techTreeEnabled === true}
+            onChange={e => setConfig({ ...config, techTreeEnabled: e.target.checked })} />
+          <label htmlFor="tech-tree">Tech Tree</label>
+        </div>
+
+        <div className="checkbox-row">
           <input type="checkbox" id="wc-cities" checked={config.winConditions.captureAllCities}
             onChange={e => setConfig({ ...config, winConditions: { ...config.winConditions, captureAllCities: e.target.checked } })} />
           <label htmlFor="wc-cities">Win: Capture All Cities</label>
@@ -140,6 +146,11 @@ export function SetupScreen() {
           <input type="checkbox" id="double-res" checked={mapgen.doubleResources ?? false}
             onChange={e => setMapgen({ doubleResources: e.target.checked })} />
           <label htmlFor="double-res">Double Resources (For testing)</label>
+        </div>
+        <div className="checkbox-row">
+          <input type="checkbox" id="rich-start" checked={config.richStart ?? false}
+            onChange={e => setConfig({ ...config, richStart: e.target.checked })} />
+          <label htmlFor="rich-start">Rich start - for testing</label>
         </div>
 
         <div className="setup-actions">

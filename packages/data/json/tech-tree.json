@@ -45,16 +45,8 @@
     "branch": "armory",
     "level": 1,
     "effects": [
-      { "type": "unlockUnit", "params": { "unit": "marksman" } }
-    ]
-  },
-  {
-    "id": "triage",
-    "name": "Triage",
-    "branch": "armory",
-    "level": 1,
-    "effects": [
-      { "type": "unlockUnit", "params": { "unit": "medic" } }
+      { "type": "unlockUnit", "params": { "unit": "defender" } },
+      { "type": "unlockUnit", "params": { "unit": "lancer" } }
     ]
   },
   {
@@ -62,61 +54,104 @@
     "name": "Combined Arms",
     "branch": "armory",
     "level": 1,
+    "prerequisites": ["small_arms"],
+    "effects": []
+  },
+  {
+    "id": "infiltration",
+    "name": "Infiltration",
+    "branch": "armory",
+    "level": 2,
+    "prerequisites": ["small_arms"],
     "effects": [
-      { "type": "globalModifier", "params": { "modifier": "focusFireBonus", "value": 0.1 } }
+      { "type": "unlockUnit", "params": { "unit": "wraith" } }
     ]
+  },
+  {
+    "id": "raiding",
+    "name": "Raiding",
+    "branch": "armory",
+    "level": 2,
+    "prerequisites": ["infiltration"],
+    "effects": []
   },
   {
     "id": "forge",
     "name": "Forge",
     "branch": "armory",
-    "level": 2,
-    "effects": [
-      { "type": "unlockUnit", "params": { "unit": "tank" } }
-    ]
+    "level": 1,
+    "effects": []
   },
   {
     "id": "mech_bay",
     "name": "Mech Bay",
     "branch": "armory",
     "level": 2,
+    "prerequisites": ["forge"],
     "effects": [
       { "type": "unlockUnit", "params": { "unit": "stalker" } }
-    ]
-  },
-  {
-    "id": "advanced_projectiles",
-    "name": "Advanced Projectiles",
-    "branch": "armory",
-    "level": 2,
-    "effects": [
-      { "type": "globalModifier", "params": { "modifier": "assaultRangeBonus", "value": 1 } }
-    ]
-  },
-  {
-    "id": "reactive_plating",
-    "name": "Reactive Plating",
-    "branch": "armory",
-    "level": 3,
-    "locked": true,
-    "effects": [
-      { "type": "globalModifier", "params": { "modifier": "heavyDefenceBonus", "value": 0.1 } }
     ]
   },
   {
     "id": "tracer_rounds",
     "name": "Tracer Rounds",
     "branch": "armory",
-    "level": 3,
-    "locked": true,
+    "level": 2,
+    "prerequisites": ["mech_bay"],
     "effects": []
   },
   {
-    "id": "replicator",
-    "name": "Replicator",
+    "id": "precision_targeting",
+    "name": "Precision Targeting",
+    "branch": "armory",
+    "level": 2,
+    "prerequisites": ["mech_bay"],
+    "effects": []
+  },
+  {
+    "id": "sentinel",
+    "name": "Sentinel",
     "branch": "armory",
     "level": 3,
-    "locked": true,
+    "prerequisites": ["mech_bay"],
+    "effects": [
+      { "type": "unlockUnit", "params": { "unit": "sentinel" } }
+    ]
+  },
+  {
+    "id": "crucible",
+    "name": "Crucible",
+    "branch": "armory",
+    "level": 2,
+    "prerequisites": ["forge"],
+    "effects": [
+      { "type": "unlockUnit", "params": { "unit": "tank" } }
+    ]
+  },
+  {
+    "id": "titan",
+    "name": "Titan",
+    "branch": "armory",
+    "level": 3,
+    "prerequisites": ["crucible"],
+    "effects": [
+      { "type": "unlockUnit", "params": { "unit": "titan" } }
+    ]
+  },
+  {
+    "id": "advanced_projectiles",
+    "name": "Advanced Projectiles",
+    "branch": "armory",
+    "level": 3,
+    "prerequisites": ["crucible"],
+    "effects": []
+  },
+  {
+    "id": "composite_plating",
+    "name": "Composite Plating",
+    "branch": "armory",
+    "level": 3,
+    "prerequisitesAny": ["crucible", "mech_bay"],
     "effects": []
   }
 ]

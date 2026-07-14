@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  createGame, applyAction, getLegalActions,
+  createGame, applyAction, getLegalActions, getRecruitOptions,
   techCost, isTechAvailable, isUnitUnlocked, getModifier, calculateOreIncome,
   canBuild, canUpgradeBuilding, cityAt,
 } from './index.js';
@@ -94,18 +94,16 @@ describe('Tech gates on buildings', () => {
     expect(canBuild(state, r, 0, 'extractor', p)).toBe(true);
   });
 
-  it('Refineries gates the refinery', () => {
+  it('the refinery has no tech gate — buildable as soon as a mine is adjacent', () => {
     const r = getRegistry();
     let state = createGame(getConfig(), r, ['vanguard', 'hive'], 7);
     const cap = capitalOf(state, 0);
     state.players[0].ore = 400;
     const m = makeTile(state, cap.position, 1, 0, 'ore');
+    const ref = makeTile(state, cap.position, 0, 1, null); // land, adjacent to the mine site
+    expect(canBuild(state, r, 0, 'refinery', ref)).toBe(false); // no mine yet
     state = applyAction(state, { type: 'build', kind: 'mine', position: m }, r);
-    const ref = makeTile(state, cap.position, 0, 1, null); // land, adjacent to the mine
-    expect(canBuild(state, r, 0, 'refinery', ref)).toBe(false);
-    state = applyAction(state, { type: 'research', techId: 'prospecting' }, r);
-    state = applyAction(state, { type: 'research', techId: 'refineries' }, r);
-    expect(canBuild(state, r, 0, 'refinery', ref)).toBe(true);
+    expect(canBuild(state, r, 0, 'refinery', ref)).toBe(true);  // mine adjacent, no tech needed
   });
 
   it('Drilling gates the mine L2 upgrade', () => {
@@ -122,36 +120,67 @@ describe('Tech gates on buildings', () => {
 });
 
 describe('Armory branch', () => {
-  it('L2 Armory techs unlock after any L1 Armory tech', () => {
-    const r = getRegistry();
-    let state = createGame(getConfig(), r, ['vanguard', 'hive'], 7);
-    state.players[0].ore = 300;
-    expect(isTechAvailable(state, 0, r.techs['small_arms'], r)).toBe(true);
-    expect(isTechAvailable(state, 0, r.techs['forge'], r)).toBe(false);
-    state = applyAction(state, { type: 'research', techId: 'small_arms' }, r);
-    expect(isTechAvailable(state, 0, r.techs['forge'], r)).toBe(true);
-    expect(isTechAvailable(state, 0, r.techs['mech_bay'], r)).toBe(true);
-  });
-
-  it('locked L3 techs are never researchable', () => {
+  it('Armory DAG: Mech Bay needs Forge (not Small Arms); Crucible needs Forge', () => {
     const r = getRegistry();
     let state = createGame(getConfig(), r, ['vanguard', 'hive'], 7);
     state.players[0].ore = 1000;
+    // small_arms and forge are both L1 roots (available from the start).
+    expect(isTechAvailable(state, 0, r.techs['small_arms'], r)).toBe(true);
+    expect(isTechAvailable(state, 0, r.techs['forge'], r)).toBe(true);
+    // Mech Bay / Crucible are gated behind Forge specifically.
+    expect(isTechAvailable(state, 0, r.techs['mech_bay'], r)).toBe(false);
     state = applyAction(state, { type: 'research', techId: 'small_arms' }, r);
-    state = applyAction(state, { type: 'research', techId: 'forge' }, r); // L2 done → L3 prereq met
-    expect(isTechAvailable(state, 0, r.techs['reactive_plating'], r)).toBe(false); // but locked
-    const research = getLegalActions(state, r, 0).filter(a => a.type === 'research').map(a => (a as { techId: string }).techId);
-    expect(research).not.toContain('reactive_plating');
-    expect(research).not.toContain('replicator');
+    expect(isTechAvailable(state, 0, r.techs['mech_bay'], r)).toBe(false); // small_arms doesn't unlock it
+    state = applyAction(state, { type: 'research', techId: 'forge' }, r);
+    expect(isTechAvailable(state, 0, r.techs['mech_bay'], r)).toBe(true);
+    expect(isTechAvailable(state, 0, r.techs['crucible'], r)).toBe(true);
   });
 
-  it('tech-locks units behind unlockUnit techs', () => {
+  it('Composite Plating (OR-prereq) unlocks from EITHER Crucible or Mech Bay', () => {
+    const r = getRegistry();
+    let state = createGame(getConfig(), r, ['vanguard', 'hive'], 7);
+    state.players[0].ore = 5000;
+    state = applyAction(state, { type: 'research', techId: 'forge' }, r);
+    expect(isTechAvailable(state, 0, r.techs['composite_plating'], r)).toBe(false); // neither yet
+    state = applyAction(state, { type: 'research', techId: 'mech_bay' }, r);
+    expect(isTechAvailable(state, 0, r.techs['composite_plating'], r)).toBe(true); // via Mech Bay alone
+  });
+
+  it('recruit options SHOW tech-locked units flagged locked (not hidden) when tech tree is ON', () => {
+    const r = getRegistry();
+    const state = createGame(getConfig(), r, ['vanguard', 'hive'], 7); // tech tree ON (gated)
+    state.units = []; state.unitHomeCity = {};
+    const cap = state.cities.find(c => c.isCapital && c.owner === 0)!;
+    const opts = getRecruitOptions(state, r, 0, cap.position);
+    const tank = opts.find(o => o.unitTypeId === 'tank');
+    expect(tank).toBeTruthy();          // shown, not hidden
+    expect(tank!.locked).toBe(true);    // but flagged locked
+    expect(tank!.lockedBy).toContain('Crucible');
+    expect(opts.find(o => o.unitTypeId === 'warrior')!.locked).toBeFalsy(); // base unit not locked
+  });
+
+  it('tech-locks units behind unlockUnit techs (Small Arms → Lancer/Bulwark; Crucible → Tank)', () => {
     const r = getRegistry();
     let state = createGame(getConfig(), r, ['vanguard', 'hive'], 7);
     expect(isUnitUnlocked(state, 0, 'warrior', r)).toBe(true); // not gated by any tech
-    expect(isUnitUnlocked(state, 0, 'marksman', r)).toBe(false); // gated by Small Arms
-    state.players[0].ore = 100;
+    expect(isUnitUnlocked(state, 0, 'lancer', r)).toBe(false); // gated by Small Arms
+    expect(isUnitUnlocked(state, 0, 'tank', r)).toBe(false);   // gated by Crucible
+    state.players[0].ore = 1000;
     state = applyAction(state, { type: 'research', techId: 'small_arms' }, r);
-    expect(isUnitUnlocked(state, 0, 'marksman', r)).toBe(true);
+    expect(isUnitUnlocked(state, 0, 'lancer', r)).toBe(true);
+    expect(isUnitUnlocked(state, 0, 'defender', r)).toBe(true);
+  });
+
+  it('tech tree OFF (techTreeEnabled:false) unlocks all gated units from the start', () => {
+    const r = getRegistry();
+    // OFF: every gated unit is unlocked without researching anything.
+    const off = createGame(getConfig({ techTreeEnabled: false }), r, ['vanguard', 'hive'], 7);
+    expect(off.players[0].researchedTechs.length).toBeGreaterThan(0); // pre-researched
+    expect(isUnitUnlocked(off, 0, 'tank', r)).toBe(true);
+    expect(isUnitUnlocked(off, 0, 'marksman', r)).toBe(true);
+    // Default (gated) still hides them.
+    const on = createGame(getConfig(), r, ['vanguard', 'hive'], 7);
+    expect(on.players[0].researchedTechs.length).toBe(0);
+    expect(isUnitUnlocked(on, 0, 'tank', r)).toBe(false);
   });
 });

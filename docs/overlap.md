@@ -113,6 +113,44 @@ these techs but render them **greyed out / disabled**, clearly labelled as a loc
 preview ("for show, not yet available"). Read the flag from `tech.locked`.
 **Status:** OPEN — awaiting the tech-tree UI.
 
+### 2026-07-04 — units → art (Patrick) — David
+**Placeholder sprites for the new units.** Three new units have **placeholder art**
+awaiting painted sprites:
+- **Stalker** (`stalker`, Vanguard) — wants a **six-legged walker droid** (a hexapod with a
+  ranged cannon). Currently a code-drawn placeholder in `apps/web/src/iso/drawUnit.ts`
+  (`drawStalker`) + the recruit-menu emoji 🕷️ in `MapView.tsx` (`UNIT_ICONS`).
+- **Vindrace** (`vindrace`, Hive) — code-drawn placeholder `drawVindrace` (an ultralisk-style
+  armoured beast with two big forward blades/tusks); recruit-menu emoji 🦏.
+- **Seercaust** (`seercaust`, Hive) — code-drawn placeholder `drawSeercaust` (a zerg-queen-style
+  crowned caster channelling a glowing spell orb); recruit-menu emoji 🔮.
+- **Titan** (`titan`, Vanguard) — code-drawn placeholder `drawTitan` (a hulking bipedal war-mech with shoulder cannons); recruit-menu emoji 🗿.
+- **Sentinel** (`sentinel`, Vanguard) — code-drawn placeholder `drawSentinel` (a hovering satellite dish, air unit); recruit-menu emoji 📡.
+- **Wyrm** (`wyrm`, Hive) — code-drawn placeholder `drawWyrm` (a Dune-sandworm rearing up with a
+  toothy maw); recruit-menu emoji 🪱. Its burrowed form (`wyrm_burrowed`) draws as a **dirt
+  mound** (`drawWyrmBurrowed`, owner-only). Both want painted sprites.
+- **Tank** (`tank`) + **Tank assault form** (`tank_assault`, Vanguard) — code-drawn
+  placeholder `drawTank` (both forms share it for now; the **assault form wants a distinct
+  "deployed" look** — dug-in / raised barrel). Recruit-menu emoji 🛞 (no tank emoji exists —
+  a real tank icon would be ideal).
+
+- **Wraith** (`wraith`, Vanguard) — code-drawn placeholder `drawWraith` (a
+  hooded stealth operative); recruit-menu emoji 🥷. Owner-side cloaked units render ghosted.
+
+**How to wire:** replace/extend the `drawStalker` / `drawTank` / `drawWraith` routines (and
+add `drawVindrace` / `drawSeercaust`, plus a separate `drawTankAssault`) in `drawUnit.ts`'s
+`UNIT_DRAWERS`, and set their `UNIT_ICONS` entries in `MapView.tsx`. **Status:** OPEN —
+awaiting Patrick's sprites.
+
+### 2026-07-04 — combat/units → economy (buildings) — David
+**Buildings need a hit-count destruction model.** The Wraith's (deferred) Plant
+Explosives — and unit-vs-building attacks generally — need buildings to be **destroyable by
+a hit count**, NOT normal HP/force combat: a building counts how many times it's hit and is
+destroyed after N hits (each hit = 1 regardless of damage). **Mine and Extractor = 2 hits.**
+Different building types may differ. This lives in the buildings/economy module (add a
+per-type hit-count in data + a "damage building" path + destruction handling), with the
+attack/explosive side in combat/units. **Hidden/unimplemented for now** — the user will spec
+it later. **Status:** OPEN — awaiting the building-destruction design.
+
 ## Done
 
 ### 2026-06-28 — economy (city levels) → Combat (self-resolved)

@@ -28,7 +28,8 @@ export interface UnitType {
   attack: number;
   defence: number;
   movement: number;
-  attackRange: number;
+  attackRange: number; // max attack range (Chebyshev)
+  minAttackRange?: number; // min attack range; >1 = a banded weapon that can't fire closer (default 1)
   visibility: number; // fog sight radius (Chebyshev): 0=own tile only, 1=3x3, 2=5x5, …
   unitClass?: string; // e.g. "light" — grouping/flavour, not yet mechanical
   popCost?: number; // pop weight (default 1); scuttling = 0.5 (a pair = 1 pop)
@@ -43,6 +44,14 @@ export interface AbilityDef {
   name: string;
   effects: EffectDef[];
   cooldown?: number;
+  morphTo?: string; // if set, casting morphs the unit into this unit type (e.g. assault mode)
+  range?: number; // Chebyshev cast range (tiles); omitted = self/no-target
+  targetKind?: 'unit' | 'tile'; // what the cast targets
+  targetClass?: string; // if targetKind 'unit', restrict to this unitClass (e.g. "light")
+  targetEnemy?: boolean; // if targetKind 'unit', restrict to enemy units only
+  targetAlly?: boolean; // if targetKind 'unit', restrict to friendly units only
+  disabled?: boolean; // greyed-out placeholder ability — never offered/castable yet
+  duration?: number; // effect duration in rounds (Spray Bile = 5)
 }
 
 export interface EffectDef {
@@ -66,7 +75,8 @@ export interface TechDef {
   branch: string; // tech branch, e.g. 'refinement'
   level: number; // 1..maxLevel
   effects: TechEffect[];
-  prerequisites?: string[]; // optional explicit prereqs, in addition to the branch-unlock rule
+  prerequisites?: string[]; // optional explicit prereqs (ALL required), in addition to the branch-unlock rule
+  prerequisitesAny?: string[]; // optional OR-prereqs (at least ONE required), e.g. Crucible OR Mech Bay
   locked?: boolean; // preview only — shown in UI (greyed) but not yet researchable
 }
 
@@ -102,6 +112,12 @@ export interface GameConfig {
   };
   comebackThreshold: number; // fraction, e.g. 0.25 = 25%
   mapgen?: MapGenOptions; // optional; sensible defaults applied when absent
+  richStart?: boolean; // testing: each team starts with 2000 ore + 2000 plasma
+  // Tech tree ON/OFF. When `false`, the whole tech tree is unlocked from the start
+  // (every player begins with all (non-locked) techs researched → all units/tech/
+  // abilities available). Undefined/true = research-gated (normal play). The keeps
+  // tech→unit links intact either way; OFF just pre-satisfies them.
+  techTreeEnabled?: boolean;
 }
 
 // ── Map generation tuning ──
@@ -139,6 +155,10 @@ export interface Tile {
   resourceKind?: ResourceKind | null; // 'shard' | 'plasma' | null
   isRuin?: boolean; // a site where a new city can be founded
   fortified?: boolean; // city centre fortified (L3 reward) — combat reads this for extra defence
+  // "Spray Bile" (Seercaust): an infected tile. Friendly units (owner === bile.owner) get
+  // ATK ×1.2 & DEF ×1.2; enemies get DEF ×0.8 (and a movement penalty — TODO, pathing).
+  // Cleared when state.turn >= expiresTurn. See docs/conditions.md.
+  bile?: { owner: PlayerId; expiresTurn: number };
 }
 
 export interface GameMap {
@@ -158,13 +178,15 @@ export interface Unit {
   hasAttacked: boolean;
   abilityCooldowns: Record<string, number>;
   dashRemaining?: number; // post-attack move budget from the "Dash N" condition (this turn)
-  statuses?: string[]; // active status effects on this unit (e.g. "corrosive")
+  statuses?: string[]; // conditions applied during play (e.g. "corrosive_1"); shown under Conditions
+  infectedBy?: PlayerId; // if "infected" (Seercaust): the player who gets the 2 scuttlings on its death
 }
 
 // ── Actions ──
 export type Action =
   | MoveAction
   | AttackAction
+  | SlashAction
   | RecruitAction
   | ResearchAction
   | UseAbilityAction
@@ -180,12 +202,25 @@ export interface MoveAction {
   type: 'move';
   unitId: UnitId;
   to: Coord;
+  // Blind/burrowed "bump into impassable terrain": the unit lands on `to` (the last
+  // valid tile) and reveals `bumpReveal` (the hidden impassable tile) as fog, wasting
+  // the rest of its movement. See docs/conditions.md (blind movement).
+  bumpReveal?: Coord;
 }
 
 export interface AttackAction {
   type: 'attack';
   unitId: UnitId;
   targetId: UnitId;
+}
+
+// A Slash (Vindrace) — an AoE swing at a 3-tile arc. `target` is the CENTRAL tile
+// (one of the unit's 8 neighbours); the two side tiles are derived from it. The
+// central tile takes 100% damage, the side tiles 50%. Enemies only; no retaliation.
+export interface SlashAction {
+  type: 'slash';
+  unitId: UnitId;
+  target: Coord;
 }
 
 export interface RecruitAction {
@@ -284,6 +319,21 @@ export interface BuildingState {
   cityId: CityId | null; // the city whose territory contains this building
 }
 
+// ── Economy breakdown (for income tooltips / city-info readouts) ──
+export interface EconomySource {
+  kind: 'city' | BuildingKind; // 'city' = base city production, else a building
+  index: number;               // 1-based index among same-kind sources in this city ("Mine 1")
+  amount: number;              // gross output for the resource (before any blocking)
+  blocked: boolean;            // enemy unit sitting on this REB → output not collected
+}
+export interface CityEconomy {
+  cityId: CityId;
+  isCapital: boolean;
+  cityIndex: number;           // 1-based index among the player's cities
+  ore: { total: number; sources: EconomySource[] };    // total excludes blocked sources
+  plasma: { total: number; sources: EconomySource[] };
+}
+
 // ── Game State ──
 export interface PlayerState {
   id: PlayerId;
@@ -299,6 +349,8 @@ export interface RecruitOption {
   cost: number; // ore
   plasmaCost: number;
   affordable: boolean;
+  locked?: boolean; // gated behind un-researched tech (tech tree ON) — shown greyed, not recruitable
+  lockedBy?: string[]; // names of the tech(s) that unlock it (for the tooltip)
 }
 
 /**
@@ -327,6 +379,9 @@ export interface GameState {
   // Temporary "bump" reveals: tiles where a blind unit bumped a hidden enemy this
   // turn, so that enemy shows to revealedTiles[player] until the player's turn ends.
   revealedTiles: Coord[][];
+  // "Combined Arms": count of the current player's LIGHT-unit attacks per target this
+  // turn (targetId → count). The 2nd+ hit on a target gets ×1.2. Cleared each end-turn.
+  combinedArmsHits: Record<UnitId, number>;
   currentPlayer: PlayerId;
   turn: number;
   nextUnitId: UnitId;
