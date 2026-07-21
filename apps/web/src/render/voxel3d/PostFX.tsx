@@ -1,0 +1,23 @@
+import React from 'react';
+import { EffectComposer, Bloom, Vignette, Noise } from '@react-three/postprocessing';
+
+/**
+ * Post chain, in order: Bloom → Vignette → Noise.
+ * Only surfaces with luminance > 1 (emissive strips, visors, lava) bloom.
+ * Low quality: bloom at half resolution, film noise dropped.
+ */
+export function PostFX({ quality }: { quality: 'high' | 'low' }) {
+  return (
+    <EffectComposer multisampling={quality === 'high' ? 4 : 0}>
+      <Bloom
+        mipmapBlur
+        luminanceThreshold={1.0}
+        luminanceSmoothing={0.2}
+        intensity={0.9}
+        resolutionScale={quality === 'high' ? 1 : 0.5}
+      />
+      <Vignette offset={0.25} darkness={0.65} />
+      {quality === 'high' ? <Noise opacity={0.04} /> : <></>}
+    </EffectComposer>
+  );
+}

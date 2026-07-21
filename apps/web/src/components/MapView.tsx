@@ -3,6 +3,9 @@ import { cityPop, citySupplyProgress, getRecruitOptions, playerEconomy } from '@
 import { useGameStore } from '../store/gameStore.js';
 import { IsoCanvas } from '../iso/IsoCanvas.js';
 import { Starfield } from '../iso/Starfield.js';
+// Lazy so the three.js stack is only downloaded when the 3D renderer is chosen.
+const VoxelMapView = React.lazy(() =>
+  import('../render/voxel3d/VoxelMapView.js').then(m => ({ default: m.VoxelMapView })));
 import { TerritorySelectBar } from './TerritorySelectBar.js';
 import { CityEconomyLines } from './EconomyBreakdown.js';
 
@@ -33,6 +36,8 @@ const UNIT_ICONS: Record<string, string> = {
 
 const RESOURCE_LABEL: Record<string, string> = { ore: 'Ore ◈', plasma: 'Plasma ✦' };
 
+type RendererKind = 'iso' | 'voxel3d';
+
 export function MapView() {
   const {
     gameState, visibleState, registry,
@@ -41,6 +46,13 @@ export function MapView() {
   } = useGameStore();
 
   const [showRecruit, setShowRecruit] = React.useState(false);
+
+  // Renderer selection: `?renderer=voxel3d` or the on-screen toggle. The 2D iso
+  // canvas remains the default and is untouched by the voxel3d option.
+  const [renderer, setRenderer] = React.useState<RendererKind>(() =>
+    new URLSearchParams(window.location.search).get('renderer') === 'voxel3d'
+      ? 'voxel3d'
+      : 'iso');
 
   // Map pan offset (drag-to-pan). Drives both the board's CSS translate and the
   // starfield parallax. Reset to centre whenever a new game starts.
@@ -117,8 +129,30 @@ export function MapView() {
 
   return (
     <div className="map-container" style={{ position: 'relative' }}>
-      <Starfield pan={pan} />
-      <IsoCanvas mode="game" pan={pan} onPanChange={setPan} />
+      {renderer === 'iso' ? (
+        <>
+          <Starfield pan={pan} />
+          <IsoCanvas mode="game" pan={pan} onPanChange={setPan} />
+        </>
+      ) : (
+        <React.Suspense fallback={null}>
+          <VoxelMapView />
+        </React.Suspense>
+      )}
+
+      {/* Renderer toggle — 2D iso canvas ⟷ 3D voxel arena */}
+      <button
+        onClick={() => setRenderer(r => (r === 'iso' ? 'voxel3d' : 'iso'))}
+        title={renderer === 'iso' ? 'Switch to 3D voxel renderer' : 'Switch to 2D renderer'}
+        style={{
+          position: 'absolute', top: 8, left: 8, zIndex: 10,
+          padding: '4px 10px', fontSize: 12, fontFamily: 'monospace',
+          background: 'rgba(20, 24, 38, 0.85)', color: '#8ecbff',
+          border: '1px solid #2a3a55', borderRadius: 4, cursor: 'pointer',
+        }}
+      >
+        {renderer === 'iso' ? '3D' : '2D'}
+      </button>
 
       {/* Territory-expansion picker — pinned to the map's top-right corner */}
       <TerritorySelectBar />
