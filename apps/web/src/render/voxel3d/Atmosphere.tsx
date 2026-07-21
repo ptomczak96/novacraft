@@ -71,7 +71,7 @@ export function CityCards({ width, height }: { width: number; height: number }) 
   );
 }
 
-const RAIN_COUNT = 1500;
+const RAIN_COUNT = 300;
 
 /**
  * Rain: one InstancedMesh of short vertical streaks, additive, scrolling down
