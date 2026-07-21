@@ -53,27 +53,59 @@ function BoxUnit({ unit }: { unit: UnitView }) {
   return <primitive object={model} />;
 }
 
+/** Seconds to slide one move (covers multi-tile moves in one glide). */
+const MOVE_DURATION = 0.3;
+
 function UnitMesh({ unit, onTileClick, interaction }: {
   unit: UnitView;
   onTileClick?: (x: number, y: number) => void;
   interaction?: React.MutableRefObject<CameraInteraction>;
 }) {
-  const bobRef = React.useRef<THREE.Group>(null);
+  const rootRef = React.useRef<THREE.Group>(null);
 
-  // Idle bob: ±0.02 units, per-unit phase offset so a squad doesn't march in sync.
-  const phase = (unit.id * 2.399) % (Math.PI * 2);
+  // Move animation: when the grid position changes, glide from the previous
+  // world position to the new one with a slight hop. Units are otherwise
+  // static (no idle bob).
+  const target = { x: unit.gridPos.x + 0.5, z: unit.gridPos.y + 0.5 };
+  const animRef = React.useRef({
+    x: target.x, z: target.z,          // current rendered position
+    fromX: target.x, fromZ: target.z,
+    toX: target.x, toZ: target.z,
+    start: -1,                          // -1 = idle
+  });
+  const a = animRef.current;
+  if (a.toX !== target.x || a.toZ !== target.z) {
+    a.fromX = a.x;
+    a.fromZ = a.z;
+    a.toX = target.x;
+    a.toZ = target.z;
+    a.start = -2; // armed; stamped with clock time on the next frame
+  }
+
   useFrame(({ clock }) => {
-    const g = bobRef.current;
-    if (g) g.position.y = 0.015 + Math.sin(clock.elapsedTime * 2 + phase) * 0.02;
+    const g = rootRef.current;
+    if (!g) return;
+    if (a.start === -2) a.start = clock.elapsedTime;
+    if (a.start >= 0) {
+      const t = Math.min(1, (clock.elapsedTime - a.start) / MOVE_DURATION);
+      const e = t * t * (3 - 2 * t); // smoothstep ease
+      a.x = a.fromX + (a.toX - a.fromX) * e;
+      a.z = a.fromZ + (a.toZ - a.fromZ) * e;
+      g.position.set(a.x, Math.sin(t * Math.PI) * 0.08, a.z);
+      if (t >= 1) a.start = -1;
+    } else {
+      g.position.set(a.x, 0, a.z);
+    }
   });
 
   return (
     <group
-      position={[unit.gridPos.x + 0.5, 0, unit.gridPos.y + 0.5]}
+      ref={rootRef}
+      position={[target.x, 0, target.z]}
       rotation-y={FACING_ROT_Y[unit.facing]}
     >
       {unit.hostile && isHeavyKind(unit.kind) && <ScanCone />}
-      <group ref={bobRef}>
+      <group position-y={0.015}>
         <BoxUnit unit={unit} />
         {/* Invisible collider: clicking a unit's body must resolve to ITS tile,
             not the tile the ray would hit on the floor behind it. */}

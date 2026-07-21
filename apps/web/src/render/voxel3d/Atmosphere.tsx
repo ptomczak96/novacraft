@@ -232,8 +232,8 @@ export function FogClouds({ map, visibility, theme = 'city' }: {
             segments={4}
             bounds={[0.46, 0.16, 0.46]}
             volume={0.8}
-            growth={0.12}
-            speed={0.06}
+            growth={0}
+            speed={0}
             opacity={0.72}
             fade={0}
             color={theme === 'desert' ? '#8a7458' : '#525d80'}
@@ -336,11 +336,11 @@ export function Bokeh({ width, height }: { width: number; height: number }) {
   return (
     <group ref={groupRef}>
       <Sparkles
-        count={40} speed={0.06} opacity={0.55} size={7} color="#ffca8a" noise={0.2}
+        count={40} speed={0.02} opacity={0.55} size={7} color="#ffca8a" noise={0.2}
         scale={[width * 4, 26, height * 4]} position={[cx - 18, 6, cz - 18]}
       />
       <Sparkles
-        count={40} speed={0.06} opacity={0.5} size={6} color="#8fb4ff" noise={0.2}
+        count={40} speed={0.02} opacity={0.5} size={6} color="#8fb4ff" noise={0.2}
         scale={[width * 4, 26, height * 4]} position={[cx - 24, 10, cz - 24]}
       />
     </group>
@@ -361,7 +361,7 @@ export function DustMotes({ width, height, theme = 'city' }: {
     <Sparkles
       ref={ref}
       count={theme === 'desert' ? 140 : 90}
-      speed={0.25}
+      speed={0.03}
       opacity={0.4}
       size={1.6}
       color={theme === 'desert' ? '#ffd9a0' : '#9fd8ff'}

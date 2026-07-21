@@ -112,28 +112,39 @@ function buildTerrain(map: MapData, visibility: TileVisibility[][] | undefined, 
         s.cityTower.push({ pos: [cx, 0.55, cz], scale: [0.45, 0.7, 0.45] });
         s.cityWindow.push({ pos: [cx, 0.62, cz], scale: [0.47, 0.08, 0.47], color: teamColor });
       } else if (tile.terrain === 'mountain') {
-        s.mountainBase.push({ pos: [cx, 0.28, cz], scale: [0.85, 0.56, 0.85], rotY: jitter * 0.2 });
+        // A low cluster of rocks, not a tile-filling monolith — units (0.7
+        // tall) should still dominate the silhouette.
+        s.mountainBase.push({ pos: [cx - 0.08, 0.16, cz + 0.06], scale: [0.55, 0.32, 0.55], rotY: jitter * 0.4 });
+        s.mountainBase.push({ pos: [cx + 0.24, 0.1, cz - 0.2], scale: [0.32, 0.2, 0.32], rotY: -jitter * 0.6 });
         s.mountainPeak.push({
-          pos: [cx + jitter * 0.15, 0.76, cz - jitter * 0.1],
-          scale: [0.5, 0.42, 0.5],
+          pos: [cx - 0.05 + jitter * 0.08, 0.4, cz + 0.04],
+          scale: [0.3, 0.18, 0.3],
           rotY: jitter * 0.5,
         });
       } else if (tile.terrain === 'forest') {
         if (desert) {
-          // Oasis scrub: a saguaro cactus (trunk + two arms) and a small bush.
-          s.forestTrunk.push({ pos: [cx, 0.36, cz], scale: [0.2, 0.72, 0.2], rotY: jitter * 0.3 });
-          s.forestTrunk.push({ pos: [cx - 0.24, 0.5, cz], scale: [0.11, 0.3, 0.11] });
-          s.forestTrunk.push({ pos: [cx + 0.24, 0.42, cz], scale: [0.11, 0.24, 0.11] });
-          s.forestTrunk.push({ pos: [cx - 0.18, 0.38, cz], scale: [0.14, 0.1, 0.1] });
-          s.forestTrunk.push({ pos: [cx + 0.18, 0.32, cz], scale: [0.14, 0.1, 0.1] });
-          s.forestCanopy.push({ pos: [cx + 0.28, 0.1, cz - 0.28], scale: [0.28, 0.2, 0.28], rotY: jitter });
+          // Oasis scrub: a slim saguaro (trunk + two arms) and a small bush.
+          s.forestTrunk.push({ pos: [cx, 0.26, cz], scale: [0.14, 0.52, 0.14], rotY: jitter * 0.3 });
+          s.forestTrunk.push({ pos: [cx - 0.17, 0.34, cz], scale: [0.08, 0.2, 0.08] });
+          s.forestTrunk.push({ pos: [cx + 0.17, 0.28, cz], scale: [0.08, 0.16, 0.08] });
+          s.forestTrunk.push({ pos: [cx - 0.13, 0.26, cz], scale: [0.1, 0.07, 0.07] });
+          s.forestTrunk.push({ pos: [cx + 0.13, 0.22, cz], scale: [0.1, 0.07, 0.07] });
+          s.forestCanopy.push({ pos: [cx + 0.26, 0.07, cz - 0.26], scale: [0.2, 0.14, 0.2], rotY: jitter });
         } else {
-          s.forestTrunk.push({ pos: [cx - 0.12, 0.14, cz + 0.1], scale: [0.12, 0.28, 0.12] });
+          // Two small trees + a bush per tile instead of one huge cube.
+          s.forestTrunk.push({ pos: [cx - 0.18, 0.09, cz + 0.12], scale: [0.07, 0.18, 0.07] });
           s.forestCanopy.push({
-            pos: [cx, 0.5 + jitter * 0.06, cz],
-            scale: [0.55, 0.45, 0.55],
+            pos: [cx - 0.18, 0.3 + jitter * 0.04, cz + 0.12],
+            scale: [0.3, 0.26, 0.3],
             rotY: jitter,
           });
+          s.forestTrunk.push({ pos: [cx + 0.2, 0.07, cz - 0.16], scale: [0.06, 0.14, 0.06] });
+          s.forestCanopy.push({
+            pos: [cx + 0.2, 0.24, cz - 0.16],
+            scale: [0.24, 0.2, 0.24],
+            rotY: -jitter,
+          });
+          s.forestCanopy.push({ pos: [cx + 0.05, 0.07, cz + 0.3], scale: [0.14, 0.12, 0.14], rotY: jitter * 2 });
         }
       } else if (tile.terrain === 'water' || tile.terrain === 'river') {
         s.waterPane.push({ pos: [cx, 0.02, cz], scale: [0.92, 0.03, 0.92] });
