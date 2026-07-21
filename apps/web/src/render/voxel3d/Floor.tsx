@@ -25,8 +25,8 @@ export function Floor({ width, height, quality, floorTextures, onTileClick, inte
   // Worn metal plates, one per tile, baked into albedo+roughness (1:1 UV over
   // the arena). Hand-authored maps via floorTextures take precedence.
   const plates = React.useMemo(
-    () => makeFloorPlateTextures(width, height, 99, theme),
-    [width, height, theme],
+    () => makeFloorPlateTextures(width, height, 99, theme, quality),
+    [width, height, theme, quality],
   );
   const albedoMap = floorTextures?.albedo ?? plates.albedo;
   const roughnessMap = floorTextures?.roughness ?? plates.roughness;
@@ -70,7 +70,9 @@ export function Floor({ width, height, quality, floorTextures, onTileClick, inte
           depthScale={1.2}
           minDepthThreshold={0.4}
           maxDepthThreshold={1.4}
-          color={theme === 'desert' ? '#c9b89a' : '#b8c0d4'}
+          // Near-white multiplier: the generated albedo carries the value; a
+          // dark tint here multiplies the reflection toward nothing.
+          color={theme === 'desert' ? '#e6d9bf' : '#dfe5f0'}
           roughnessMap={roughnessMap}
           map={albedoMap}
           normalMap={normalMap}

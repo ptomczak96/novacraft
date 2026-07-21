@@ -17,100 +17,177 @@ function mulberry(seed: number): () => number {
 }
 
 /**
- * Arena floor as worn metal plates, one plate per tile: dark seams between
- * plates, bevel highlights, per-plate tint variation, scratches and stains.
- * Baked into the reflector's albedo + roughness maps so the "chunky tile slab"
- * look coexists with planar reflections (seams rough, plate centres smoother,
- * ~10% puddle blobs near-mirror). UVs map 1:1 onto the arena plane.
+ * Arena floor albedo + roughness, generated once at startup (canvas sized by
+ * quality tier, capped at 2048² high / 1024² low). The albedo is deliberately
+ * mid-value — a near-black albedo multiplies the planar reflection to nothing.
+ *
+ * Albedo: per-tile ±8% value jitter, 2–3 octave value-noise grime (−20%,
+ * biased toward edges/corners), subtle 1–2px panel seams + bevel, 6–10
+ * desaturated colour splats, rust streaks near the perimeter.
+ * Roughness: base 0.75 with ±0.05 tile jitter; 8–14 clustered near-mirror
+ * puddles (0.05–0.15); grime areas pushed to 0.9 (grime kills reflection).
+ * UVs map 1:1 onto the arena plane.
  */
 export function makeFloorPlateTextures(
   widthTiles: number,
   heightTiles: number,
   seed = 99,
   theme: 'city' | 'desert' = 'city',
+  quality: 'high' | 'low' = 'high',
 ): { albedo: THREE.CanvasTexture; roughness: THREE.CanvasTexture } {
-  const PX = 64;
+  const maxTex = quality === 'high' ? 2048 : 1024;
+  const PX = Math.max(24, Math.min(quality === 'high' ? 128 : 64,
+    Math.floor(maxTex / Math.max(widthTiles, heightTiles))));
   const W = widthTiles * PX;
   const H = heightTiles * PX;
   const rnd = mulberry(seed);
 
+  // ── Value-noise lattice for the grime field (2 octaves + bias) ──
+  const latticeAt = (cells: number, off: number) => {
+    const r = mulberry(seed ^ off);
+    const grid = new Float32Array((cells + 1) * (cells + 1));
+    for (let i = 0; i < grid.length; i++) grid[i] = r();
+    return (u: number, v: number) => {
+      const x = u * cells, y = v * cells;
+      const x0 = Math.floor(x), y0 = Math.floor(y);
+      const fx = x - x0, fy = y - y0;
+      const sx = fx * fx * (3 - 2 * fx), sy = fy * fy * (3 - 2 * fy);
+      const idx = (yy: number, xx: number) => grid[yy * (cells + 1) + xx];
+      const a = idx(y0, x0) + (idx(y0, x0 + 1) - idx(y0, x0)) * sx;
+      const b = idx(y0 + 1, x0) + (idx(y0 + 1, x0 + 1) - idx(y0 + 1, x0)) * sx;
+      return a + (b - a) * sy;
+    };
+  };
+  const noiseA = latticeAt(5, 0x1111);
+  const noiseB = latticeAt(11, 0x2222);
+  const noiseC = latticeAt(23, 0x3333);
+  /** Grime field 0..1, biased toward arena edges and corners. */
+  const grimeAt = (u: number, v: number) => {
+    const n = 0.5 * noiseA(u, v) + 0.32 * noiseB(u, v) + 0.18 * noiseC(u, v);
+    const edge = Math.max(Math.abs(u - 0.5), Math.abs(v - 0.5)) * 2; // 0 centre → 1 edge
+    const biased = n * (0.55 + 0.45 * edge * edge);
+    return Math.min(1, Math.max(0, (biased - 0.38) / 0.34)); // threshold + normalise
+  };
+
+  // ── Base palettes ──
+  const base = theme === 'desert' ? [0x4a, 0x3c, 0x2b] : [0x24, 0x28, 0x37];
+  const SPLATS = theme === 'desert'
+    ? ['#6b4a2f', '#7a3b52', '#2f5a5e']
+    : ['#7a3b52', '#2f5a5e', '#6b4a2f'];
+
+  // Per-tile value jitter (±8%) + small hue-ish channel wobble, deterministic
+  // from tile coords.
+  const tileJitter: number[][] = [];
+  const tileRough: number[][] = [];
+  for (let ty = 0; ty < heightTiles; ty++) {
+    tileJitter[ty] = [];
+    tileRough[ty] = [];
+    for (let tx = 0; tx < widthTiles; tx++) {
+      const r = mulberry(seed ^ (tx * 73856093) ^ (ty * 19349663));
+      tileJitter[ty][tx] = 0.92 + r() * 0.16;
+      tileRough[ty][tx] = -0.05 + r() * 0.1;
+    }
+  }
+
+  // ── Albedo: base + jitter + grime in one ImageData pass ──
   const alb = document.createElement('canvas');
   alb.width = W; alb.height = H;
   const a = alb.getContext('2d')!;
+  const img = a.createImageData(W, H);
+  const grimeMask = new Float32Array(W * H); // reused by the roughness pass
+  for (let y = 0; y < H; y++) {
+    const ty = Math.min(heightTiles - 1, Math.floor(y / PX));
+    for (let x = 0; x < W; x++) {
+      const tx = Math.min(widthTiles - 1, Math.floor(x / PX));
+      const g = grimeAt(x / W, y / H);
+      grimeMask[y * W + x] = g;
+      const mul = tileJitter[ty][tx] * (1 - 0.2 * g); // grime darkens up to −20%
+      const i = (y * W + x) * 4;
+      img.data[i] = base[0] * mul;
+      img.data[i + 1] = base[1] * mul;
+      img.data[i + 2] = base[2] * mul;
+      img.data[i + 3] = 255;
+    }
+  }
+  a.putImageData(img, 0, 0);
+
+  // Panel seams (1–2px, subtle — the shader grid overlay stays the crisp one)
+  // plus a faint bevel light-catch on each tile's top/left.
+  a.fillStyle = 'rgba(0,0,0,0.42)';
+  for (let tx = 0; tx <= widthTiles; tx++) a.fillRect(tx * PX - 1, 0, 2, H);
+  for (let ty = 0; ty <= heightTiles; ty++) a.fillRect(0, ty * PX - 1, W, 2);
+  a.fillStyle = 'rgba(255,255,255,0.05)';
+  for (let ty = 0; ty < heightTiles; ty++) {
+    for (let tx = 0; tx < widthTiles; tx++) {
+      a.fillRect(tx * PX + 1, ty * PX + 1, PX - 2, 2);
+      a.fillRect(tx * PX + 1, ty * PX + 1, 2, PX - 2);
+    }
+  }
+
+  // Sparse colour splat decals: 6–10 soft blobs, 0.3–1.5 tiles, 10–18% alpha.
+  const splatCount = 6 + Math.floor(rnd() * 5);
+  for (let i = 0; i < splatCount; i++) {
+    const gx = rnd() * W, gy = rnd() * H;
+    const gr = PX * (0.3 + rnd() * 1.2) / 2 * 2; // 0.3–1.5 tiles diameter
+    const col = SPLATS[Math.floor(rnd() * SPLATS.length)];
+    const alpha = 0.1 + rnd() * 0.08;
+    const g = a.createRadialGradient(gx, gy, 1, gx, gy, gr);
+    g.addColorStop(0, col + Math.round(alpha * 255).toString(16).padStart(2, '0'));
+    g.addColorStop(1, col + '00');
+    a.fillStyle = g;
+    a.fillRect(gx - gr, gy - gr, gr * 2, gr * 2);
+  }
+
+  // Rust/stain streaks near the perimeter blocks.
+  for (let i = 0; i < widthTiles + heightTiles; i++) {
+    const along = rnd();
+    const streakL = PX * (0.2 + rnd() * 0.5);
+    const alpha = 0.08 + rnd() * 0.1;
+    a.fillStyle = `rgba(122,74,47,${alpha})`;
+    const edge = Math.floor(rnd() * 4);
+    const t = along * (edge < 2 ? W : H);
+    const d = rnd() * PX * 0.9;
+    if (edge === 0) a.fillRect(t, d, 2 + rnd() * 3, streakL);
+    else if (edge === 1) a.fillRect(t, H - d - streakL, 2 + rnd() * 3, streakL);
+    else if (edge === 2) a.fillRect(d, t, streakL, 2 + rnd() * 3);
+    else a.fillRect(W - d - streakL, t, streakL, 2 + rnd() * 3);
+  }
+
+  // ── Roughness ──
   const rgh = document.createElement('canvas');
   rgh.width = W; rgh.height = H;
   const r = rgh.getContext('2d')!;
-
-  // Seam base fills the whole sheet; plates are drawn inset on top.
-  a.fillStyle = theme === 'desert' ? '#150f08' : '#0a0c13';
-  a.fillRect(0, 0, W, H);
-  r.fillStyle = 'rgb(235,235,235)'; // seams: high roughness
-  r.fillRect(0, 0, W, H);
-
-  // City: deep blue-violet plates (reference grade). Desert: dark rust-sand.
-  const PLATES = theme === 'desert'
-    ? ['#4a3a28', '#52402d', '#463525', '#5a4632', '#3f3022', '#55412c']
-    : ['#262c50', '#2b3158', '#232849', '#313763', '#202440', '#2e2b58'];
-  const STAINS = theme === 'desert'
-    ? ['255,140,60', '196,90,40', '51,240,255']
-    : ['51,240,255', '255,45,149', '196,110,60'];
-  const SEAM = 2;
-  for (let ty = 0; ty < heightTiles; ty++) {
-    for (let tx = 0; tx < widthTiles; tx++) {
-      const x0 = tx * PX + SEAM, y0 = ty * PX + SEAM, sz = PX - SEAM * 2;
-      a.fillStyle = PLATES[Math.floor(rnd() * PLATES.length)];
-      a.fillRect(x0, y0, sz, sz);
-      // Bevel: light catch on top/left, shade on bottom/right.
-      a.fillStyle = 'rgba(255,255,255,0.07)';
-      a.fillRect(x0, y0, sz, 2);
-      a.fillRect(x0, y0, 2, sz);
-      a.fillStyle = 'rgba(0,0,0,0.35)';
-      a.fillRect(x0, y0 + sz - 2, sz, 2);
-      a.fillRect(x0 + sz - 2, y0, 2, sz);
-      // Wear: speckles.
-      for (let i = 0; i < 26; i++) {
-        a.fillStyle = rnd() < 0.5 ? 'rgba(0,0,0,0.22)' : 'rgba(255,255,255,0.05)';
-        a.fillRect(x0 + rnd() * sz, y0 + rnd() * sz, 1 + rnd() * 2, 1 + rnd() * 2);
-      }
-      // Occasional stain / scorch blob (kept subtle — heavy ones read as holes).
-      if (rnd() < 0.15) {
-        const gx = x0 + rnd() * sz, gy = y0 + rnd() * sz, gr = 6 + rnd() * 12;
-        const g = a.createRadialGradient(gx, gy, 1, gx, gy, gr);
-        g.addColorStop(0, 'rgba(5,6,10,0.28)');
-        g.addColorStop(1, 'rgba(5,6,10,0)');
-        a.fillStyle = g;
-        a.fillRect(gx - gr, gy - gr, gr * 2, gr * 2);
-      }
-      // Colourful staining like the reference: theme-tinted splatter.
-      if (rnd() < 0.22) {
-        const gx = x0 + rnd() * sz, gy = y0 + rnd() * sz, gr = 6 + rnd() * 16;
-        const pick = rnd();
-        const tint = pick < 0.4 ? STAINS[0] : pick < 0.7 ? STAINS[1] : STAINS[2];
-        const g = a.createRadialGradient(gx, gy, 1, gx, gy, gr);
-        g.addColorStop(0, `rgba(${tint},0.22)`);
-        g.addColorStop(1, `rgba(${tint},0)`);
-        a.fillStyle = g;
-        a.fillRect(gx - gr, gy - gr, gr * 2, gr * 2);
-        // a few splatter droplets around the blob
-        for (let k = 0; k < 5; k++) {
-          a.fillStyle = `rgba(${tint},${0.12 + rnd() * 0.12})`;
-          a.fillRect(gx + (rnd() - 0.5) * gr * 2.4, gy + (rnd() - 0.5) * gr * 2.4, 1 + rnd() * 3, 1 + rnd() * 3);
-        }
-      }
-      // Roughness: plate body mid-rough with jitter.
-      const base = 150 + Math.floor(rnd() * 50);
-      r.fillStyle = `rgb(${base},${base},${base})`;
-      r.fillRect(x0, y0, sz, sz);
+  const rimg = r.createImageData(W, H);
+  for (let y = 0; y < H; y++) {
+    const ty = Math.min(heightTiles - 1, Math.floor(y / PX));
+    for (let x = 0; x < W; x++) {
+      const tx = Math.min(widthTiles - 1, Math.floor(x / PX));
+      // Base 0.75 ± per-tile jitter; grime pushes toward 0.9.
+      const g = grimeMask[y * W + x];
+      const rough = (0.75 + tileRough[ty][tx]) * (1 - g) + 0.9 * g;
+      const b = Math.round(rough * 255);
+      const i = (y * W + x) * 4;
+      rimg.data[i] = b; rimg.data[i + 1] = b; rimg.data[i + 2] = b;
+      rimg.data[i + 3] = 255;
     }
   }
-  // Puddles: soft near-zero-roughness blobs over ~10% of the floor.
-  const blobCount = Math.round(widthTiles * heightTiles * 0.28);
-  for (let i = 0; i < blobCount; i++) {
-    const gx = rnd() * W, gy = rnd() * H, gr = PX * (0.3 + rnd() * 0.6);
-    const g = r.createRadialGradient(gx, gy, 1, gx, gy, gr);
-    g.addColorStop(0, 'rgba(12,12,12,0.95)');
-    g.addColorStop(0.7, 'rgba(12,12,12,0.75)');
-    g.addColorStop(1, 'rgba(12,12,12,0)');
+  r.putImageData(rimg, 0, 0);
+
+  // Puddles: 8–14 irregular near-mirror blobs, clustered non-uniformly so
+  // some tiles stay bone dry. Drawn AFTER grime so a puddle wins locally.
+  const clusters = Array.from({ length: 3 }, () => [rnd() * W, rnd() * H]);
+  const puddleCount = 8 + Math.floor(rnd() * 7);
+  for (let i = 0; i < puddleCount; i++) {
+    const c = clusters[Math.floor(rnd() * clusters.length)];
+    const gx = c[0] + (rnd() - 0.5) * W * 0.35;
+    const gy = c[1] + (rnd() - 0.5) * H * 0.35;
+    const gr = PX * (0.35 + rnd() * 0.75);
+    const rough = 0.05 + rnd() * 0.1;
+    const v = Math.round(rough * 255);
+    const g = r.createRadialGradient(gx, gy, gr * 0.15, gx, gy, gr);
+    g.addColorStop(0, `rgba(${v},${v},${v},1)`);
+    g.addColorStop(0.65, `rgba(${v},${v},${v},0.85)`);
+    g.addColorStop(1, `rgba(${v},${v},${v},0)`);
     r.fillStyle = g;
     r.fillRect(gx - gr, gy - gr, gr * 2, gr * 2);
   }

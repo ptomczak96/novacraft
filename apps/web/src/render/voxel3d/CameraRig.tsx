@@ -36,6 +36,13 @@ export function CameraRig({ width, height, debugCam, interaction }: {
   const size = useThree(s => s.size);
   const gl = useThree(s => s.gl);
 
+  // ?campos=default: fixed comparison framing (fit zoom, no pan, input
+  // disabled) so before/after screenshots are pixel-comparable.
+  const fixedCam = React.useMemo(
+    () => new URLSearchParams(window.location.search).get('campos') === 'default',
+    [],
+  );
+
   const cx = width / 2;
   const cz = height / 2;
   const d = Math.max(width, height) * 1.25;
@@ -53,8 +60,8 @@ export function CameraRig({ width, height, debugCam, interaction }: {
   // New arena → reset pan/zoom.
   React.useMemo(() => {
     viewRef.current.pan.set(0, 0, 0);
-    viewRef.current.zoomFactor = DEFAULT_ZOOM_FACTOR;
-  }, [width, height]);
+    viewRef.current.zoomFactor = fixedCam ? 1 : DEFAULT_ZOOM_FACTOR;
+  }, [width, height, fixedCam]);
 
   const applyView = React.useCallback(() => {
     const cam = camRef.current;
@@ -102,7 +109,7 @@ export function CameraRig({ width, height, debugCam, interaction }: {
   // Grab-pan + wheel-zoom on the canvas (game mode only; OrbitControls owns
   // the pointer when debugCam is active).
   React.useEffect(() => {
-    if (debugCam) return;
+    if (debugCam || fixedCam) return;
     const el = gl.domElement;
     const maxPan = Math.max(width, height) * 1.1;
     let down = false;
@@ -187,7 +194,7 @@ export function CameraRig({ width, height, debugCam, interaction }: {
       el.removeEventListener('pointerleave', onPointerUp);
       el.removeEventListener('wheel', onWheel);
     };
-  }, [debugCam, gl, width, height, size.width, size.height, applyView, interaction]);
+  }, [debugCam, fixedCam, gl, width, height, size.width, size.height, applyView, interaction]);
 
   return (
     <>
