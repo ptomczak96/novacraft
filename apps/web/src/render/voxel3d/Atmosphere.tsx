@@ -3,7 +3,7 @@ import React from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import { Clouds, Cloud, Sparkles } from '@react-three/drei';
 import type { TileVisibility } from '@tactica/engine';
-import type { MapData } from './types.js';
+import type { ArenaTheme, MapData } from './types.js';
 import { LAYER_NO_REFLECT } from './layers.js';
 import { makeCityWindowTexture } from './proceduralTextures.js';
 
@@ -170,9 +170,10 @@ export function Rain({ width, height }: { width: number; height: number }) {
  * these clouds are the visual layer on top. Rendered on every quality tier —
  * fog is gameplay information, not decoration.
  */
-export function FogClouds({ map, visibility }: {
+export function FogClouds({ map, visibility, theme = 'city' }: {
   map: MapData;
   visibility?: TileVisibility[][];
+  theme?: ArenaTheme;
 }) {
   const groupRef = React.useRef<THREE.Group>(null);
 
@@ -217,7 +218,7 @@ export function FogClouds({ map, visibility }: {
             speed={0.06}
             opacity={0.72}
             fade={0}
-            color="#525d80"
+            color={theme === 'desert' ? '#8a7458' : '#525d80'}
             position={[t.x + 0.5, 0.28, t.y + 0.5]}
           />
         ))}
@@ -231,7 +232,11 @@ export function FogClouds({ map, visibility }: {
  * tower rings — the glowing atmosphere that fills the reference's sky.
  * Additive, no depth write, excluded from reflection.
  */
-export function HazeLayers({ width, height }: { width: number; height: number }) {
+export function HazeLayers({ width, height, theme = 'city' }: {
+  width: number;
+  height: number;
+  theme?: ArenaTheme;
+}) {
   const groupRef = React.useRef<THREE.Group>(null);
   const camera = useThree(s => s.camera);
 
@@ -241,15 +246,22 @@ export function HazeLayers({ width, height }: { width: number; height: number })
     canvas.width = canvas.height = size;
     const ctx = canvas.getContext('2d')!;
     const g = ctx.createRadialGradient(size / 2, size / 2, 8, size / 2, size / 2, size / 2);
-    g.addColorStop(0, 'rgba(150,100,235,0.4)');
-    g.addColorStop(0.5, 'rgba(120,70,200,0.28)');
-    g.addColorStop(1, 'rgba(60,30,120,0)');
+    if (theme === 'desert') {
+      // Dusty sunset haze.
+      g.addColorStop(0, 'rgba(235,140,90,0.4)');
+      g.addColorStop(0.5, 'rgba(190,90,120,0.26)');
+      g.addColorStop(1, 'rgba(90,40,90,0)');
+    } else {
+      g.addColorStop(0, 'rgba(150,100,235,0.4)');
+      g.addColorStop(0.5, 'rgba(120,70,200,0.28)');
+      g.addColorStop(1, 'rgba(60,30,120,0)');
+    }
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, size, size);
     const t = new THREE.CanvasTexture(canvas);
     t.colorSpace = THREE.SRGBColorSpace;
     return t;
-  }, []);
+  }, [theme]);
   React.useEffect(() => () => tex.dispose(), [tex]);
 
   const layers = React.useMemo(() => {
@@ -318,7 +330,11 @@ export function Bokeh({ width, height }: { width: number; height: number }) {
 }
 
 /** Ambient floating dust motes over the arena (drei Sparkles, one draw call). */
-export function DustMotes({ width, height }: { width: number; height: number }) {
+export function DustMotes({ width, height, theme = 'city' }: {
+  width: number;
+  height: number;
+  theme?: ArenaTheme;
+}) {
   const ref = React.useRef<THREE.Points>(null);
   React.useLayoutEffect(() => {
     ref.current?.layers.set(LAYER_NO_REFLECT);
@@ -326,11 +342,11 @@ export function DustMotes({ width, height }: { width: number; height: number }) 
   return (
     <Sparkles
       ref={ref}
-      count={90}
+      count={theme === 'desert' ? 140 : 90}
       speed={0.25}
       opacity={0.4}
       size={1.6}
-      color="#9fd8ff"
+      color={theme === 'desert' ? '#ffd9a0' : '#9fd8ff'}
       noise={0.6}
       scale={[width, 2.2, height]}
       position={[width / 2, 1.2, height / 2]}

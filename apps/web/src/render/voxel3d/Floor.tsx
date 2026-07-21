@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import React from 'react';
 import { useLoader, type ThreeEvent } from '@react-three/fiber';
 import { MeshReflectorMaterial } from '@react-three/drei';
-import type { FloorTextures } from './types.js';
+import type { ArenaTheme, FloorTextures } from './types.js';
 import type { CameraInteraction } from './CameraRig.js';
 import { GRID_LINE, GRID_LINE_BRIGHT } from './palette.js';
 import { LAYER_NO_REFLECT } from './layers.js';
@@ -13,19 +13,20 @@ import { makeFloorPlateTextures } from './proceduralTextures.js';
  * 1×1 world units, tile (x,y) centered at (x+0.5, 0, y+0.5), so the plane spans
  * [0..width]×[0..height]. Clicks raycast this plane and floor() to grid coords.
  */
-export function Floor({ width, height, quality, floorTextures, onTileClick, interaction }: {
+export function Floor({ width, height, quality, floorTextures, onTileClick, interaction, theme = 'city' }: {
   width: number;
   height: number;
   quality: 'high' | 'low';
   floorTextures?: FloorTextures;
   onTileClick?: (x: number, y: number) => void;
   interaction?: React.MutableRefObject<CameraInteraction>;
+  theme?: ArenaTheme;
 }) {
   // Worn metal plates, one per tile, baked into albedo+roughness (1:1 UV over
   // the arena). Hand-authored maps via floorTextures take precedence.
   const plates = React.useMemo(
-    () => makeFloorPlateTextures(width, height),
-    [width, height],
+    () => makeFloorPlateTextures(width, height, 99, theme),
+    [width, height, theme],
   );
   const albedoMap = floorTextures?.albedo ?? plates.albedo;
   const roughnessMap = floorTextures?.roughness ?? plates.roughness;
@@ -68,7 +69,7 @@ export function Floor({ width, height, quality, floorTextures, onTileClick, inte
           depthScale={1.2}
           minDepthThreshold={0.4}
           maxDepthThreshold={1.4}
-          color="#b8c0d4"
+          color={theme === 'desert' ? '#c9b89a' : '#b8c0d4'}
           roughnessMap={roughnessMap}
           map={albedoMap}
           normalMap={normalMap}

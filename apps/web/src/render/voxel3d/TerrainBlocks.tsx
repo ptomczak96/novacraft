@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import React from 'react';
 import type { TileVisibility } from '@tactica/engine';
-import type { MapData } from './types.js';
+import type { ArenaTheme, MapData } from './types.js';
 import { TEAM_COLORS } from './palette.js';
 
 /**
@@ -87,7 +87,7 @@ interface TerrainSets {
   cityWindow: BlockInstance[];
 }
 
-function buildTerrain(map: MapData, visibility?: TileVisibility[][]): TerrainSets {
+function buildTerrain(map: MapData, visibility: TileVisibility[][] | undefined, desert: boolean): TerrainSets {
   const s: TerrainSets = {
     mountainBase: [], mountainPeak: [], forestCanopy: [], forestTrunk: [],
     waterPane: [], lavaPane: [], oreCrystal: [], plasmaCrystal: [],
@@ -119,12 +119,22 @@ function buildTerrain(map: MapData, visibility?: TileVisibility[][]): TerrainSet
           rotY: jitter * 0.5,
         });
       } else if (tile.terrain === 'forest') {
-        s.forestTrunk.push({ pos: [cx - 0.12, 0.14, cz + 0.1], scale: [0.12, 0.28, 0.12] });
-        s.forestCanopy.push({
-          pos: [cx, 0.5 + jitter * 0.06, cz],
-          scale: [0.55, 0.45, 0.55],
-          rotY: jitter,
-        });
+        if (desert) {
+          // Oasis scrub: a saguaro cactus (trunk + two arms) and a small bush.
+          s.forestTrunk.push({ pos: [cx, 0.36, cz], scale: [0.2, 0.72, 0.2], rotY: jitter * 0.3 });
+          s.forestTrunk.push({ pos: [cx - 0.24, 0.5, cz], scale: [0.11, 0.3, 0.11] });
+          s.forestTrunk.push({ pos: [cx + 0.24, 0.42, cz], scale: [0.11, 0.24, 0.11] });
+          s.forestTrunk.push({ pos: [cx - 0.18, 0.38, cz], scale: [0.14, 0.1, 0.1] });
+          s.forestTrunk.push({ pos: [cx + 0.18, 0.32, cz], scale: [0.14, 0.1, 0.1] });
+          s.forestCanopy.push({ pos: [cx + 0.28, 0.1, cz - 0.28], scale: [0.28, 0.2, 0.28], rotY: jitter });
+        } else {
+          s.forestTrunk.push({ pos: [cx - 0.12, 0.14, cz + 0.1], scale: [0.12, 0.28, 0.12] });
+          s.forestCanopy.push({
+            pos: [cx, 0.5 + jitter * 0.06, cz],
+            scale: [0.55, 0.45, 0.55],
+            rotY: jitter,
+          });
+        }
       } else if (tile.terrain === 'water' || tile.terrain === 'river') {
         s.waterPane.push({ pos: [cx, 0.02, cz], scale: [0.92, 0.03, 0.92] });
       } else if (tile.terrain === 'lava') {
@@ -145,17 +155,23 @@ function buildTerrain(map: MapData, visibility?: TileVisibility[][]): TerrainSet
   return s;
 }
 
-export function TerrainBlocks({ map, visibility }: {
+export function TerrainBlocks({ map, visibility, theme = 'city' }: {
   map: MapData;
   visibility?: TileVisibility[][];
+  theme?: ArenaTheme;
 }) {
-  const sets = React.useMemo(() => buildTerrain(map, visibility), [map, visibility]);
+  const desert = theme === 'desert';
+  const sets = React.useMemo(
+    () => buildTerrain(map, visibility, desert),
+    [map, visibility, desert],
+  );
   return (
     <>
-      <Blocks instances={sets.mountainBase} color="#454f6b" />
-      <Blocks instances={sets.mountainPeak} color="#57627e" />
-      <Blocks instances={sets.forestTrunk} color="#33293f" />
-      <Blocks instances={sets.forestCanopy} color="#2a6b4f" />
+      {/* Desert: sandstone mesas + saguaro cacti; city: rock + forest. */}
+      <Blocks instances={sets.mountainBase} color={desert ? '#6b4a33' : '#454f6b'} />
+      <Blocks instances={sets.mountainPeak} color={desert ? '#7d5940' : '#57627e'} />
+      <Blocks instances={sets.forestTrunk} color={desert ? '#3f7a4a' : '#33293f'} />
+      <Blocks instances={sets.forestCanopy} color={desert ? '#2f5c3a' : '#2a6b4f'} />
       <Blocks instances={sets.waterPane} color="#1e3a5f" opacity={0.65} castShadow={false} />
       <Blocks instances={sets.lavaPane} color="#2a0d05" emissive="#ff5a1f" emissiveIntensity={1.4} castShadow={false} />
       <Blocks instances={sets.oreCrystal} color="#000000" emissive="#ffb84d" emissiveIntensity={3} />

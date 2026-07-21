@@ -106,7 +106,7 @@ function makeField(
 // full elevation/temperature biome classifier below (waterLavaTerrain).
 const ENABLE_WATER_LAVA = true;
 
-/** Active classifier: two simple biomes, no water/lava. */
+/** Active classifier: simple biomes, no water/lava. */
 function biomeTerrain(biome: Biome, e: number, m: number): string {
   if (biome === 'stone') {
     // Mostly stone (mountain); rare grassy clearings where moisture is high.
@@ -115,6 +115,19 @@ function biomeTerrain(biome: Biome, e: number, m: number): string {
   // Grassland: grass with forest patches, plus the odd rocky outcrop on peaks.
   if (e > 0.88) return 'mountain';
   return m > 0.62 ? 'forest' : 'plains';
+}
+
+/**
+ * Desert biome classifier: sand seas with mesa outcrops in the peak band
+ * (same mountain budget as other maps), rare lava vents on the hottest peaks,
+ * and scrub oases where moisture spikes (rendered as cacti by the
+ * presentation layer). No water/snow. Selected explicitly for
+ * `mapgen.biome === 'desert'`; other biomes keep the existing classifier.
+ */
+function desertTerrain(e: number, t: number, m: number, mountainLevel: number): string {
+  if (e > mountainLevel) return t > 0.8 ? 'lava' : 'mountain';
+  if (m > 0.8) return 'forest';
+  return 'sand';
 }
 
 /**
@@ -180,9 +193,11 @@ export function generateMap(
   for (let y = 0; y < height; y++) {
     tiles[y] = [];
     for (let x = 0; x < width; x++) {
-      const terrain = ENABLE_WATER_LAVA
-        ? waterLavaTerrain(elevation[y][x], temperature[y][x], moisture[y][x], seaLevel, mountainLevel)
-        : biomeTerrain(o.biome, elevation[y][x], moisture[y][x]);
+      const terrain = o.biome === 'desert'
+        ? desertTerrain(elevation[y][x], temperature[y][x], moisture[y][x], mountainLevel)
+        : ENABLE_WATER_LAVA
+          ? waterLavaTerrain(elevation[y][x], temperature[y][x], moisture[y][x], seaLevel, mountainLevel)
+          : biomeTerrain(o.biome, elevation[y][x], moisture[y][x]);
       tiles[y][x] = {
         terrain,
         owner: null,

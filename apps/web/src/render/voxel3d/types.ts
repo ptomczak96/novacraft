@@ -8,6 +8,9 @@ import type { GameMap, TileVisibility } from '@tactica/engine';
  */
 export type MapData = GameMap;
 
+/** Visual dressing of the arena — detected from the map's dominant terrain. */
+export type ArenaTheme = 'city' | 'desert';
+
 /** Render-side facing, derived from move deltas in the adapter (never engine state). */
 export type Facing = 'ne' | 'nw' | 'se' | 'sw';
 

@@ -102,6 +102,7 @@ export function makeFloorPlateTextures(
   widthTiles: number,
   heightTiles: number,
   seed = 99,
+  theme: 'city' | 'desert' = 'city',
 ): { albedo: THREE.CanvasTexture; roughness: THREE.CanvasTexture } {
   const PX = 64;
   const W = widthTiles * PX;
@@ -116,13 +117,18 @@ export function makeFloorPlateTextures(
   const r = rgh.getContext('2d')!;
 
   // Seam base fills the whole sheet; plates are drawn inset on top.
-  a.fillStyle = '#0a0c13';
+  a.fillStyle = theme === 'desert' ? '#150f08' : '#0a0c13';
   a.fillRect(0, 0, W, H);
   r.fillStyle = 'rgb(235,235,235)'; // seams: high roughness
   r.fillRect(0, 0, W, H);
 
-  // Deep blue-violet plates (reference grade), not neutral grey.
-  const PLATES = ['#262c50', '#2b3158', '#232849', '#313763', '#202440', '#2e2b58'];
+  // City: deep blue-violet plates (reference grade). Desert: dark rust-sand.
+  const PLATES = theme === 'desert'
+    ? ['#4a3a28', '#52402d', '#463525', '#5a4632', '#3f3022', '#55412c']
+    : ['#262c50', '#2b3158', '#232849', '#313763', '#202440', '#2e2b58'];
+  const STAINS = theme === 'desert'
+    ? ['255,140,60', '196,90,40', '51,240,255']
+    : ['51,240,255', '255,45,149', '196,110,60'];
   const SEAM = 2;
   for (let ty = 0; ty < heightTiles; ty++) {
     for (let tx = 0; tx < widthTiles; tx++) {
@@ -150,11 +156,11 @@ export function makeFloorPlateTextures(
         a.fillStyle = g;
         a.fillRect(gx - gr, gy - gr, gr * 2, gr * 2);
       }
-      // Colourful staining like the reference: teal/magenta/rust splatter.
+      // Colourful staining like the reference: theme-tinted splatter.
       if (rnd() < 0.22) {
         const gx = x0 + rnd() * sz, gy = y0 + rnd() * sz, gr = 6 + rnd() * 16;
         const pick = rnd();
-        const tint = pick < 0.4 ? '51,240,255' : pick < 0.7 ? '255,45,149' : '196,110,60';
+        const tint = pick < 0.4 ? STAINS[0] : pick < 0.7 ? STAINS[1] : STAINS[2];
         const g = a.createRadialGradient(gx, gy, 1, gx, gy, gr);
         g.addColorStop(0, `rgba(${tint},0.22)`);
         g.addColorStop(1, `rgba(${tint},0)`);

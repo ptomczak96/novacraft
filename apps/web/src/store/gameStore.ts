@@ -374,3 +374,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
     return JSON.stringify(mapEditorState.map, null, 2);
   },
 }));
+
+// Dev-only: expose the store for debugging/QA tooling (never in production builds).
+if (import.meta.env.DEV) {
+  (window as unknown as Record<string, unknown>).__gameStore = useGameStore;
+}

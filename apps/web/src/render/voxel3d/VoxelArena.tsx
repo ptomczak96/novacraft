@@ -32,6 +32,19 @@ export function VoxelArena({
   // Shared with CameraRig: a grab-pan drag must not fire a tile click on release.
   const interaction = React.useRef<CameraInteraction>({ suppressClick: false });
 
+  // Visual theme, detected from the map's dominant terrain (works for both
+  // generated desert-biome maps and hand-built editor maps).
+  const theme = React.useMemo<import('./types.js').ArenaTheme>(() => {
+    let sand = 0, total = 0;
+    for (const row of map.tiles) {
+      for (const tile of row) {
+        total++;
+        if (tile.terrain === 'sand') sand++;
+      }
+    }
+    return total > 0 && sand / total > 0.3 ? 'desert' : 'city';
+  }, [map]);
+
   // Fog tuned so the arena stays clear and the background city softens: it
   // starts just past the arena's far edge as seen by the fixed camera.
   const [fogNear, fogFar] = React.useMemo(() => {
@@ -56,10 +69,10 @@ export function VoxelArena({
       }}
       style={{ position: 'absolute', inset: 0 }}
     >
-      <color attach="background" args={[BACKGROUND_COLOR]} />
-      <fog attach="fog" args={[FOG_COLOR, fogNear, fogFar]} />
+      <color attach="background" args={[theme === 'desert' ? '#241628' : BACKGROUND_COLOR]} />
+      <fog attach="fog" args={[theme === 'desert' ? '#3a2145' : FOG_COLOR, fogNear, fogFar]} />
       <CameraRig width={map.width} height={map.height} debugCam={debugCam} interaction={interaction} />
-      <Lights width={map.width} height={map.height} />
+      <Lights width={map.width} height={map.height} theme={theme} />
       <React.Suspense fallback={null}>
         <Floor
           width={map.width}
@@ -68,13 +81,14 @@ export function VoxelArena({
           floorTextures={floorTextures}
           onTileClick={onTileClick}
           interaction={interaction}
+          theme={theme}
         />
       </React.Suspense>
       <EdgeRim width={map.width} height={map.height} />
-      <TerrainBlocks map={map} visibility={visibility} />
+      <TerrainBlocks map={map} visibility={visibility} theme={theme} />
       <Highlights highlights={highlights} />
       <Units units={units} onTileClick={onTileClick} interaction={interaction} />
-      <FogClouds map={map} visibility={visibility} />
+      <FogClouds map={map} visibility={visibility} theme={theme} />
       {quality === 'high' && (
         <>
           {/* Night-city IBL (Poly Haven, CC0, vendored) — subtle sheen on the
@@ -82,12 +96,13 @@ export function VoxelArena({
           <React.Suspense fallback={null}>
             <Environment files="/voxel3d/env_night.hdr" environmentIntensity={0.18} />
           </React.Suspense>
-          <HazeLayers width={map.width} height={map.height} />
+          <HazeLayers width={map.width} height={map.height} theme={theme} />
           <Bokeh width={map.width} height={map.height} />
           <CityBlocks width={map.width} height={map.height} />
           <Signage width={map.width} height={map.height} />
-          <Rain width={map.width} height={map.height} />
-          <DustMotes width={map.width} height={map.height} />
+          {/* No rain over the desert — dust carries the atmosphere instead. */}
+          {theme !== 'desert' && <Rain width={map.width} height={map.height} />}
+          <DustMotes width={map.width} height={map.height} theme={theme} />
         </>
       )}
       <FrameStats quality={quality} />
