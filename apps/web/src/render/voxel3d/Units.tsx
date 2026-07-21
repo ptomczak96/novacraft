@@ -13,7 +13,10 @@ const FACING_ROT_Y: Record<Facing, number> = {
   ne: Math.PI,      // -y (world -z)
 };
 
-function UnitMesh({ unit }: { unit: UnitView }) {
+function UnitMesh({ unit, onTileClick }: {
+  unit: UnitView;
+  onTileClick?: (x: number, y: number) => void;
+}) {
   const bobRef = React.useRef<THREE.Group>(null);
   const model = React.useMemo(
     () => buildUnit(defForKind(unit.kind), unit.teamColor),
@@ -35,15 +38,32 @@ function UnitMesh({ unit }: { unit: UnitView }) {
     >
       <group ref={bobRef}>
         <primitive object={model} />
+        {/* Invisible collider: clicking a unit's body must resolve to ITS tile,
+            not the tile the ray would hit on the floor behind it. */}
+        {onTileClick && (
+          <mesh
+            visible={false}
+            position={[0, 0.4, 0]}
+            onClick={e => {
+              e.stopPropagation();
+              onTileClick(unit.gridPos.x, unit.gridPos.y);
+            }}
+          >
+            <boxGeometry args={[0.7, 0.85, 0.7]} />
+          </mesh>
+        )}
       </group>
     </group>
   );
 }
 
-export function Units({ units }: { units: UnitView[] }) {
+export function Units({ units, onTileClick }: {
+  units: UnitView[];
+  onTileClick?: (x: number, y: number) => void;
+}) {
   return (
     <>
-      {units.map(u => <UnitMesh key={u.id} unit={u} />)}
+      {units.map(u => <UnitMesh key={u.id} unit={u} onTileClick={onTileClick} />)}
     </>
   );
 }

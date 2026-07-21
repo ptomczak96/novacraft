@@ -6,6 +6,9 @@ import { BACKGROUND_COLOR } from './palette.js';
 import { CameraRig } from './CameraRig.js';
 import { Lights } from './Lights.js';
 import { Floor } from './Floor.js';
+import { EdgeRim } from './EdgeRim.js';
+import { TerrainBlocks } from './TerrainBlocks.js';
+import { Highlights } from './Highlights.js';
 import { Units } from './Units.js';
 import { PostFX } from './PostFX.js';
 
@@ -45,7 +48,10 @@ export function VoxelArena({
         floorTextures={floorTextures}
         onTileClick={onTileClick}
       />
-      <Units units={units} />
+      <EdgeRim width={map.width} height={map.height} />
+      <TerrainBlocks map={map} visibility={visibility} />
+      <Highlights highlights={highlights} />
+      <Units units={units} onTileClick={onTileClick} />
       <PostFX quality={quality} />
     </Canvas>
   );
