@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import React from 'react';
+import type { ArenaTheme } from './types.js';
 import { RIM_BLOCK } from './palette.js';
 
 /** Deterministic per-index hash for colour jitter / greeble layout. */
@@ -38,14 +39,18 @@ function buildRim(width: number, height: number): RimData {
   for (let x = 0; x < width; x += 2) {
     addStrip(x + 0.5, 0.035, 0.09, 0);
     addStrip(x + 0.5, 0.035, height - 0.09, 0);
-    addStrip(x + 1.5 <= width ? x + 1.5 : x + 0.5, 0.085, -0.42, 0);
-    addStrip(x + 1.5 <= width ? x + 1.5 : x + 0.5, 0.085, height + 0.42, 0);
+    if (x + 1.5 <= width) {
+      addStrip(x + 1.5, 0.085, -0.42, 0);
+      addStrip(x + 1.5, 0.085, height + 0.42, 0);
+    }
   }
   for (let z = 0; z < height; z += 2) {
     addStrip(0.09, 0.035, z + 0.5, Math.PI / 2);
     addStrip(width - 0.09, 0.035, z + 0.5, Math.PI / 2);
-    addStrip(-0.42, 0.085, z + 1.5 <= height ? z + 1.5 : z + 0.5, Math.PI / 2);
-    addStrip(width + 0.42, 0.085, z + 1.5 <= height ? z + 1.5 : z + 0.5, Math.PI / 2);
+    if (z + 1.5 <= height) {
+      addStrip(-0.42, 0.085, z + 1.5, Math.PI / 2);
+      addStrip(width + 0.42, 0.085, z + 1.5, Math.PI / 2);
+    }
   }
 
   // Greebles: vents/boxes studded on the two camera-facing hull faces, plus
@@ -132,7 +137,11 @@ function InstancedSet({ items, color, emissive, emissiveIntensity = 0, geo, cast
  * perimeter (emissive-only, no point lights), tiered hull below with corner
  * support pillars and greebled faces, and railings along the two far edges.
  */
-export function EdgeRim({ width, height }: { width: number; height: number }) {
+export function EdgeRim({ width, height, theme = 'city' }: {
+  width: number;
+  height: number;
+  theme?: ArenaTheme;
+}) {
   const rim = React.useMemo(() => buildRim(width, height), [width, height]);
   const cx = width / 2;
   const cz = height / 2;
@@ -161,7 +170,7 @@ export function EdgeRim({ width, height }: { width: number; height: number }) {
       <InstancedSet
         items={stripItems}
         color="#000000"
-        emissive="#e6fdff"
+        emissive={theme === 'desert' ? '#ffd9a0' : '#e6fdff'}
         emissiveIntensity={7}
         geo={[0.55, 0.03, 0.05]}
       />

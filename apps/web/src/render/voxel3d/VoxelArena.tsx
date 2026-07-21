@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import React from 'react';
 import { Canvas } from '@react-three/fiber';
 import { Environment } from '@react-three/drei';
-import type { VoxelArenaProps } from './types.js';
+import type { ArenaTheme, VoxelArenaProps } from './types.js';
 import { BACKGROUND_COLOR, FOG_COLOR } from './palette.js';
 import { CityBlocks, HazeLayers, Bokeh, Rain, FogClouds, DustMotes, FrameStats } from './Atmosphere.js';
 import { Signage } from './Signage.js';
@@ -34,7 +34,7 @@ export function VoxelArena({
 
   // Visual theme, detected from the map's dominant terrain (works for both
   // generated desert-biome maps and hand-built editor maps).
-  const theme = React.useMemo<import('./types.js').ArenaTheme>(() => {
+  const theme = React.useMemo<ArenaTheme>(() => {
     let sand = 0, total = 0;
     for (const row of map.tiles) {
       for (const tile of row) {
@@ -84,7 +84,7 @@ export function VoxelArena({
           theme={theme}
         />
       </React.Suspense>
-      <EdgeRim width={map.width} height={map.height} />
+      <EdgeRim width={map.width} height={map.height} theme={theme} />
       <TerrainBlocks map={map} visibility={visibility} theme={theme} />
       <Highlights highlights={highlights} />
       <Units units={units} onTileClick={onTileClick} interaction={interaction} />
@@ -97,11 +97,16 @@ export function VoxelArena({
             <Environment files="/voxel3d/env_night.hdr" environmentIntensity={0.18} />
           </React.Suspense>
           <HazeLayers width={map.width} height={map.height} theme={theme} />
-          <Bokeh width={map.width} height={map.height} />
-          <CityBlocks width={map.width} height={map.height} />
-          <Signage width={map.width} height={map.height} />
-          {/* No rain over the desert — dust carries the atmosphere instead. */}
-          {theme !== 'desert' && <Rain width={map.width} height={map.height} />}
+          <CityBlocks width={map.width} height={map.height} theme={theme} />
+          {/* City-only: window bokeh, neon signage, rain. The desert horizon
+              is buttes + two radio masts; dust carries its atmosphere. */}
+          {theme === 'city' && (
+            <>
+              <Bokeh width={map.width} height={map.height} />
+              <Signage width={map.width} height={map.height} />
+              <Rain width={map.width} height={map.height} />
+            </>
+          )}
           <DustMotes width={map.width} height={map.height} theme={theme} />
         </>
       )}

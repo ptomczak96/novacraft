@@ -32,13 +32,14 @@ export function Floor({ width, height, quality, floorTextures, onTileClick, inte
   const roughnessMap = floorTextures?.roughness ?? plates.roughness;
 
   // Physical micro-relief: ambientCG MetalPlates006 normal map (CC0, vendored),
-  // tiled one plate per tile so bolts/ridges align with the grid.
+  // tiled one plate per tile so bolts/ridges align with the grid. City only —
+  // the diamond-plate relief reads as a metal grate, which is wrong on sand.
   const defaultNormal = useLoader(THREE.TextureLoader, '/voxel3d/floor_normal.jpg');
   React.useMemo(() => {
     defaultNormal.wrapS = defaultNormal.wrapT = THREE.RepeatWrapping;
     defaultNormal.repeat.set(width, height);
   }, [defaultNormal, width, height]);
-  const normalMap = floorTextures?.normal ?? defaultNormal;
+  const normalMap = floorTextures?.normal ?? (theme === 'city' ? defaultNormal : undefined);
 
   const handleClick = React.useCallback((e: ThreeEvent<MouseEvent>) => {
     if (!onTileClick) return;
@@ -64,7 +65,7 @@ export function Floor({ width, height, quality, floorTextures, onTileClick, inte
           mixBlur={1}
           mixStrength={2}
           roughness={0.7}
-          metalness={0.4}
+          metalness={theme === 'desert' ? 0.12 : 0.4}
           mirror={0.5}
           depthScale={1.2}
           minDepthThreshold={0.4}
@@ -73,7 +74,7 @@ export function Floor({ width, height, quality, floorTextures, onTileClick, inte
           roughnessMap={roughnessMap}
           map={albedoMap}
           normalMap={normalMap}
-          normalScale={new THREE.Vector2(0.5, 0.5)}
+          normalScale={new THREE.Vector2(0.35, 0.35)}
         />
       </mesh>
       <GridOverlay width={width} height={height} />

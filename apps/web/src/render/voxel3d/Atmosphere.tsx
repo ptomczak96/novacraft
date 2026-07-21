@@ -16,13 +16,19 @@ function hash(i: number): number {
 }
 
 /**
- * Background city: 3D voxel towers at varying depths behind/below the floating
- * arena, lit-window textures on their side faces, dark roofs. Excluded from
- * the floor reflection and from shadows; softened by the scene fog. A couple
- * of tall near towers rise above the arena horizon like the reference frame.
+ * Background skyline. City theme: 3D voxel towers with lit-window faces, dark
+ * roofs, rooftop antennas. Desert theme: dark tiered rock buttes on the
+ * horizon plus a couple of distant radio masts — no windows, no signage; a
+ * floating arena over open wasteland instead of a metropolis. Both excluded
+ * from the floor reflection and softened by scene fog.
  */
-export function CityBlocks({ width, height }: { width: number; height: number }) {
+export function CityBlocks({ width, height, theme = 'city' }: {
+  width: number;
+  height: number;
+  theme?: ArenaTheme;
+}) {
   const groupRef = React.useRef<THREE.Group>(null);
+  const desert = theme === 'desert';
 
   const towers = React.useMemo(() => {
     const cx = width / 2;
@@ -32,19 +38,23 @@ export function CityBlocks({ width, height }: { width: number; height: number })
     const list: { pos: THREE.Vector3; w: number; h: number; d: number; seed: number }[] = [];
     // Dense skyline — the reference has no empty sky. Three rings of towers:
     // flanking near ones rising past the arena, a mid ring, and a far wall.
-    for (let i = 0; i < 26; i++) {
+    const count = desert ? 14 : 26;
+    for (let i = 0; i < count; i++) {
       const ring = i % 3;
       const depth = ring === 0 ? 26 + hash(i * 3) * 14
         : ring === 1 ? 42 + hash(i * 3) * 22
         : 62 + hash(i * 3) * 30;
       const side = (hash(i * 3 + 1) - 0.5) * (Math.max(width, height) * 2.0 + depth * 1.5);
-      const w = 4.5 + hash(i * 5) * 6;
-      const d = 4.5 + hash(i * 5 + 2) * 6;
-      const h = 18 + hash(i * 5 + 1) * 26;
+      // Desert buttes: broad and low. City towers: narrow and tall.
+      const w = desert ? 8 + hash(i * 5) * 12 : 4.5 + hash(i * 5) * 6;
+      const d = desert ? 8 + hash(i * 5 + 2) * 12 : 4.5 + hash(i * 5 + 2) * 6;
+      const h = desert ? 7 + hash(i * 5 + 1) * 12 : 18 + hash(i * 5 + 1) * 26;
       // Near flankers rise past the arena; farther rings fill the horizon.
-      const top = ring === 0
-        ? 6 + hash(i * 7) * 14
-        : ring === 1 ? 2 + hash(i * 7) * 12 : 4 + hash(i * 7) * 16;
+      const top = desert
+        ? (ring === 0 ? 2 + hash(i * 7) * 6 : -1 + hash(i * 7) * 7)
+        : ring === 0
+          ? 6 + hash(i * 7) * 14
+          : ring === 1 ? 2 + hash(i * 7) * 12 : 4 + hash(i * 7) * 16;
       const pos = new THREE.Vector3(cx, 0, cz)
         .addScaledVector(view, depth)
         .addScaledVector(perp, side);
@@ -52,10 +62,16 @@ export function CityBlocks({ width, height }: { width: number; height: number })
       list.push({ pos, w, h, d, seed: 1000 + i * 97 });
     }
     return list;
-  }, [width, height]);
+  }, [width, height, desert]);
 
   const materials = React.useMemo(
-    () => towers.map(t => {
+    () => towers.map((t, i) => {
+      if (desert) {
+        // Buttes: bare rock, slightly lighter caprock on top.
+        const rock = new THREE.MeshBasicMaterial({ color: '#332420', fog: true });
+        const cap = new THREE.MeshBasicMaterial({ color: '#41302a', fog: true });
+        return [rock, rock, cap, rock, rock, rock];
+      }
       const tex = makeCityWindowTexture(256, 512, t.seed);
       // Slight violet cast on the tower faces ties them into the haze.
       const windows = new THREE.MeshBasicMaterial({
@@ -67,7 +83,7 @@ export function CityBlocks({ width, height }: { width: number; height: number })
       // BoxGeometry face order: +x, -x, +y (roof), -y, +z, -z
       return [windows, windows, dark, dark, windows, windows];
     }),
-    [towers],
+    [towers, desert],
   );
   React.useEffect(() => () => {
     materials.forEach(m => {
@@ -85,20 +101,22 @@ export function CityBlocks({ width, height }: { width: number; height: number })
     <group ref={groupRef}>
       {towers.map((t, i) => {
         const top = t.pos.y + t.h / 2;
-        const hasAntenna = hash(i * 19) < 0.45;
+        // City: rooftop antennas on ~45% of towers. Desert: two lone radio
+        // masts on far buttes — the only man-made lights on the horizon.
+        const hasAntenna = desert ? i === 4 || i === 9 : hash(i * 19) < 0.45;
+        const mastH = desert ? 6 : 2.2;
         return (
           <group key={i}>
             <mesh position={t.pos} material={materials[i]}>
               <boxGeometry args={[t.w, t.h, t.d]} />
             </mesh>
-            {/* Rooftop antenna + red beacon, like the reference skyline. */}
             {hasAntenna && (
               <group position={[t.pos.x + (hash(i * 23) - 0.5) * t.w * 0.5, 0, t.pos.z]}>
-                <mesh position={[0, top + 1.1, 0]}>
-                  <boxGeometry args={[0.16, 2.2, 0.16]} />
+                <mesh position={[0, top + mastH / 2, 0]}>
+                  <boxGeometry args={[0.16, mastH, 0.16]} />
                   <meshBasicMaterial color="#0c0e18" fog />
                 </mesh>
-                <mesh position={[0, top + 2.3, 0]}>
+                <mesh position={[0, top + mastH + 0.1, 0]}>
                   <boxGeometry args={[0.22, 0.22, 0.22]} />
                   <meshStandardMaterial color="#000000" emissive="#ff3b30" emissiveIntensity={4} />
                 </mesh>
