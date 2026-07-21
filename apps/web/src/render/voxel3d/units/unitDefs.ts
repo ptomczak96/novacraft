@@ -83,6 +83,10 @@ const RANGED_KINDS = new Set([
   'archer', 'sentinel', 'seercaust', 'hive_scout', 'reaper', 'stalker',
 ]);
 
+export function isHeavyKind(kind: string): boolean {
+  return HEAVY_KINDS.has(kind);
+}
+
 export function defForKind(kind: string): UnitDef {
   if (HEAVY_KINDS.has(kind)) return MECH;
   if (RANGED_KINDS.has(kind)) return GUNNER;

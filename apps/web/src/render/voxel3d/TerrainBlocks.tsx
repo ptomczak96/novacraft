@@ -157,7 +157,7 @@ export function TerrainBlocks({ map, visibility }: {
       <Blocks instances={sets.forestTrunk} color="#33293f" />
       <Blocks instances={sets.forestCanopy} color="#2a6b4f" />
       <Blocks instances={sets.waterPane} color="#1e3a5f" opacity={0.65} castShadow={false} />
-      <Blocks instances={sets.lavaPane} color="#000000" emissive="#ff5a1f" emissiveIntensity={2.5} castShadow={false} />
+      <Blocks instances={sets.lavaPane} color="#2a0d05" emissive="#ff5a1f" emissiveIntensity={1.4} castShadow={false} />
       <Blocks instances={sets.oreCrystal} color="#000000" emissive="#ffb84d" emissiveIntensity={3} />
       <Blocks instances={sets.plasmaCrystal} color="#000000" emissive="#33f0ff" emissiveIntensity={3} />
       <Blocks instances={sets.ruinPillar} color="#565e75" />

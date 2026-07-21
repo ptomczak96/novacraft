@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import React from 'react';
-import type { ThreeEvent } from '@react-three/fiber';
+import { useLoader, type ThreeEvent } from '@react-three/fiber';
 import { MeshReflectorMaterial } from '@react-three/drei';
 import type { FloorTextures } from './types.js';
 import { GRID_LINE, GRID_LINE_BRIGHT } from './palette.js';
@@ -27,6 +27,15 @@ export function Floor({ width, height, quality, floorTextures, onTileClick }: {
   );
   const albedoMap = floorTextures?.albedo ?? plates.albedo;
   const roughnessMap = floorTextures?.roughness ?? plates.roughness;
+
+  // Physical micro-relief: ambientCG MetalPlates006 normal map (CC0, vendored),
+  // tiled one plate per tile so bolts/ridges align with the grid.
+  const defaultNormal = useLoader(THREE.TextureLoader, '/voxel3d/floor_normal.jpg');
+  React.useMemo(() => {
+    defaultNormal.wrapS = defaultNormal.wrapT = THREE.RepeatWrapping;
+    defaultNormal.repeat.set(width, height);
+  }, [defaultNormal, width, height]);
+  const normalMap = floorTextures?.normal ?? defaultNormal;
 
   const handleClick = React.useCallback((e: ThreeEvent<MouseEvent>) => {
     if (!onTileClick) return;
@@ -59,7 +68,8 @@ export function Floor({ width, height, quality, floorTextures, onTileClick }: {
           color="#b8c0d4"
           roughnessMap={roughnessMap}
           map={albedoMap}
-          normalMap={floorTextures?.normal}
+          normalMap={normalMap}
+          normalScale={new THREE.Vector2(0.5, 0.5)}
         />
       </mesh>
       <GridOverlay width={width} height={height} />

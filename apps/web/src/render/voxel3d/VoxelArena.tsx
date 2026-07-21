@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import React from 'react';
 import { Canvas } from '@react-three/fiber';
+import { Environment } from '@react-three/drei';
 import type { VoxelArenaProps } from './types.js';
 import { BACKGROUND_COLOR, FOG_COLOR } from './palette.js';
 import { CityBlocks, Rain, FogClouds, DustMotes, FrameStats } from './Atmosphere.js';
@@ -56,13 +57,15 @@ export function VoxelArena({
       <fog attach="fog" args={[FOG_COLOR, fogNear, fogFar]} />
       <CameraRig width={map.width} height={map.height} debugCam={debugCam} />
       <Lights width={map.width} height={map.height} />
-      <Floor
-        width={map.width}
-        height={map.height}
-        quality={quality}
-        floorTextures={floorTextures}
-        onTileClick={onTileClick}
-      />
+      <React.Suspense fallback={null}>
+        <Floor
+          width={map.width}
+          height={map.height}
+          quality={quality}
+          floorTextures={floorTextures}
+          onTileClick={onTileClick}
+        />
+      </React.Suspense>
       <EdgeRim width={map.width} height={map.height} />
       <TerrainBlocks map={map} visibility={visibility} />
       <Highlights highlights={highlights} />
@@ -70,6 +73,11 @@ export function VoxelArena({
       <FogClouds map={map} visibility={visibility} />
       {quality === 'high' && (
         <>
+          {/* Night-city IBL (Poly Haven, CC0, vendored) — subtle sheen on the
+              metal floor and units; lighting-only, never the background. */}
+          <React.Suspense fallback={null}>
+            <Environment files="/voxel3d/env_night.hdr" environmentIntensity={0.18} />
+          </React.Suspense>
           <CityBlocks width={map.width} height={map.height} />
           <Signage width={map.width} height={map.height} />
           <Rain width={map.width} height={map.height} />
