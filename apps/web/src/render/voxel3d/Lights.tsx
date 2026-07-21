@@ -41,11 +41,11 @@ export function Lights({ width, height, theme = 'city' }: {
       {/* Intensities sit above the spec'd legacy values (0.5 / 1.1) because
           three r155+ physically-based lighting + ACES render those too dark. */}
       {/* Desert: warm dusk key + orange corner glow; city: cool key + magenta. */}
-      <ambientLight color={theme === 'desert' ? '#6d5270' : AMBIENT_COLOR} intensity={0.95} />
+      <ambientLight color={theme === 'desert' ? '#6d5270' : AMBIENT_COLOR} intensity={0.3} />
       <directionalLight
         ref={dirRef}
         color={theme === 'desert' ? '#ffd9b0' : KEY_LIGHT_COLOR}
-        intensity={1.7}
+        intensity={1.0}
         position={[cx - 6, 10, cz - 4]}
         castShadow
         shadow-mapSize={[1024, 1024]}
