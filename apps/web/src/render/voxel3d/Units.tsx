@@ -5,6 +5,7 @@ import type { CombatFx, Facing, UnitGhost, UnitView } from './types.js';
 import type { CameraInteraction } from './CameraRig.js';
 import { defForKind, isHeavyKind } from './units/unitDefs.js';
 import { buildUnit, disposeUnit } from './units/buildUnit.js';
+import { StalkerModel } from './units/StalkerModel.js';
 
 /** Models are built facing +Z; rotate to the unit's grid facing. */
 const FACING_ROT_Y: Record<Facing, number> = {
@@ -51,6 +52,19 @@ function BoxUnit({ unit }: { unit: UnitView }) {
   );
   React.useEffect(() => () => disposeUnit(model), [model]);
   return <primitive object={model} />;
+}
+
+/** Unit body router: kinds with real 3D models use them (box fallback while
+ *  the asset streams in); everyone else keeps the box-voxel build. */
+function UnitBody({ unit }: { unit: UnitView }) {
+  if (unit.kind === 'stalker') {
+    return (
+      <React.Suspense fallback={<BoxUnit unit={unit} />}>
+        <StalkerModel teamColor={unit.teamColor} />
+      </React.Suspense>
+    );
+  }
+  return <BoxUnit unit={unit} />;
 }
 
 /** Seconds to slide one move (covers multi-tile moves in one glide). */
@@ -162,7 +176,7 @@ function UnitMesh({ unit, onTileClick, interaction, combat }: {
         />
       </mesh>
       <group position-y={0.015}>
-        <BoxUnit unit={unit} />
+        <UnitBody unit={unit} />
         {/* Invisible collider: clicking a unit's body must resolve to ITS tile,
             not the tile the ray would hit on the floor behind it. */}
         {onTileClick && (
