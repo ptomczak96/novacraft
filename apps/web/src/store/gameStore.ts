@@ -50,6 +50,9 @@ interface GameStore {
   // Tile art theme (pure render setting — not part of deterministic engine state).
   tileTheme: TileTheme;
   setTileTheme: (t: TileTheme) => void;
+  // Background music mute (session-only; toggled from the setup screen).
+  musicMuted: boolean;
+  setMusicMuted: (v: boolean) => void;
   rebuildRegistry: () => void;
   setTerrain: (t: TerrainType[]) => void;
   setUnits: (u: UnitType[]) => void;
@@ -133,6 +136,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
   registry: buildRegistry(),
   tileTheme: 'default',
   setTileTheme: (t) => set({ tileTheme: t }),
+  musicMuted: false,
+  setMusicMuted: (v) => set({ musicMuted: v }),
 
   rebuildRegistry: () => {
     const { terrain, units, factions, techs } = get();
