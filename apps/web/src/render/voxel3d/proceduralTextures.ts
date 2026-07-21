@@ -36,7 +36,7 @@ export function makeFloorPlateTextures(
   quality: 'high' | 'low' = 'high',
 ): { albedo: THREE.CanvasTexture; roughness: THREE.CanvasTexture } {
   const maxTex = quality === 'high' ? 2048 : 1024;
-  const PX = Math.max(24, Math.min(quality === 'high' ? 128 : 64,
+  const PX = Math.max(24, Math.min(quality === 'high' ? 192 : 64,
     Math.floor(maxTex / Math.max(widthTiles, heightTiles))));
   const W = widthTiles * PX;
   const H = heightTiles * PX;
@@ -101,7 +101,14 @@ export function makeFloorPlateTextures(
       const tx = Math.min(widthTiles - 1, Math.floor(x / PX));
       const g = grimeAt(x / W, y / H);
       grimeMask[y * W + x] = g;
-      const mul = tileJitter[ty][tx] * (1 - 0.2 * g); // grime darkens up to −20%
+      // Fine per-pixel grain (±3% + sparse darker pores) so the surface holds
+      // organic detail at close zoom without any repeating pattern.
+      let h = (x * 1664525 + y * 1013904223) ^ (seed * 2654435761);
+      h = ((h >>> 13) ^ h) * 0x5bd1e995;
+      const n01 = ((h >>> 8) & 0xffff) / 0xffff;
+      let grain = 0.97 + n01 * 0.06;
+      if (n01 < 0.015) grain -= 0.1; // pore
+      const mul = tileJitter[ty][tx] * (1 - 0.2 * g) * grain;
       const i = (y * W + x) * 4;
       img.data[i] = base[0] * mul;
       img.data[i + 1] = base[1] * mul;
