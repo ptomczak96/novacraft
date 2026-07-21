@@ -61,7 +61,7 @@ export function Floor({ width, height, quality, floorTextures, onTileClick, inte
           blur={[200, 80]}
           resolution={quality === 'high' ? 1024 : 512}
           mixBlur={1.6}
-          mixStrength={3}
+          mixStrength={5}
           roughness={0.7}
           metalness={theme === 'desert' ? 0.1 : 0.2}
           mirror={0.7}
