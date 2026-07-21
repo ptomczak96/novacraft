@@ -12,8 +12,10 @@ import {
 export function PostFX({ quality }: { quality: 'high' | 'low' }) {
   return (
     <EffectComposer multisampling={quality === 'high' ? 4 : 0}>
+      {/* Contact occlusion so geometry sits on the floor. Low tier skips AO
+          entirely — its low-tier answer is "off" (a high-tier luxury). */}
       {quality === 'high' ? (
-        <N8AO aoRadius={0.5} intensity={2.5} distanceFalloff={0.6} halfRes />
+        <N8AO aoRadius={0.4} intensity={3} distanceFalloff={0.4} halfRes />
       ) : (
         <></>
       )}
