@@ -131,15 +131,14 @@ function GridOverlay({ width, height }: { width: number; height: number }) {
 
           void main() {
             vec2 coord = vUv * uSize;
-            float sub = lineMask(coord, 0.5);      // half-tile lines, dim
-            float tile = lineMask(coord, 1.0);     // tile edges, brighter
+            float tile = lineMask(coord, 1.0);     // tile edges only
             // Soft 1px-ish glow falloff around tile edges.
             vec2 gd = abs(fract(coord - 0.5) - 0.5) / fwidth(coord);
             float glow = exp(-min(gd.x, gd.y) * 0.9) * 0.25;
-            // Bright seam lines like the reference floor, plus faint half-tile
-            // sub-grid; the baked plate seams add the dark gap underneath.
-            vec3 col = uLine * sub * 0.35 + uLineBright * tile * 0.95 + uLineBright * glow * 0.6;
-            float alpha = max(tile * 0.8, sub * 0.25) + glow * 0.55;
+            // One line per tile edge — the baked plate seams add the dark gap
+            // underneath. No sub-grid: a tile reads as a single panel.
+            vec3 col = uLineBright * tile * 0.95 + uLineBright * glow * 0.6;
+            float alpha = tile * 0.8 + glow * 0.55;
             if (alpha < 0.01) discard;
             gl_FragColor = vec4(col, alpha);
           }
