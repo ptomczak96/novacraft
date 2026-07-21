@@ -29,22 +29,27 @@ function buildRim(width: number, height: number): RimData {
     }
   }
 
-  // White-cyan light dashes ON the floor surface along the perimeter,
-  // every other tile edge — emissive-only "emergency lighting".
+  // Double dashed light border like the reference: one dash row on the floor
+  // perimeter, a second on the lip just outside it. Emissive-only.
   const strips: THREE.Matrix4[] = [];
-  const addStrip = (x: number, z: number, rotY: number) => {
-    strips.push(new THREE.Matrix4().makeRotationY(rotY).setPosition(x, 0.035, z));
+  const addStrip = (x: number, y: number, z: number, rotY: number) => {
+    strips.push(new THREE.Matrix4().makeRotationY(rotY).setPosition(x, y, z));
   };
   for (let x = 0; x < width; x += 2) {
-    addStrip(x + 0.5, 0.09, 0);
-    addStrip(x + 0.5, height - 0.09, 0);
+    addStrip(x + 0.5, 0.035, 0.09, 0);
+    addStrip(x + 0.5, 0.035, height - 0.09, 0);
+    addStrip(x + 1.5 <= width ? x + 1.5 : x + 0.5, 0.085, -0.42, 0);
+    addStrip(x + 1.5 <= width ? x + 1.5 : x + 0.5, 0.085, height + 0.42, 0);
   }
   for (let z = 0; z < height; z += 2) {
-    addStrip(0.09, z + 0.5, Math.PI / 2);
-    addStrip(width - 0.09, z + 0.5, Math.PI / 2);
+    addStrip(0.09, 0.035, z + 0.5, Math.PI / 2);
+    addStrip(width - 0.09, 0.035, z + 0.5, Math.PI / 2);
+    addStrip(-0.42, 0.085, z + 1.5 <= height ? z + 1.5 : z + 0.5, Math.PI / 2);
+    addStrip(width + 0.42, 0.085, z + 1.5 <= height ? z + 1.5 : z + 0.5, Math.PI / 2);
   }
 
-  // Greebles: vents/boxes studded on the two camera-facing hull faces.
+  // Greebles: vents/boxes studded on the two camera-facing hull faces, plus
+  // clutter hanging under the hull (the reference platform drips with tech).
   const greebles: RimData['greebles'] = [];
   const faceX = width + 1.02;
   const faceZ = height + 1.02;
@@ -56,6 +61,16 @@ function buildRim(width: number, height: number): RimData {
       greebles.push({ pos: [hash(i * 7) * (width - 1) + 0.5, y, faceZ], scale: [w, h, 0.1] });
     } else {
       greebles.push({ pos: [faceX, y, hash(i * 7) * (height - 1) + 0.5], scale: [0.1, h, w] });
+    }
+  }
+  for (let i = 0; i < 10; i++) {
+    const w = 0.25 + hash(i * 11) * 0.5;
+    const hgt = 0.3 + hash(i * 11 + 1) * 0.9;
+    const y = -1.5 - hash(i * 11 + 2) * 1.2;
+    if (i % 2 === 0) {
+      greebles.push({ pos: [0.8 + hash(i * 13) * (width - 1.6), y, height + 0.6 + hash(i * 17) * 0.5], scale: [w, hgt, w] });
+    } else {
+      greebles.push({ pos: [width + 0.6 + hash(i * 17) * 0.5, y, 0.8 + hash(i * 13) * (height - 1.6)], scale: [w, hgt, w] });
     }
   }
 
@@ -146,8 +161,8 @@ export function EdgeRim({ width, height }: { width: number; height: number }) {
       <InstancedSet
         items={stripItems}
         color="#000000"
-        emissive="#d6fbff"
-        emissiveIntensity={6}
+        emissive="#e6fdff"
+        emissiveIntensity={7}
         geo={[0.55, 0.03, 0.05]}
       />
       {/* greebles: base box 0.1³ scaled per instance */}

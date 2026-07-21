@@ -3,8 +3,8 @@
  * the 2D iso renderer's palette.
  */
 export const FLOOR_COLOR = '#151821';
-export const BACKGROUND_COLOR = '#12101e';
-export const FOG_COLOR = '#1a1230';
+export const BACKGROUND_COLOR = '#131024';
+export const FOG_COLOR = '#1d1540';
 
 export const GRID_LINE = '#2a3040';
 export const GRID_LINE_BRIGHT = '#3d4a63';

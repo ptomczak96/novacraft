@@ -1,5 +1,7 @@
 import React from 'react';
-import { EffectComposer, N8AO, Bloom, Vignette, Noise } from '@react-three/postprocessing';
+import {
+  EffectComposer, N8AO, Bloom, HueSaturation, BrightnessContrast, Vignette, Noise,
+} from '@react-three/postprocessing';
 
 /**
  * Post chain, in order: N8AO → Bloom → Vignette → Noise.
@@ -19,9 +21,12 @@ export function PostFX({ quality }: { quality: 'high' | 'low' }) {
         mipmapBlur
         luminanceThreshold={1.0}
         luminanceSmoothing={0.2}
-        intensity={0.9}
+        intensity={1.1}
         resolutionScale={quality === 'high' ? 1 : 0.5}
       />
+      {/* Reference-style grade: push saturation and a touch of contrast. */}
+      <HueSaturation saturation={0.12} />
+      <BrightnessContrast brightness={0} contrast={0.06} />
       <Vignette offset={0.25} darkness={0.65} />
       {quality === 'high' ? <Noise opacity={0.04} /> : <></>}
     </EffectComposer>

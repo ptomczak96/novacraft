@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import React from 'react';
-import { useFrame } from '@react-three/fiber';
+import { useFrame, useThree } from '@react-three/fiber';
 import { Clouds, Cloud, Sparkles } from '@react-three/drei';
 import type { TileVisibility } from '@tactica/engine';
 import type { MapData } from './types.js';
@@ -30,16 +30,21 @@ export function CityBlocks({ width, height }: { width: number; height: number })
     const view = new THREE.Vector3(-1, -0.82, -1).normalize();
     const perp = new THREE.Vector3(1, 0, -1).normalize();
     const list: { pos: THREE.Vector3; w: number; h: number; d: number; seed: number }[] = [];
-    for (let i = 0; i < 11; i++) {
-      const depth = 30 + hash(i * 3) * 46;
-      const side = (hash(i * 3 + 1) - 0.5) * (Math.max(width, height) * 2.2 + depth * 1.2);
-      const w = 4.5 + hash(i * 5) * 5;
-      const d = 4.5 + hash(i * 5 + 2) * 5;
-      const h = 15 + hash(i * 5 + 1) * 20;
-      // Tower TOP between well below and slightly above arena level; the two
-      // nearest towers rise high like the reference's flanking skyscrapers.
-      const near = depth < 40;
-      const top = near ? 8 + hash(i * 7) * 8 : -1 - hash(i * 7) * 8;
+    // Dense skyline — the reference has no empty sky. Three rings of towers:
+    // flanking near ones rising past the arena, a mid ring, and a far wall.
+    for (let i = 0; i < 26; i++) {
+      const ring = i % 3;
+      const depth = ring === 0 ? 26 + hash(i * 3) * 14
+        : ring === 1 ? 42 + hash(i * 3) * 22
+        : 62 + hash(i * 3) * 30;
+      const side = (hash(i * 3 + 1) - 0.5) * (Math.max(width, height) * 2.0 + depth * 1.5);
+      const w = 4.5 + hash(i * 5) * 6;
+      const d = 4.5 + hash(i * 5 + 2) * 6;
+      const h = 18 + hash(i * 5 + 1) * 26;
+      // Near flankers rise past the arena; farther rings fill the horizon.
+      const top = ring === 0
+        ? 6 + hash(i * 7) * 14
+        : ring === 1 ? 2 + hash(i * 7) * 12 : 4 + hash(i * 7) * 16;
       const pos = new THREE.Vector3(cx, 0, cz)
         .addScaledVector(view, depth)
         .addScaledVector(perp, side);
@@ -52,12 +57,13 @@ export function CityBlocks({ width, height }: { width: number; height: number })
   const materials = React.useMemo(
     () => towers.map(t => {
       const tex = makeCityWindowTexture(256, 512, t.seed);
+      // Slight violet cast on the tower faces ties them into the haze.
       const windows = new THREE.MeshBasicMaterial({
         map: tex,
-        color: new THREE.Color(1.2, 1.2, 1.2),
+        color: new THREE.Color(1.05, 0.95, 1.2),
         fog: true,
       });
-      const dark = new THREE.MeshBasicMaterial({ color: '#0c0e18', fog: true });
+      const dark = new THREE.MeshBasicMaterial({ color: '#12101f', fog: true });
       // BoxGeometry face order: +x, -x, +y (roof), -y, +z, -z
       return [windows, windows, dark, dark, windows, windows];
     }),
@@ -197,6 +203,75 @@ export function FogClouds({ map, visibility }: {
           />
         ))}
       </Clouds>
+    </group>
+  );
+}
+
+/**
+ * Violet haze: three huge soft radial-gradient billboards layered between the
+ * tower rings — the glowing atmosphere that fills the reference's sky.
+ * Additive, no depth write, excluded from reflection.
+ */
+export function HazeLayers({ width, height }: { width: number; height: number }) {
+  const groupRef = React.useRef<THREE.Group>(null);
+  const camera = useThree(s => s.camera);
+
+  const tex = React.useMemo(() => {
+    const size = 256;
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = size;
+    const ctx = canvas.getContext('2d')!;
+    const g = ctx.createRadialGradient(size / 2, size / 2, 8, size / 2, size / 2, size / 2);
+    g.addColorStop(0, 'rgba(150,100,235,0.4)');
+    g.addColorStop(0.5, 'rgba(120,70,200,0.28)');
+    g.addColorStop(1, 'rgba(60,30,120,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, size, size);
+    const t = new THREE.CanvasTexture(canvas);
+    t.colorSpace = THREE.SRGBColorSpace;
+    return t;
+  }, []);
+  React.useEffect(() => () => tex.dispose(), [tex]);
+
+  const layers = React.useMemo(() => {
+    const cx = width / 2;
+    const cz = height / 2;
+    const view = new THREE.Vector3(-1, -0.82, -1).normalize();
+    const perp = new THREE.Vector3(1, 0, -1).normalize();
+    return [
+      { depth: 36, side: -14, y: 4, s: 55 },
+      { depth: 55, side: 16, y: 8, s: 75 },
+      { depth: 78, side: 0, y: 6, s: 110 },
+    ].map(l => ({
+      pos: new THREE.Vector3(cx, l.y, cz)
+        .addScaledVector(view, l.depth)
+        .addScaledVector(perp, l.side),
+      s: l.s,
+    }));
+  }, [width, height]);
+
+  React.useLayoutEffect(() => {
+    const g = groupRef.current;
+    if (!g) return;
+    g.traverse(o => o.layers.set(LAYER_NO_REFLECT));
+    g.children.forEach(child => child.lookAt(camera.position));
+  }, [camera, layers]);
+
+  return (
+    <group ref={groupRef}>
+      {layers.map((l, i) => (
+        <mesh key={i} position={l.pos}>
+          <planeGeometry args={[l.s, l.s * 0.7]} />
+          <meshBasicMaterial
+            map={tex}
+            transparent
+            opacity={0.2}
+            blending={THREE.AdditiveBlending}
+            depthWrite={false}
+            fog={false}
+          />
+        </mesh>
+      ))}
     </group>
   );
 }

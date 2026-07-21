@@ -121,7 +121,8 @@ export function makeFloorPlateTextures(
   r.fillStyle = 'rgb(235,235,235)'; // seams: high roughness
   r.fillRect(0, 0, W, H);
 
-  const PLATES = ['#1b2130', '#1e2434', '#202839', '#242c40', '#1a202e', '#222637'];
+  // Deep blue-violet plates (reference grade), not neutral grey.
+  const PLATES = ['#1d2140', '#202547', '#23294e', '#262e55', '#1b1e38', '#242247'];
   const SEAM = 2;
   for (let ty = 0; ty < heightTiles; ty++) {
     for (let tx = 0; tx < widthTiles; tx++) {
@@ -146,6 +147,16 @@ export function makeFloorPlateTextures(
         const g = a.createRadialGradient(gx, gy, 1, gx, gy, gr);
         g.addColorStop(0, 'rgba(5,6,10,0.28)');
         g.addColorStop(1, 'rgba(5,6,10,0)');
+        a.fillStyle = g;
+        a.fillRect(gx - gr, gy - gr, gr * 2, gr * 2);
+      }
+      // Sparse neon paint splashes (magenta/cyan), like the reference's decals.
+      if (rnd() < 0.1) {
+        const gx = x0 + rnd() * sz, gy = y0 + rnd() * sz, gr = 5 + rnd() * 14;
+        const neon = rnd() < 0.6 ? '255,45,149' : '51,240,255';
+        const g = a.createRadialGradient(gx, gy, 1, gx, gy, gr);
+        g.addColorStop(0, `rgba(${neon},0.16)`);
+        g.addColorStop(1, `rgba(${neon},0)`);
         a.fillStyle = g;
         a.fillRect(gx - gr, gy - gr, gr * 2, gr * 2);
       }
@@ -243,14 +254,14 @@ export function makeCityWindowTexture(width = 256, height = 512, seed = 4242): T
     };
   })();
   const warm = ['#ffb163', '#ffd9a0', '#ff8f4d'];
-  const cool = ['#5fd7ff', '#8fb4ff', '#c07bff', '#ff5fae'];
+  const cool = ['#5fd7ff', '#8fb4ff', '#c07bff', '#ff5fae', '#b98cff'];
   const cw = 6;
   const ch = 9;
   for (let y = 4; y < height - ch; y += ch + 5) {
     for (let x = 4; x < width - cw; x += cw + 6) {
       const r = rnd();
-      if (r < 0.55) continue; // unlit
-      const pool = r < 0.8 ? warm : cool;
+      if (r < 0.5) continue; // unlit
+      const pool = r < 0.65 ? warm : cool;
       ctx.fillStyle = pool[Math.floor(rnd() * pool.length)];
       ctx.globalAlpha = 0.5 + rnd() * 0.5;
       ctx.fillRect(x, y, cw, ch * (rnd() < 0.12 ? 2 : 1));
