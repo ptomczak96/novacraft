@@ -22,6 +22,8 @@ export function VoxelArena({
   onTileClick,
   visibility,
   floorTextures,
+  combat,
+  ghosts,
 }: VoxelArenaProps) {
   const debugCam = React.useMemo(
     () => new URLSearchParams(window.location.search).get('debugCam') === '1',
@@ -76,7 +78,7 @@ export function VoxelArena({
       <EdgeRim width={map.width} height={map.height} theme={theme} />
       <TerrainBlocks map={map} visibility={visibility} theme={theme} />
       <Highlights highlights={highlights} />
-      <Units units={units} onTileClick={onTileClick} interaction={interaction} />
+      <Units units={units} ghosts={ghosts} combat={combat} onTileClick={onTileClick} interaction={interaction} />
       <FogClouds map={map} visibility={visibility} theme={theme} />
       <SpaceStars width={map.width} height={map.height} quality={quality} />
       {quality === 'high' && (

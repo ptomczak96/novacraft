@@ -3,7 +3,7 @@ import type { Action } from '@tactica/engine';
 import { useGameStore } from '../../store/gameStore.js';
 import { VoxelArena } from './VoxelArena.js';
 import { VoxelErrorBoundary } from './VoxelErrorBoundary.js';
-import type { Facing, TileHighlight, UnitView } from './types.js';
+import type { CombatFx, Facing, TileHighlight, UnitGhost, UnitView } from './types.js';
 import { TEAM_COLORS } from './palette.js';
 
 /** Fresh facing derivation for the voxel pipeline (render-side only). */
@@ -37,7 +37,7 @@ export function VoxelMapView() {
   const {
     visibleState, legalActions, selectedUnitId, abilityMode,
     selectUnit, executeAction, setSelectedCity, setInspectedTile,
-    registry,
+    registry, lastCombatEvent,
   } = useGameStore();
 
   // Dev harness: ?unitGallery=1 lays out one of every unit kind on the board
@@ -156,6 +156,46 @@ export function VoxelMapView() {
       hostile: i % 2 === 1,
     }));
   }, [gallery, visibleState, registry]);
+
+  // Combat FX + death ghosts. Ghosts are created ONLY from combat kill events
+  // (units disappearing into fog of war must not play a death). The previous
+  // frame's unit views provide the dead unit's last appearance.
+  const prevViewsRef = React.useRef<UnitView[]>([]);
+  const [ghosts, setGhosts] = React.useState<UnitGhost[]>([]);
+  const combatSeq = lastCombatEvent?.seq;
+  React.useEffect(() => {
+    const ev = lastCombatEvent;
+    if (!ev) return;
+    const dead: UnitGhost[] = [];
+    const ghost = (id: number, pos: { x: number; y: number }) => {
+      const v = prevViewsRef.current.find(u => u.id === id);
+      if (v) dead.push({ view: { ...v, gridPos: { ...pos } }, ghostKey: `${ev.seq}:${id}` });
+    };
+    if (ev.defenderKilled) ghost(ev.defenderId, ev.defenderPos);
+    if (ev.attackerKilled) ghost(ev.attackerId, ev.attackerPos);
+    if (dead.length === 0) return;
+    setGhosts(g => [...g, ...dead]);
+    const keys = new Set(dead.map(d => d.ghostKey));
+    const t = setTimeout(() => setGhosts(g => g.filter(x => !keys.has(x.ghostKey))), 900);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [combatSeq]);
+  React.useEffect(() => {
+    prevViewsRef.current = unitViews;
+  }, [unitViews]);
+
+  const combat = React.useMemo<CombatFx | null>(() => {
+    const ev = lastCombatEvent;
+    if (!ev) return null;
+    return {
+      seq: ev.seq,
+      attackerId: ev.attackerId,
+      defenderId: ev.defenderId,
+      attackerPos: ev.attackerPos,
+      defenderPos: ev.defenderPos,
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [combatSeq]);
 
   if (!visibleState) return null;
 

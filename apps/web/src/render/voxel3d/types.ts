@@ -25,6 +25,22 @@ export interface UnitView {
   hostile?: boolean;
 }
 
+/** One executed attack, for render-side lunge/flash effects (from the store's
+ *  CombatEvent — purely presentational). */
+export interface CombatFx {
+  seq: number;
+  attackerId: number;
+  defenderId: number;
+  attackerPos: { x: number; y: number };
+  defenderPos: { x: number; y: number };
+}
+
+/** A just-killed unit's last view, rendered as a fading ghost. */
+export interface UnitGhost {
+  view: UnitView;
+  ghostKey: string;
+}
+
 export type HighlightKind = 'move' | 'threat' | 'select' | 'path';
 
 export interface TileHighlight {
@@ -53,4 +69,8 @@ export interface VoxelArenaProps {
   /** Optional fog-of-war grid ([y][x]); hidden tiles render as dark cloud blocks. */
   visibility?: TileVisibility[][];
   floorTextures?: FloorTextures;
+  /** Latest attack (drives attacker lunge + defender hit flash). */
+  combat?: CombatFx | null;
+  /** Recently killed units, rendered as fading ghosts. */
+  ghosts?: UnitGhost[];
 }
