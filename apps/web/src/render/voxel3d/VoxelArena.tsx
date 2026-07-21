@@ -3,7 +3,7 @@ import React from 'react';
 import { Canvas } from '@react-three/fiber';
 import type { VoxelArenaProps } from './types.js';
 import { BACKGROUND_COLOR, FOG_COLOR } from './palette.js';
-import { CityCards, Rain, FrameStats } from './Atmosphere.js';
+import { CityCards, Rain, FogClouds, DustMotes, FrameStats } from './Atmosphere.js';
 import { CameraRig } from './CameraRig.js';
 import { Lights } from './Lights.js';
 import { Floor } from './Floor.js';
@@ -66,10 +66,12 @@ export function VoxelArena({
       <TerrainBlocks map={map} visibility={visibility} />
       <Highlights highlights={highlights} />
       <Units units={units} onTileClick={onTileClick} />
+      <FogClouds map={map} visibility={visibility} />
       {quality === 'high' && (
         <>
           <CityCards width={map.width} height={map.height} />
           <Rain width={map.width} height={map.height} />
+          <DustMotes width={map.width} height={map.height} />
         </>
       )}
       <FrameStats quality={quality} />

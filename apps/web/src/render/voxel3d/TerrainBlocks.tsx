@@ -85,33 +85,23 @@ interface TerrainSets {
   cityBase: BlockInstance[];
   cityTower: BlockInstance[];
   cityWindow: BlockInstance[];
-  fogCloud: BlockInstance[];
 }
 
 function buildTerrain(map: MapData, visibility?: TileVisibility[][]): TerrainSets {
   const s: TerrainSets = {
     mountainBase: [], mountainPeak: [], forestCanopy: [], forestTrunk: [],
     waterPane: [], lavaPane: [], oreCrystal: [], plasmaCrystal: [],
-    ruinPillar: [], cityBase: [], cityTower: [], cityWindow: [], fogCloud: [],
+    ruinPillar: [], cityBase: [], cityTower: [], cityWindow: [],
   };
   for (let y = 0; y < map.height; y++) {
     for (let x = 0; x < map.width; x++) {
       const tile = map.tiles[y][x];
       const cx = x + 0.5;
       const cz = y + 0.5;
-      // Fog of war: never-seen tiles are opaque cloud blocks; nothing under
-      // them is placed, so terrain can't leak through the 3D view. Height and
-      // tint jitter so the cloud layer reads as clouds, not as black floor.
-      if (visibility && visibility[y]?.[x] === 'hidden') {
-        const j = ((x * 11 + y * 17) % 7) / 7;
-        const lum = 0.85 + j * 0.5;
-        s.fogCloud.push({
-          pos: [cx, 0.18 + j * 0.08, cz],
-          scale: [0.99, 0.36 + j * 0.16, 0.99],
-          color: `rgb(${Math.round(30 * lum)}, ${Math.round(35 * lum)}, ${Math.round(56 * lum)})`,
-        });
-        continue;
-      }
+      // Fog of war: nothing is placed under never-seen tiles, so terrain can't
+      // leak through the 3D view. The visible cloud layer itself is drawn by
+      // FogClouds (drei Clouds) in Atmosphere.tsx.
+      if (visibility && visibility[y]?.[x] === 'hidden') continue;
       const jitter = ((x * 7 + y * 13) % 5) / 5 - 0.4; // deterministic ±0.4 variation
 
       if (tile.isCity) {
@@ -181,7 +171,6 @@ export function TerrainBlocks({ map, visibility }: {
           <meshStandardMaterial color="#000000" emissive={b.color} emissiveIntensity={3} />
         </mesh>
       ))}
-      <Blocks instances={sets.fogCloud} color="#ffffff" castShadow={false} />
     </>
   );
 }

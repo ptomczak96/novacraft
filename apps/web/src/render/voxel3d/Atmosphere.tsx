@@ -1,6 +1,9 @@
 import * as THREE from 'three';
 import React from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
+import { Clouds, Cloud, Sparkles } from '@react-three/drei';
+import type { TileVisibility } from '@tactica/engine';
+import type { MapData } from './types.js';
 import { LAYER_NO_REFLECT } from './layers.js';
 import { makeCityWindowTexture } from './proceduralTextures.js';
 
@@ -117,6 +120,84 @@ export function Rain({ width, height }: { width: number; height: number }) {
         depthWrite={false}
       />
     </instancedMesh>
+  );
+}
+
+/**
+ * Fog of war as real cloud puffs (drei Clouds — one batched instanced draw,
+ * cloud sprite vendored at public/voxel3d/cloud.png so builds stay offline).
+ * Terrain/props are never placed under hidden tiles, so nothing can leak;
+ * these clouds are the visual layer on top. Rendered on every quality tier —
+ * fog is gameplay information, not decoration.
+ */
+export function FogClouds({ map, visibility }: {
+  map: MapData;
+  visibility?: TileVisibility[][];
+}) {
+  const groupRef = React.useRef<THREE.Group>(null);
+
+  const tiles = React.useMemo(() => {
+    if (!visibility) return [];
+    const out: { x: number; y: number }[] = [];
+    for (let y = 0; y < map.height; y++) {
+      for (let x = 0; x < map.width; x++) {
+        if (visibility[y]?.[x] === 'hidden') out.push({ x, y });
+      }
+    }
+    return out;
+  }, [map, visibility]);
+
+  React.useLayoutEffect(() => {
+    groupRef.current?.traverse(o => o.layers.set(LAYER_NO_REFLECT));
+  }, [tiles.length]);
+
+  if (tiles.length === 0) return null;
+  return (
+    <group ref={groupRef}>
+      <Clouds
+        material={THREE.MeshBasicMaterial}
+        texture="/voxel3d/cloud.png"
+        limit={map.width * map.height * 4}
+        frustumCulled={false}
+      >
+        {tiles.map(t => (
+          <Cloud
+            key={`${t.x},${t.y}`}
+            seed={t.x * 31 + t.y}
+            segments={4}
+            bounds={[0.34, 0.16, 0.34]}
+            volume={0.6}
+            growth={0.2}
+            speed={0.08}
+            opacity={0.9}
+            fade={0}
+            color="#454f6e"
+            position={[t.x + 0.5, 0.3, t.y + 0.5]}
+          />
+        ))}
+      </Clouds>
+    </group>
+  );
+}
+
+/** Ambient floating dust motes over the arena (drei Sparkles, one draw call). */
+export function DustMotes({ width, height }: { width: number; height: number }) {
+  const ref = React.useRef<THREE.Points>(null);
+  React.useLayoutEffect(() => {
+    ref.current?.layers.set(LAYER_NO_REFLECT);
+  }, []);
+  return (
+    <Sparkles
+      ref={ref}
+      count={90}
+      speed={0.25}
+      opacity={0.4}
+      size={1.6}
+      color="#9fd8ff"
+      noise={0.6}
+      scale={[width, 2.2, height]}
+      position={[width / 2, 1.2, height / 2]}
+    />
   );
 }
 
