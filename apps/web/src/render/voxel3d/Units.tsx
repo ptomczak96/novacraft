@@ -15,6 +15,35 @@ const FACING_ROT_Y: Record<Facing, number> = {
   ne: Math.PI,      // -y (world -z)
 };
 
+/**
+ * Decorative red sensor sweep projected on the floor in front of hostile
+ * heavies (the reference's mech scan cones). Purely visual — real threat
+ * tiles remain the highlights props.
+ */
+function ScanCone() {
+  const geometry = React.useMemo(() => {
+    const shape = new THREE.Shape();
+    shape.moveTo(0, 0);
+    shape.lineTo(-0.85, 2.6);
+    shape.lineTo(0.85, 2.6);
+    shape.closePath();
+    return new THREE.ShapeGeometry(shape);
+  }, []);
+  React.useEffect(() => () => geometry.dispose(), [geometry]);
+  return (
+    <mesh geometry={geometry} rotation-x={Math.PI / 2} position={[0, 0.025, 0.3]}>
+      <meshBasicMaterial
+        color="#ff3b30"
+        transparent
+        opacity={0.14}
+        blending={THREE.AdditiveBlending}
+        depthWrite={false}
+        side={THREE.DoubleSide}
+      />
+    </mesh>
+  );
+}
+
 /** Box-built fallback / heavy-mech body (shared with Suspense fallback). */
 function BoxUnit({ unit }: { unit: UnitView }) {
   const model = React.useMemo(
@@ -47,6 +76,7 @@ function UnitMesh({ unit, onTileClick, interaction }: {
       position={[unit.gridPos.x + 0.5, 0, unit.gridPos.y + 0.5]}
       rotation-y={FACING_ROT_Y[unit.facing]}
     >
+      {unit.hostile && !useGltf && <ScanCone />}
       <group ref={bobRef}>
         {useGltf ? (
           <React.Suspense fallback={<BoxUnit unit={unit} />}>
@@ -60,14 +90,14 @@ function UnitMesh({ unit, onTileClick, interaction }: {
         {onTileClick && (
           <mesh
             visible={false}
-            position={[0, 0.4, 0]}
+            position={[0, 0.5, 0]}
             onClick={e => {
               if (interaction?.current.suppressClick) return; // grab-pan release
               e.stopPropagation();
               onTileClick(unit.gridPos.x, unit.gridPos.y);
             }}
           >
-            <boxGeometry args={[0.7, 0.85, 0.7]} />
+            <boxGeometry args={[0.7, 1.05, 0.7]} />
           </mesh>
         )}
       </group>

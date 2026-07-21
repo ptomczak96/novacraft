@@ -65,12 +65,23 @@ export function GltfUnit({ kind, teamColor }: { kind: string; teamColor: string 
 
   return (
     <group>
-      <primitive object={model} />
-      {/* Team visor glow — the unit's blooming detail, like the box units. */}
-      <mesh position={[0, 0.545, 0.093]}>
-        <boxGeometry args={[0.12, 0.035, 0.02]} />
-        <meshStandardMaterial color="#000000" emissive={teamColor} emissiveIntensity={5} />
+      {/* Pedestal crate under the character, like the reference heroes. */}
+      <mesh position={[0, 0.115, 0]} castShadow receiveShadow>
+        <boxGeometry args={[0.52, 0.23, 0.52]} />
+        <meshStandardMaterial color="#262c44" flatShading roughness={0.85} metalness={0.15} />
       </mesh>
+      <mesh position={[0, 0.235, 0]}>
+        <boxGeometry args={[0.56, 0.03, 0.56]} />
+        <meshStandardMaterial color="#323a5c" flatShading roughness={0.7} metalness={0.3} />
+      </mesh>
+      <group position={[0, 0.25, 0]}>
+        <primitive object={model} />
+        {/* Team visor glow — the unit's blooming detail, like the box units. */}
+        <mesh position={[0, 0.545, 0.093]}>
+          <boxGeometry args={[0.12, 0.035, 0.02]} />
+          <meshStandardMaterial color="#000000" emissive={teamColor} emissiveIntensity={5} />
+        </mesh>
+      </group>
     </group>
   );
 }

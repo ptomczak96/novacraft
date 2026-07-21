@@ -4,7 +4,7 @@ import { Canvas } from '@react-three/fiber';
 import { Environment } from '@react-three/drei';
 import type { VoxelArenaProps } from './types.js';
 import { BACKGROUND_COLOR, FOG_COLOR } from './palette.js';
-import { CityBlocks, HazeLayers, Rain, FogClouds, DustMotes, FrameStats } from './Atmosphere.js';
+import { CityBlocks, HazeLayers, Bokeh, Rain, FogClouds, DustMotes, FrameStats } from './Atmosphere.js';
 import { Signage } from './Signage.js';
 import { CameraRig, type CameraInteraction } from './CameraRig.js';
 import { Lights } from './Lights.js';
@@ -83,6 +83,7 @@ export function VoxelArena({
             <Environment files="/voxel3d/env_night.hdr" environmentIntensity={0.18} />
           </React.Suspense>
           <HazeLayers width={map.width} height={map.height} />
+          <Bokeh width={map.width} height={map.height} />
           <CityBlocks width={map.width} height={map.height} />
           <Signage width={map.width} height={map.height} />
           <Rain width={map.width} height={map.height} />

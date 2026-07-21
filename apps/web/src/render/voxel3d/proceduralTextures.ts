@@ -122,7 +122,7 @@ export function makeFloorPlateTextures(
   r.fillRect(0, 0, W, H);
 
   // Deep blue-violet plates (reference grade), not neutral grey.
-  const PLATES = ['#1d2140', '#202547', '#23294e', '#262e55', '#1b1e38', '#242247'];
+  const PLATES = ['#262c50', '#2b3158', '#232849', '#313763', '#202440', '#2e2b58'];
   const SEAM = 2;
   for (let ty = 0; ty < heightTiles; ty++) {
     for (let tx = 0; tx < widthTiles; tx++) {
@@ -150,15 +150,21 @@ export function makeFloorPlateTextures(
         a.fillStyle = g;
         a.fillRect(gx - gr, gy - gr, gr * 2, gr * 2);
       }
-      // Sparse neon paint splashes (magenta/cyan), like the reference's decals.
-      if (rnd() < 0.1) {
-        const gx = x0 + rnd() * sz, gy = y0 + rnd() * sz, gr = 5 + rnd() * 14;
-        const neon = rnd() < 0.6 ? '255,45,149' : '51,240,255';
+      // Colourful staining like the reference: teal/magenta/rust splatter.
+      if (rnd() < 0.22) {
+        const gx = x0 + rnd() * sz, gy = y0 + rnd() * sz, gr = 6 + rnd() * 16;
+        const pick = rnd();
+        const tint = pick < 0.4 ? '51,240,255' : pick < 0.7 ? '255,45,149' : '196,110,60';
         const g = a.createRadialGradient(gx, gy, 1, gx, gy, gr);
-        g.addColorStop(0, `rgba(${neon},0.16)`);
-        g.addColorStop(1, `rgba(${neon},0)`);
+        g.addColorStop(0, `rgba(${tint},0.22)`);
+        g.addColorStop(1, `rgba(${tint},0)`);
         a.fillStyle = g;
         a.fillRect(gx - gr, gy - gr, gr * 2, gr * 2);
+        // a few splatter droplets around the blob
+        for (let k = 0; k < 5; k++) {
+          a.fillStyle = `rgba(${tint},${0.12 + rnd() * 0.12})`;
+          a.fillRect(gx + (rnd() - 0.5) * gr * 2.4, gy + (rnd() - 0.5) * gr * 2.4, 1 + rnd() * 3, 1 + rnd() * 3);
+        }
       }
       // Roughness: plate body mid-rough with jitter.
       const base = 150 + Math.floor(rnd() * 50);
@@ -255,9 +261,17 @@ export function makeCityWindowTexture(width = 256, height = 512, seed = 4242): T
   })();
   const warm = ['#ffb163', '#ffd9a0', '#ff8f4d'];
   const cool = ['#5fd7ff', '#8fb4ff', '#c07bff', '#ff5fae', '#b98cff'];
-  const cw = 6;
-  const ch = 9;
-  for (let y = 4; y < height - ch; y += ch + 5) {
+  // Per-tower window cell size — varied facades like the reference.
+  const cw = 4 + Math.floor(rnd() * 5);
+  const ch = 6 + Math.floor(rnd() * 6);
+  const balconyEvery = 3 + Math.floor(rnd() * 3);
+  let row = 0;
+  for (let y = 4; y < height - ch; y += ch + 5, row++) {
+    // Balcony band: darker horizontal ledge line under some rows.
+    if (row % balconyEvery === balconyEvery - 1) {
+      ctx.fillStyle = 'rgba(0,0,0,0.55)';
+      ctx.fillRect(0, y + ch + 1, width, 3);
+    }
     for (let x = 4; x < width - cw; x += cw + 6) {
       const r = rnd();
       if (r < 0.5) continue; // unlit
@@ -268,6 +282,22 @@ export function makeCityWindowTexture(width = 256, height = 512, seed = 4242): T
     }
   }
   ctx.globalAlpha = 1;
+  // 1–2 bright ad billboards with a coloured border, like the reference facades.
+  const ads = 1 + Math.floor(rnd() * 2);
+  for (let i = 0; i < ads; i++) {
+    const bw = 30 + rnd() * 40, bh = 18 + rnd() * 26;
+    const bx = 8 + rnd() * (width - bw - 16), by = 20 + rnd() * (height - bh - 40);
+    const col = cool[Math.floor(rnd() * cool.length)];
+    ctx.fillStyle = '#0d0a18';
+    ctx.fillRect(bx - 2, by - 2, bw + 4, bh + 4);
+    ctx.strokeStyle = col;
+    ctx.lineWidth = 2;
+    ctx.strokeRect(bx, by, bw, bh);
+    ctx.fillStyle = col;
+    ctx.globalAlpha = 0.65;
+    ctx.fillRect(bx + 4, by + 4, bw - 8, bh - 8);
+    ctx.globalAlpha = 1;
+  }
   const tex = new THREE.CanvasTexture(canvas);
   tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
   return tex;

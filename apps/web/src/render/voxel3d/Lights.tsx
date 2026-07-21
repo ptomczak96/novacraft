@@ -35,7 +35,7 @@ export function Lights({ width, height }: { width: number; height: number }) {
     <>
       {/* Intensities sit above the spec'd legacy values (0.5 / 1.1) because
           three r155+ physically-based lighting + ACES render those too dark. */}
-      <ambientLight color={AMBIENT_COLOR} intensity={0.65} />
+      <ambientLight color={AMBIENT_COLOR} intensity={0.95} />
       <directionalLight
         ref={dirRef}
         color={KEY_LIGHT_COLOR}

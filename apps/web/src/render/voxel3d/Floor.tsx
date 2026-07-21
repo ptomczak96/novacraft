@@ -135,10 +135,10 @@ function GridOverlay({ width, height }: { width: number; height: number }) {
             // Soft 1px-ish glow falloff around tile edges.
             vec2 gd = abs(fract(coord - 0.5) - 0.5) / fwidth(coord);
             float glow = exp(-min(gd.x, gd.y) * 0.9) * 0.25;
-            // Subtle: the baked plate seams carry the tile read; this overlay
-            // only adds a faint tactical grid on top.
-            vec3 col = uLine * sub * 0.25 + uLineBright * tile * 0.5 + uLineBright * glow * 0.5;
-            float alpha = max(tile * 0.45, sub * 0.18) + glow * 0.5;
+            // Bright seam lines like the reference floor, plus faint half-tile
+            // sub-grid; the baked plate seams add the dark gap underneath.
+            vec3 col = uLine * sub * 0.35 + uLineBright * tile * 0.95 + uLineBright * glow * 0.6;
+            float alpha = max(tile * 0.8, sub * 0.25) + glow * 0.55;
             if (alpha < 0.01) discard;
             gl_FragColor = vec4(col, alpha);
           }

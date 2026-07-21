@@ -83,11 +83,30 @@ export function CityBlocks({ width, height }: { width: number; height: number })
 
   return (
     <group ref={groupRef}>
-      {towers.map((t, i) => (
-        <mesh key={i} position={t.pos} material={materials[i]}>
-          <boxGeometry args={[t.w, t.h, t.d]} />
-        </mesh>
-      ))}
+      {towers.map((t, i) => {
+        const top = t.pos.y + t.h / 2;
+        const hasAntenna = hash(i * 19) < 0.45;
+        return (
+          <group key={i}>
+            <mesh position={t.pos} material={materials[i]}>
+              <boxGeometry args={[t.w, t.h, t.d]} />
+            </mesh>
+            {/* Rooftop antenna + red beacon, like the reference skyline. */}
+            {hasAntenna && (
+              <group position={[t.pos.x + (hash(i * 23) - 0.5) * t.w * 0.5, 0, t.pos.z]}>
+                <mesh position={[0, top + 1.1, 0]}>
+                  <boxGeometry args={[0.16, 2.2, 0.16]} />
+                  <meshBasicMaterial color="#0c0e18" fog />
+                </mesh>
+                <mesh position={[0, top + 2.3, 0]}>
+                  <boxGeometry args={[0.22, 0.22, 0.22]} />
+                  <meshStandardMaterial color="#000000" emissive="#ff3b30" emissiveIntensity={4} />
+                </mesh>
+              </group>
+            )}
+          </group>
+        );
+      })}
     </group>
   );
 }
@@ -132,11 +151,11 @@ export function Rain({ width, height }: { width: number; height: number }) {
 
   return (
     <instancedMesh ref={meshRef} args={[undefined, undefined, RAIN_COUNT]} frustumCulled={false}>
-      <boxGeometry args={[0.012, 0.42, 0.012]} />
+      <boxGeometry args={[0.014, 0.7, 0.014]} />
       <meshBasicMaterial
         color="#9fc0ff"
         transparent
-        opacity={0.12}
+        opacity={0.18}
         blending={THREE.AdditiveBlending}
         depthWrite={false}
       />
@@ -272,6 +291,28 @@ export function HazeLayers({ width, height }: { width: number; height: number })
           />
         </mesh>
       ))}
+    </group>
+  );
+}
+
+/** Defocused city-light bokeh dots drifting in the tower field. */
+export function Bokeh({ width, height }: { width: number; height: number }) {
+  const groupRef = React.useRef<THREE.Group>(null);
+  React.useLayoutEffect(() => {
+    groupRef.current?.traverse(o => o.layers.set(LAYER_NO_REFLECT));
+  }, []);
+  const cx = width / 2;
+  const cz = height / 2;
+  return (
+    <group ref={groupRef}>
+      <Sparkles
+        count={40} speed={0.06} opacity={0.55} size={7} color="#ffca8a" noise={0.2}
+        scale={[width * 4, 26, height * 4]} position={[cx - 18, 6, cz - 18]}
+      />
+      <Sparkles
+        count={40} speed={0.06} opacity={0.5} size={6} color="#8fb4ff" noise={0.2}
+        scale={[width * 4, 26, height * 4]} position={[cx - 24, 10, cz - 24]}
+      />
     </group>
   );
 }

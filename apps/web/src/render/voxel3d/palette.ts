@@ -3,8 +3,8 @@
  * the 2D iso renderer's palette.
  */
 export const FLOOR_COLOR = '#151821';
-export const BACKGROUND_COLOR = '#131024';
-export const FOG_COLOR = '#1d1540';
+export const BACKGROUND_COLOR = '#1a1538';
+export const FOG_COLOR = '#241b4d';
 
 export const GRID_LINE = '#2a3040';
 export const GRID_LINE_BRIGHT = '#3d4a63';
@@ -23,6 +23,6 @@ export const HIGHLIGHT_COLORS = {
 /** Team colours by player index — vivid, made to read against the dark floor. */
 export const TEAM_COLORS = ['#33f0ff', '#ff2d95'] as const;
 
-export const AMBIENT_COLOR = '#4a3a6b';
+export const AMBIENT_COLOR = '#5a4a8a';
 export const KEY_LIGHT_COLOR = '#cfd8ff';
 export const CORNER_LIGHT_COLOR = '#ff2d95';

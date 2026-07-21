@@ -17,6 +17,9 @@ export interface UnitView {
   facing: Facing;
   teamColor: string;
   kind: string;
+  /** True for units not owned by the viewing player — drives decorative
+   *  scan-cone telegraphs on heavy units. */
+  hostile?: boolean;
 }
 
 export type HighlightKind = 'move' | 'threat' | 'select' | 'path';

@@ -65,6 +65,7 @@ export function VoxelMapView() {
         facing: facings.get(u.id) ?? DEFAULT_FACING,
         teamColor: TEAM_COLORS[u.owner % TEAM_COLORS.length],
         kind: u.typeId,
+        hostile: u.owner !== visibleState.currentPlayer,
       };
     });
   }, [visibleState]);
