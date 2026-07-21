@@ -28,6 +28,7 @@ export function buildUnit(def: UnitDef, teamColor: string): THREE.Group {
     const mesh = new THREE.Mesh(UNIT_BOX, material);
     mesh.scale.set(part.size[0] * VOXEL, part.size[1] * VOXEL, part.size[2] * VOXEL);
     mesh.position.set(part.pos[0] * VOXEL, part.pos[1] * VOXEL, part.pos[2] * VOXEL);
+    if (part.rot) mesh.rotation.set(part.rot[0], part.rot[1], part.rot[2]);
     mesh.castShadow = true;
     group.add(mesh);
   }

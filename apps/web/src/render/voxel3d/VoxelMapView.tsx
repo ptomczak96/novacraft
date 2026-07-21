@@ -37,7 +37,15 @@ export function VoxelMapView() {
   const {
     visibleState, legalActions, selectedUnitId, abilityMode,
     selectUnit, executeAction, setSelectedCity, setInspectedTile,
+    registry,
   } = useGameStore();
+
+  // Dev harness: ?unitGallery=1 lays out one of every unit kind on the board
+  // (alternating teams) for reviewing the voxel models.
+  const gallery = React.useMemo(
+    () => new URLSearchParams(window.location.search).get('unitGallery') === '1',
+    [],
+  );
 
   const quality = React.useMemo<'high' | 'low'>(
     () => (new URLSearchParams(window.location.search).get('quality') === 'low' ? 'low' : 'high'),
@@ -136,6 +144,19 @@ export function VoxelMapView() {
     setInspectedTile({ x, y });
   }, [targets, visibleState, selectedUnitId, executeAction, selectUnit, setSelectedCity, setInspectedTile]);
 
+  const galleryUnits = React.useMemo<UnitView[]>(() => {
+    if (!gallery || !visibleState) return [];
+    const perRow = Math.max(1, Math.floor((visibleState.map.width - 1) / 2));
+    return Object.keys(registry.unitTypes).map((kind, i) => ({
+      id: 100000 + i,
+      gridPos: { x: 1 + (i % perRow) * 2, y: 1 + Math.floor(i / perRow) * 2 },
+      facing: 'sw' as Facing,
+      teamColor: TEAM_COLORS[i % TEAM_COLORS.length],
+      kind,
+      hostile: i % 2 === 1,
+    }));
+  }, [gallery, visibleState, registry]);
+
   if (!visibleState) return null;
 
   return (
@@ -143,11 +164,11 @@ export function VoxelMapView() {
       <VoxelErrorBoundary>
         <VoxelArena
           map={visibleState.map}
-          units={unitViews}
+          units={gallery ? galleryUnits : unitViews}
           highlights={highlights}
           quality={quality}
           onTileClick={onTileClick}
-          visibility={visibleState.visibility}
+          visibility={gallery ? undefined : visibleState.visibility}
         />
       </VoxelErrorBoundary>
     </div>
