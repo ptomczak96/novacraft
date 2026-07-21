@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import React from 'react';
-import { useFrame, useThree } from '@react-three/fiber';
+import { useFrame } from '@react-three/fiber';
 import { Clouds, Cloud, Sparkles } from '@react-three/drei';
 import type { TileVisibility } from '@tactica/engine';
 import type { MapData } from './types.js';
@@ -16,55 +16,70 @@ function hash(i: number): number {
 }
 
 /**
- * Background city: 7 flat billboard planes at varying depths behind/below the
- * arena, textured with procedural emissive window grids. Excluded from the
- * floor reflection and from shadows; softened by the scene fog.
+ * Background city: 3D voxel towers at varying depths behind/below the floating
+ * arena, lit-window textures on their side faces, dark roofs. Excluded from
+ * the floor reflection and from shadows; softened by the scene fog. A couple
+ * of tall near towers rise above the arena horizon like the reference frame.
  */
-export function CityCards({ width, height }: { width: number; height: number }) {
-  const camera = useThree(s => s.camera);
+export function CityBlocks({ width, height }: { width: number; height: number }) {
   const groupRef = React.useRef<THREE.Group>(null);
 
-  const cards = React.useMemo(() => {
+  const towers = React.useMemo(() => {
     const cx = width / 2;
     const cz = height / 2;
-    // View direction of the fixed dimetric camera; cards sit beyond the arena
-    // along it (and below), like towers under a floating platform.
     const view = new THREE.Vector3(-1, -0.82, -1).normalize();
     const perp = new THREE.Vector3(1, 0, -1).normalize();
-    return Array.from({ length: 7 }, (_, i) => {
-      const depth = 34 + hash(i * 3) * 40;
-      const side = (hash(i * 3 + 1) - 0.5) * (Math.max(width, height) * 1.6 + depth);
+    const list: { pos: THREE.Vector3; w: number; h: number; d: number; seed: number }[] = [];
+    for (let i = 0; i < 11; i++) {
+      const depth = 30 + hash(i * 3) * 46;
+      const side = (hash(i * 3 + 1) - 0.5) * (Math.max(width, height) * 2.2 + depth * 1.2);
+      const w = 4.5 + hash(i * 5) * 5;
+      const d = 4.5 + hash(i * 5 + 2) * 5;
+      const h = 15 + hash(i * 5 + 1) * 20;
+      // Tower TOP between well below and slightly above arena level; the two
+      // nearest towers rise high like the reference's flanking skyscrapers.
+      const near = depth < 40;
+      const top = near ? 8 + hash(i * 7) * 8 : -1 - hash(i * 7) * 8;
       const pos = new THREE.Vector3(cx, 0, cz)
         .addScaledVector(view, depth)
         .addScaledVector(perp, side);
-      pos.y += (hash(i * 3 + 2) - 0.85) * 14;
-      const w = 6 + hash(i * 5) * 7;
-      const h = 15 + hash(i * 5 + 1) * 14;
-      return { pos, w, h, seed: 1000 + i * 97 };
-    });
+      pos.y = top - h / 2;
+      list.push({ pos, w, h, d, seed: 1000 + i * 97 });
+    }
+    return list;
   }, [width, height]);
 
-  const textures = React.useMemo(
-    () => cards.map(c => makeCityWindowTexture(256, 512, c.seed)),
-    [cards],
+  const materials = React.useMemo(
+    () => towers.map(t => {
+      const tex = makeCityWindowTexture(256, 512, t.seed);
+      const windows = new THREE.MeshBasicMaterial({
+        map: tex,
+        color: new THREE.Color(1.2, 1.2, 1.2),
+        fog: true,
+      });
+      const dark = new THREE.MeshBasicMaterial({ color: '#0c0e18', fog: true });
+      // BoxGeometry face order: +x, -x, +y (roof), -y, +z, -z
+      return [windows, windows, dark, dark, windows, windows];
+    }),
+    [towers],
   );
-  React.useEffect(() => () => textures.forEach(t => t.dispose()), [textures]);
+  React.useEffect(() => () => {
+    materials.forEach(m => {
+      m[0].map?.dispose();
+      m[0].dispose();
+      m[2].dispose();
+    });
+  }, [materials]);
 
   React.useLayoutEffect(() => {
-    const g = groupRef.current;
-    if (!g) return;
-    g.traverse(o => o.layers.set(LAYER_NO_REFLECT));
-    // Static billboards: face the (fixed) game camera once.
-    g.children.forEach(child => child.lookAt(camera.position));
-  }, [camera, cards]);
+    groupRef.current?.traverse(o => o.layers.set(LAYER_NO_REFLECT));
+  }, [towers]);
 
   return (
     <group ref={groupRef}>
-      {cards.map((c, i) => (
-        <mesh key={i} position={c.pos}>
-          <planeGeometry args={[c.w, c.h]} />
-          {/* color > 1 pushes lit windows past the bloom threshold (≈ emissiveIntensity 1.5). */}
-          <meshBasicMaterial map={textures[i]} color={new THREE.Color(1.2, 1.2, 1.2)} fog transparent opacity={0.85} />
+      {towers.map((t, i) => (
+        <mesh key={i} position={t.pos} material={materials[i]}>
+          <boxGeometry args={[t.w, t.h, t.d]} />
         </mesh>
       ))}
     </group>

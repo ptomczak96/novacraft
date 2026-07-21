@@ -16,6 +16,8 @@ export interface UnitPartDef {
   /** Painted with the owning player's team colour. */
   teamColor?: boolean;
   emissive?: string;
+  /** Visor/eye glow in the owning player's team colour (blooms). */
+  teamGlow?: boolean;
   emissiveIntensity?: number;
 }
 
@@ -37,7 +39,7 @@ const TROOPER: UnitDef = {
     { size: [2.5, 6.5, 2.5], pos: [5.2, 12.5, 0], color: GUNMETAL },
     { size: [5, 5, 5], pos: [0, 18.8, 0], color: GUNMETAL },
     // Visor — the one emissive detail (bloom + reflection participant).
-    { size: [4.2, 1.4, 0.8], pos: [0, 19.3, 2.6], color: '#000000', emissive: '#33f0ff', emissiveIntensity: 5 },
+    { size: [4.2, 1.4, 0.8], pos: [0, 19.3, 2.6], color: '#000000', teamGlow: true, emissiveIntensity: 5 },
     { size: [1.8, 1.8, 8], pos: [5.2, 10.5, 3], color: JOINT },
   ],
 };
@@ -51,7 +53,7 @@ const GUNNER: UnitDef = {
     { size: [2.2, 6, 2.2], pos: [-4.6, 12, 0], color: GUNMETAL },
     { size: [2.2, 6, 2.2], pos: [4.6, 12, 0], color: GUNMETAL },
     { size: [4.6, 4.6, 4.6], pos: [0, 17.8, 0], color: GUNMETAL },
-    { size: [3.8, 1.2, 0.8], pos: [0, 18.2, 2.4], color: '#000000', emissive: '#ff2d95', emissiveIntensity: 5 },
+    { size: [3.8, 1.2, 0.8], pos: [0, 18.2, 2.4], color: '#000000', teamGlow: true, emissiveIntensity: 5 },
     { size: [0.8, 5, 0.8], pos: [-2, 22.5, -1], color: JOINT },
     { size: [1.6, 1.6, 12], pos: [4.6, 10.2, 4], color: JOINT },
   ],
@@ -67,7 +69,7 @@ const MECH: UnitDef = {
     { size: [5, 4, 7], pos: [8.5, 18, 0], color: GUNMETAL },
     { size: [7, 4, 6], pos: [0, 21, 0.5], color: GUNMETAL },
     // Cyclops visor slit.
-    { size: [5.5, 1.6, 0.8], pos: [0, 21.2, 3.6], color: '#000000', emissive: '#33f0ff', emissiveIntensity: 5 },
+    { size: [5.5, 1.6, 0.8], pos: [0, 21.2, 3.6], color: '#000000', teamGlow: true, emissiveIntensity: 5 },
     { size: [3, 3, 9], pos: [-8.5, 15.5, 3], color: JOINT },
   ],
 };

@@ -3,9 +3,9 @@ import React from 'react';
 import type { ThreeEvent } from '@react-three/fiber';
 import { MeshReflectorMaterial } from '@react-three/drei';
 import type { FloorTextures } from './types.js';
-import { FLOOR_COLOR, GRID_LINE, GRID_LINE_BRIGHT } from './palette.js';
+import { GRID_LINE, GRID_LINE_BRIGHT } from './palette.js';
 import { LAYER_NO_REFLECT } from './layers.js';
-import { makeFloorRoughnessTexture } from './proceduralTextures.js';
+import { makeFloorPlateTextures } from './proceduralTextures.js';
 
 /**
  * ONE reflector plane for the whole arena (never per-tile meshes). Tiles are
@@ -19,14 +19,14 @@ export function Floor({ width, height, quality, floorTextures, onTileClick }: {
   floorTextures?: FloorTextures;
   onTileClick?: (x: number, y: number) => void;
 }) {
-  const roughnessMap = React.useMemo(
-    () => floorTextures?.roughness ?? makeFloorRoughnessTexture(),
-    [floorTextures?.roughness],
+  // Worn metal plates, one per tile, baked into albedo+roughness (1:1 UV over
+  // the arena). Hand-authored maps via floorTextures take precedence.
+  const plates = React.useMemo(
+    () => makeFloorPlateTextures(width, height),
+    [width, height],
   );
-  React.useMemo(() => {
-    // Grime pattern spans ~8×8 tiles, then repeats across larger arenas.
-    roughnessMap.repeat.set(width / 8, height / 8);
-  }, [roughnessMap, width, height]);
+  const albedoMap = floorTextures?.albedo ?? plates.albedo;
+  const roughnessMap = floorTextures?.roughness ?? plates.roughness;
 
   const handleClick = React.useCallback((e: ThreeEvent<MouseEvent>) => {
     if (!onTileClick) return;
@@ -56,9 +56,9 @@ export function Floor({ width, height, quality, floorTextures, onTileClick }: {
           depthScale={1.2}
           minDepthThreshold={0.4}
           maxDepthThreshold={1.4}
-          color={FLOOR_COLOR}
+          color="#b8c0d4"
           roughnessMap={roughnessMap}
-          map={floorTextures?.albedo}
+          map={albedoMap}
           normalMap={floorTextures?.normal}
         />
       </mesh>
@@ -122,8 +122,10 @@ function GridOverlay({ width, height }: { width: number; height: number }) {
             // Soft 1px-ish glow falloff around tile edges.
             vec2 gd = abs(fract(coord - 0.5) - 0.5) / fwidth(coord);
             float glow = exp(-min(gd.x, gd.y) * 0.9) * 0.25;
-            vec3 col = uLine * sub * 0.5 + uLineBright * tile + uLineBright * glow;
-            float alpha = max(tile, sub * 0.35) * 0.85 + glow;
+            // Subtle: the baked plate seams carry the tile read; this overlay
+            // only adds a faint tactical grid on top.
+            vec3 col = uLine * sub * 0.25 + uLineBright * tile * 0.5 + uLineBright * glow * 0.5;
+            float alpha = max(tile * 0.45, sub * 0.18) + glow * 0.5;
             if (alpha < 0.01) discard;
             gl_FragColor = vec4(col, alpha);
           }

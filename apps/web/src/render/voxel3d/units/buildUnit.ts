@@ -12,15 +12,17 @@ const UNIT_BOX = new THREE.BoxGeometry(1, 1, 1);
 export function buildUnit(def: UnitDef, teamColor: string): THREE.Group {
   const group = new THREE.Group();
   for (const part of def.parts) {
-    // Team-flagged parts get a faint emissive of the same colour so allegiance
-    // reads in the dark arena — kept well below the bloom threshold (1.0) so
-    // the visor stays the unit's only blooming detail.
+    // teamGlow parts (visors) bloom in the owner's colour; teamColor parts get
+    // a faint same-colour emissive so allegiance reads in the dark arena —
+    // kept well below the bloom threshold (1.0) so only the visor blooms.
     const material = new THREE.MeshStandardMaterial({
       color: part.teamColor ? teamColor : (part.color ?? '#57627a'),
       flatShading: true,
       roughness: 0.7,
       metalness: 0.25,
-      emissive: part.emissive ?? (part.teamColor ? teamColor : '#000000'),
+      emissive: part.teamGlow
+        ? teamColor
+        : (part.emissive ?? (part.teamColor ? teamColor : '#000000')),
       emissiveIntensity: part.emissiveIntensity ?? (part.teamColor ? 0.35 : 0),
     });
     const mesh = new THREE.Mesh(UNIT_BOX, material);

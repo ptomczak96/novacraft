@@ -1,8 +1,8 @@
 import * as THREE from 'three';
 import React from 'react';
-import { RIM_BLOCK, NEON_CYAN, NEON_PINK } from './palette.js';
+import { RIM_BLOCK } from './palette.js';
 
-/** Deterministic per-index hash for colour jitter / pink strip picks. */
+/** Deterministic per-index hash for colour jitter / greeble layout. */
 function hash(i: number): number {
   let x = (i + 1) * 2654435761;
   x = ((x >>> 16) ^ x) * 0x45d9f3b;
@@ -11,113 +11,172 @@ function hash(i: number): number {
 }
 
 interface RimData {
-  blocks: { pos: [number, number, number]; tint: number }[];
-  cyanStrips: THREE.Matrix4[];
-  pinkStrips: THREE.Matrix4[];
+  lip: { pos: [number, number, number]; tint: number }[];
+  strips: THREE.Matrix4[];
+  greebles: { pos: [number, number, number]; scale: [number, number, number] }[];
+  posts: [number, number, number][];
 }
 
 function buildRim(width: number, height: number): RimData {
-  const blocks: RimData['blocks'] = [];
-  // 1-block-wide rim ring around the floor, sunk so its top sits at +0.3 —
-  // the arena reads as a floating platform with a chunky hull edge.
+  // Low flush lip ring — the platform edge is nearly level with the floor
+  // (reference look), with the mass in the hull below.
+  const lip: RimData['lip'] = [];
   for (let x = -1; x <= width; x++) {
     for (let z = -1; z <= height; z++) {
       const onRim = x === -1 || x === width || z === -1 || z === height;
       if (!onRim) continue;
-      const i = blocks.length;
-      blocks.push({ pos: [x + 0.5, -0.2, z + 0.5], tint: 0.9 + hash(i) * 0.25 });
+      lip.push({ pos: [x + 0.5, -0.38, z + 0.5], tint: 0.9 + hash(lip.length) * 0.25 });
     }
   }
-  // Corner risers: 2–3 blocks tall.
-  const corners: [number, number][] = [
-    [-0.5, -0.5], [width + 0.5, -0.5], [-0.5, height + 0.5], [width + 0.5, height + 0.5],
-  ];
-  corners.forEach(([px, pz], ci) => {
-    const extra = ci === 1 ? 3 : 2;
-    for (let k = 1; k <= extra; k++) {
-      blocks.push({ pos: [px, -0.2 + k, pz], tint: 0.85 + hash(blocks.length) * 0.2 });
-    }
-  });
 
-  // Neon strips along the outer rim, on every other tile edge. Mostly cyan,
-  // a few pink. These are emissive-only "light sources" — no point lights.
-  const cyanStrips: THREE.Matrix4[] = [];
-  const pinkStrips: THREE.Matrix4[] = [];
-  const stripY = 0.315; // resting on the rim top (0.3)
-  const addStrip = (x: number, z: number, rotY: number, i: number) => {
-    const m = new THREE.Matrix4().makeRotationY(rotY).setPosition(x, stripY, z);
-    (hash(i * 31 + 7) < 0.18 ? pinkStrips : cyanStrips).push(m);
+  // White-cyan light dashes ON the floor surface along the perimeter,
+  // every other tile edge — emissive-only "emergency lighting".
+  const strips: THREE.Matrix4[] = [];
+  const addStrip = (x: number, z: number, rotY: number) => {
+    strips.push(new THREE.Matrix4().makeRotationY(rotY).setPosition(x, 0.035, z));
   };
-  let i = 0;
   for (let x = 0; x < width; x += 2) {
-    addStrip(x + 0.5, -0.5, 0, i++);          // north rim
-    addStrip(x + 0.5, height + 0.5, 0, i++);  // south rim
+    addStrip(x + 0.5, 0.09, 0);
+    addStrip(x + 0.5, height - 0.09, 0);
   }
   for (let z = 0; z < height; z += 2) {
-    addStrip(-0.5, z + 0.5, Math.PI / 2, i++);          // west rim
-    addStrip(width + 0.5, z + 0.5, Math.PI / 2, i++);   // east rim
+    addStrip(0.09, z + 0.5, Math.PI / 2);
+    addStrip(width - 0.09, z + 0.5, Math.PI / 2);
   }
-  return { blocks, cyanStrips, pinkStrips };
+
+  // Greebles: vents/boxes studded on the two camera-facing hull faces.
+  const greebles: RimData['greebles'] = [];
+  const faceX = width + 1.02;
+  const faceZ = height + 1.02;
+  for (let i = 0; i < 14; i++) {
+    const w = 0.35 + hash(i * 3) * 0.6;
+    const h = 0.14 + hash(i * 3 + 1) * 0.22;
+    const y = -0.4 - hash(i * 3 + 2) * 0.85;
+    if (i % 2 === 0) {
+      greebles.push({ pos: [hash(i * 7) * (width - 1) + 0.5, y, faceZ], scale: [w, h, 0.1] });
+    } else {
+      greebles.push({ pos: [faceX, y, hash(i * 7) * (height - 1) + 0.5], scale: [0.1, h, w] });
+    }
+  }
+
+  // Railing posts along the two far edges (screen-top in the dimetric view).
+  const posts: RimData['posts'] = [];
+  for (let x = 0.5; x < width; x += 1) posts.push([x, 0.2, 0.06]);
+  for (let z = 0.5; z < height; z += 1) posts.push([0.06, 0.2, z]);
+  return { lip, strips, greebles, posts };
 }
 
-function StripMesh({ matrices, color }: { matrices: THREE.Matrix4[]; color: string }) {
+function InstancedSet({ items, color, emissive, emissiveIntensity = 0, geo, castShadow = false }: {
+  items: { m: THREE.Matrix4; tint?: number }[];
+  color: string;
+  emissive?: string;
+  emissiveIntensity?: number;
+  geo: [number, number, number];
+  castShadow?: boolean;
+}) {
   const ref = React.useRef<THREE.InstancedMesh>(null);
   React.useLayoutEffect(() => {
     const mesh = ref.current;
     if (!mesh) return;
-    matrices.forEach((m, i) => mesh.setMatrixAt(i, m));
-    mesh.count = matrices.length;
+    const c = new THREE.Color();
+    const base = new THREE.Color(color);
+    items.forEach((it, i) => {
+      mesh.setMatrixAt(i, it.m);
+      if (it.tint !== undefined) mesh.setColorAt(i, c.copy(base).multiplyScalar(it.tint));
+    });
+    mesh.count = items.length;
     mesh.instanceMatrix.needsUpdate = true;
-  }, [matrices]);
+    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+  }, [items, color]);
+  if (items.length === 0) return null;
+  const usesTint = items[0].tint !== undefined;
   return (
     <instancedMesh
-      key={matrices.length}
+      key={items.length}
       ref={ref}
-      args={[undefined, undefined, Math.max(1, matrices.length)]}
+      args={[undefined, undefined, items.length]}
+      castShadow={castShadow}
+      receiveShadow
       frustumCulled={false}
     >
-      <boxGeometry args={[0.9, 0.03, 0.06]} />
-      <meshStandardMaterial color="#000000" emissive={color} emissiveIntensity={6} />
+      <boxGeometry args={geo} />
+      <meshStandardMaterial
+        color={usesTint ? '#ffffff' : color}
+        flatShading
+        roughness={0.85}
+        metalness={0.15}
+        emissive={emissive ?? '#000000'}
+        emissiveIntensity={emissiveIntensity}
+      />
     </instancedMesh>
   );
 }
 
-/** Chunky voxel edge blocks + neon strips forming the arena perimeter. */
+/**
+ * Platform edge + hull: flush voxel lip, white-cyan light dashes on the floor
+ * perimeter (emissive-only, no point lights), tiered hull below with corner
+ * support pillars and greebled faces, and railings along the two far edges.
+ */
 export function EdgeRim({ width, height }: { width: number; height: number }) {
   const rim = React.useMemo(() => buildRim(width, height), [width, height]);
-  const blocksRef = React.useRef<THREE.InstancedMesh>(null);
+  const cx = width / 2;
+  const cz = height / 2;
 
-  React.useLayoutEffect(() => {
-    const mesh = blocksRef.current;
-    if (!mesh) return;
-    const m = new THREE.Matrix4();
-    const c = new THREE.Color();
-    const base = new THREE.Color(RIM_BLOCK);
-    rim.blocks.forEach((b, i) => {
-      m.identity().setPosition(...b.pos);
-      mesh.setMatrixAt(i, m);
-      mesh.setColorAt(i, c.copy(base).multiplyScalar(b.tint));
-    });
-    mesh.count = rim.blocks.length;
-    mesh.instanceMatrix.needsUpdate = true;
-    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
-  }, [rim]);
+  const lipItems = React.useMemo(
+    () => rim.lip.map(b => ({ m: new THREE.Matrix4().setPosition(...b.pos), tint: b.tint })),
+    [rim],
+  );
+  const stripItems = React.useMemo(() => rim.strips.map(m => ({ m })), [rim]);
+  const greebleItems = React.useMemo(
+    () => rim.greebles.map(g => ({
+      m: new THREE.Matrix4()
+        .makeScale(g.scale[0] * 10, g.scale[1] * 10, g.scale[2] * 10)
+        .setPosition(...g.pos),
+    })),
+    [rim],
+  );
+  const postItems = React.useMemo(
+    () => rim.posts.map(p => ({ m: new THREE.Matrix4().setPosition(...p) })),
+    [rim],
+  );
 
   return (
     <>
-      <instancedMesh
-        key={rim.blocks.length}
-        ref={blocksRef}
-        args={[undefined, undefined, Math.max(1, rim.blocks.length)]}
-        castShadow
-        receiveShadow
-        frustumCulled={false}
-      >
-        <boxGeometry args={[1, 1, 1]} />
-        <meshStandardMaterial color="#ffffff" flatShading roughness={0.85} metalness={0.15} />
-      </instancedMesh>
-      <StripMesh matrices={rim.cyanStrips} color={NEON_CYAN} />
-      <StripMesh matrices={rim.pinkStrips} color={NEON_PINK} />
+      <InstancedSet items={lipItems} color={RIM_BLOCK} geo={[1, 0.9, 1]} castShadow />
+      <InstancedSet
+        items={stripItems}
+        color="#000000"
+        emissive="#d6fbff"
+        emissiveIntensity={6}
+        geo={[0.55, 0.03, 0.05]}
+      />
+      {/* greebles: base box 0.1³ scaled per instance */}
+      <InstancedSet items={greebleItems} color="#232838" geo={[0.1, 0.1, 0.1]} />
+      <InstancedSet items={postItems} color="#333b4e" geo={[0.045, 0.36, 0.045]} />
+      {/* Railing bars along the far edges */}
+      <mesh position={[cx, 0.37, 0.06]}>
+        <boxGeometry args={[width, 0.035, 0.035]} />
+        <meshStandardMaterial color="#3a4356" roughness={0.5} metalness={0.5} />
+      </mesh>
+      <mesh position={[0.06, 0.37, cz]}>
+        <boxGeometry args={[0.035, 0.035, height]} />
+        <meshStandardMaterial color="#3a4356" roughness={0.5} metalness={0.5} />
+      </mesh>
+      {/* Hull: tiered underside + corner support pillars */}
+      <mesh position={[cx, -0.78, cz]}>
+        <boxGeometry args={[width + 2, 1.25, height + 2]} />
+        <meshStandardMaterial color="#141824" flatShading roughness={0.9} metalness={0.1} />
+      </mesh>
+      <mesh position={[cx, -1.75, cz]}>
+        <boxGeometry args={[width - 1, 1.0, height - 1]} />
+        <meshStandardMaterial color="#10131c" flatShading roughness={0.9} metalness={0.1} />
+      </mesh>
+      {[[0.8, 0.8], [width - 0.8, 0.8], [0.8, height - 0.8], [width - 0.8, height - 0.8]].map(([px, pz], i) => (
+        <mesh key={i} position={[px, -2.6, pz]}>
+          <boxGeometry args={[0.7, 2.6, 0.7]} />
+          <meshStandardMaterial color="#171b28" flatShading roughness={0.9} metalness={0.1} />
+        </mesh>
+      ))}
     </>
   );
 }

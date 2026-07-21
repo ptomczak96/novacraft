@@ -81,8 +81,149 @@ export function makeFloorRoughnessTexture(size = 512, seed = 1337): THREE.Canvas
   return tex;
 }
 
+function mulberry(seed: number): () => number {
+  let s = seed >>> 0;
+  return () => {
+    s = (s + 0x6d2b79f5) >>> 0;
+    let t = Math.imul(s ^ (s >>> 15), 1 | s);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
 /**
- * "City window" emissive texture for the background billboards: random lit/unlit
+ * Arena floor as worn metal plates, one plate per tile: dark seams between
+ * plates, bevel highlights, per-plate tint variation, scratches and stains.
+ * Baked into the reflector's albedo + roughness maps so the "chunky tile slab"
+ * look coexists with planar reflections (seams rough, plate centres smoother,
+ * ~10% puddle blobs near-mirror). UVs map 1:1 onto the arena plane.
+ */
+export function makeFloorPlateTextures(
+  widthTiles: number,
+  heightTiles: number,
+  seed = 99,
+): { albedo: THREE.CanvasTexture; roughness: THREE.CanvasTexture } {
+  const PX = 64;
+  const W = widthTiles * PX;
+  const H = heightTiles * PX;
+  const rnd = mulberry(seed);
+
+  const alb = document.createElement('canvas');
+  alb.width = W; alb.height = H;
+  const a = alb.getContext('2d')!;
+  const rgh = document.createElement('canvas');
+  rgh.width = W; rgh.height = H;
+  const r = rgh.getContext('2d')!;
+
+  // Seam base fills the whole sheet; plates are drawn inset on top.
+  a.fillStyle = '#0a0c13';
+  a.fillRect(0, 0, W, H);
+  r.fillStyle = 'rgb(235,235,235)'; // seams: high roughness
+  r.fillRect(0, 0, W, H);
+
+  const PLATES = ['#1b2130', '#1e2434', '#202839', '#242c40', '#1a202e', '#222637'];
+  const SEAM = 2;
+  for (let ty = 0; ty < heightTiles; ty++) {
+    for (let tx = 0; tx < widthTiles; tx++) {
+      const x0 = tx * PX + SEAM, y0 = ty * PX + SEAM, sz = PX - SEAM * 2;
+      a.fillStyle = PLATES[Math.floor(rnd() * PLATES.length)];
+      a.fillRect(x0, y0, sz, sz);
+      // Bevel: light catch on top/left, shade on bottom/right.
+      a.fillStyle = 'rgba(255,255,255,0.07)';
+      a.fillRect(x0, y0, sz, 2);
+      a.fillRect(x0, y0, 2, sz);
+      a.fillStyle = 'rgba(0,0,0,0.35)';
+      a.fillRect(x0, y0 + sz - 2, sz, 2);
+      a.fillRect(x0 + sz - 2, y0, 2, sz);
+      // Wear: speckles.
+      for (let i = 0; i < 26; i++) {
+        a.fillStyle = rnd() < 0.5 ? 'rgba(0,0,0,0.22)' : 'rgba(255,255,255,0.05)';
+        a.fillRect(x0 + rnd() * sz, y0 + rnd() * sz, 1 + rnd() * 2, 1 + rnd() * 2);
+      }
+      // Occasional stain / scorch blob (kept subtle — heavy ones read as holes).
+      if (rnd() < 0.15) {
+        const gx = x0 + rnd() * sz, gy = y0 + rnd() * sz, gr = 6 + rnd() * 12;
+        const g = a.createRadialGradient(gx, gy, 1, gx, gy, gr);
+        g.addColorStop(0, 'rgba(5,6,10,0.28)');
+        g.addColorStop(1, 'rgba(5,6,10,0)');
+        a.fillStyle = g;
+        a.fillRect(gx - gr, gy - gr, gr * 2, gr * 2);
+      }
+      // Roughness: plate body mid-rough with jitter.
+      const base = 150 + Math.floor(rnd() * 50);
+      r.fillStyle = `rgb(${base},${base},${base})`;
+      r.fillRect(x0, y0, sz, sz);
+    }
+  }
+  // Puddles: soft near-zero-roughness blobs over ~10% of the floor.
+  const blobCount = Math.round(widthTiles * heightTiles * 0.28);
+  for (let i = 0; i < blobCount; i++) {
+    const gx = rnd() * W, gy = rnd() * H, gr = PX * (0.3 + rnd() * 0.6);
+    const g = r.createRadialGradient(gx, gy, 1, gx, gy, gr);
+    g.addColorStop(0, 'rgba(12,12,12,0.95)');
+    g.addColorStop(0.7, 'rgba(12,12,12,0.75)');
+    g.addColorStop(1, 'rgba(12,12,12,0)');
+    r.fillStyle = g;
+    r.fillRect(gx - gr, gy - gr, gr * 2, gr * 2);
+  }
+
+  const albedo = new THREE.CanvasTexture(alb);
+  albedo.colorSpace = THREE.SRGBColorSpace;
+  albedo.anisotropy = 4;
+  const roughness = new THREE.CanvasTexture(rgh);
+  return { albedo, roughness };
+}
+
+export type SignPalette = 'pink' | 'cyan' | 'orange' | 'purple';
+
+const SIGN_COLORS: Record<SignPalette, string> = {
+  pink: '#ff2d95',
+  cyan: '#33f0ff',
+  orange: '#ffb163',
+  purple: '#c07bff',
+};
+
+/**
+ * Vertical neon sign: bright frame + rows of blocky glyph-like strokes
+ * (reads as CJK signage at game distance without shipping a font).
+ */
+export function makeNeonSignTexture(seed: number, palette: SignPalette): THREE.CanvasTexture {
+  const W = 96, H = 256;
+  const rnd = mulberry(seed);
+  const canvas = document.createElement('canvas');
+  canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext('2d')!;
+  const col = SIGN_COLORS[palette];
+  ctx.fillStyle = '#0b0714';
+  ctx.fillRect(0, 0, W, H);
+  ctx.strokeStyle = col;
+  ctx.lineWidth = 5;
+  ctx.strokeRect(6, 6, W - 12, H - 12);
+  // Glyph rows.
+  const rows = 4 + Math.floor(rnd() * 2);
+  const cell = (H - 40) / rows;
+  for (let i = 0; i < rows; i++) {
+    const cy = 24 + i * cell + cell / 2;
+    const strokes = 3 + Math.floor(rnd() * 4);
+    ctx.strokeStyle = col;
+    ctx.lineWidth = 6;
+    ctx.lineCap = 'round';
+    for (let s = 0; s < strokes; s++) {
+      const x1 = 22 + rnd() * (W - 44), y1 = cy - cell * 0.28 + rnd() * cell * 0.56;
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      if (rnd() < 0.5) ctx.lineTo(x1 + 10 + rnd() * (W - 44 - x1 + 10), y1);
+      else ctx.lineTo(x1, Math.min(cy + cell * 0.3, y1 + 8 + rnd() * cell * 0.4));
+      ctx.stroke();
+    }
+  }
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+/**
+ * "City window" emissive texture for the background towers: random lit/unlit
  * window rects in warm and cool tones on near-black towers.
  */
 export function makeCityWindowTexture(width = 256, height = 512, seed = 4242): THREE.CanvasTexture {

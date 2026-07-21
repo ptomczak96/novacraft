@@ -3,7 +3,8 @@ import React from 'react';
 import { Canvas } from '@react-three/fiber';
 import type { VoxelArenaProps } from './types.js';
 import { BACKGROUND_COLOR, FOG_COLOR } from './palette.js';
-import { CityCards, Rain, FogClouds, DustMotes, FrameStats } from './Atmosphere.js';
+import { CityBlocks, Rain, FogClouds, DustMotes, FrameStats } from './Atmosphere.js';
+import { Signage } from './Signage.js';
 import { CameraRig } from './CameraRig.js';
 import { Lights } from './Lights.js';
 import { Floor } from './Floor.js';
@@ -34,7 +35,7 @@ export function VoxelArena({
     const camDist = d * Math.sqrt(1 + 0.82 * 0.82 + 1);
     const diag = Math.hypot(map.width, map.height);
     const near = camDist + diag * 0.55;
-    return [near, near + 55];
+    return [near, near + 38];
   }, [map.width, map.height]);
 
   return (
@@ -69,7 +70,8 @@ export function VoxelArena({
       <FogClouds map={map} visibility={visibility} />
       {quality === 'high' && (
         <>
-          <CityCards width={map.width} height={map.height} />
+          <CityBlocks width={map.width} height={map.height} />
+          <Signage width={map.width} height={map.height} />
           <Rain width={map.width} height={map.height} />
           <DustMotes width={map.width} height={map.height} />
         </>
