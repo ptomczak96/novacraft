@@ -23,6 +23,6 @@ export const HIGHLIGHT_COLORS = {
 /** Team colours by player index — vivid, made to read against the dark floor. */
 export const TEAM_COLORS = ['#33f0ff', '#ff2d95'] as const;
 
-export const AMBIENT_COLOR = '#5a4a8a';
+export const AMBIENT_COLOR = '#4a3a6b';
 export const KEY_LIGHT_COLOR = '#cfd8ff';
 export const CORNER_LIGHT_COLOR = '#ff2d95';

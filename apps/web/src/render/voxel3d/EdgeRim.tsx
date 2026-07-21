@@ -170,7 +170,7 @@ export function EdgeRim({ width, height, theme = 'city' }: {
       <InstancedSet
         items={stripItems}
         color="#000000"
-        emissive={theme === 'desert' ? '#ffd9a0' : '#e6fdff'}
+        emissive={'#bfe8ff'}
         emissiveIntensity={7}
         geo={[0.55, 0.03, 0.05]}
       />

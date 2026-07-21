@@ -1,19 +1,40 @@
 import * as THREE from 'three';
 import React from 'react';
 import type { ArenaTheme } from './types.js';
-import { AMBIENT_COLOR, KEY_LIGHT_COLOR, CORNER_LIGHT_COLOR } from './palette.js';
+import { AMBIENT_COLOR, KEY_LIGHT_COLOR, NEON_CYAN, NEON_PINK } from './palette.js';
+
+interface BounceLight {
+  /** Position: x/z as fractions of arena width/height, y in world units. */
+  pos: [number, number, number];
+  color: string;
+  intensity: number;
+  distance: number;
+}
 
 /**
- * Exactly three lights — the neon edge strips are emissive-only and get NO
- * point lights:
- *  1. violet ambient fill
- *  2. cool key directional from screen upper-left, casting the unit shadows
- *  3. one pink point light off-arena above a corner for a magenta wash
+ * Coloured "bounce fills": emissive signage can't light the world in a
+ * rasterizer, so shadowless point lights fake the neon spill — local pools on
+ * the floor near each signage cluster, colour-matched to the nearest sign.
+ * Authored as data so they can become per-map later. Max 2 warm; the rest
+ * magenta/cyan. Low tier renders only the first 3.
  */
-export function Lights({ width, height, theme = 'city' }: {
+const BOUNCE_LIGHTS: BounceLight[] = [
+  { pos: [0.18, 0.8, 1.02], color: NEON_PINK, intensity: 14, distance: 6 },    // south hull signs
+  { pos: [0.82, 0.8, 1.02], color: NEON_CYAN, intensity: 14, distance: 6 },
+  { pos: [1.02, 0.8, 0.3], color: NEON_PINK, intensity: 12, distance: 6 },     // east hull signs
+  { pos: [1.02, 0.8, 0.72], color: NEON_CYAN, intensity: 12, distance: 6 },
+  { pos: [-0.05, 0.9, 0.35], color: '#ffb347', intensity: 11, distance: 5.5 }, // amber skyline board
+];
+
+/**
+ * Lighting: 1 cool ambient + 1 shadowed key directional + ≤6 shadowless
+ * bounce fills (the neon-spill pools). No per-strip lights.
+ */
+export function Lights({ width, height, theme = 'city', quality = 'high' }: {
   width: number;
   height: number;
   theme?: ArenaTheme;
+  quality?: 'high' | 'low';
 }) {
   const cx = width / 2;
   const cz = height / 2;
@@ -36,12 +57,12 @@ export function Lights({ width, height, theme = 'city' }: {
     cam.updateProjectionMatrix();
   }, [cx, cz, ext]);
 
+  const fills = quality === 'high' ? BOUNCE_LIGHTS : BOUNCE_LIGHTS.slice(0, 3);
+
   return (
     <>
-      {/* Intensities sit above the spec'd legacy values (0.5 / 1.1) because
-          three r155+ physically-based lighting + ACES render those too dark. */}
-      {/* Desert: warm dusk key + orange corner glow; city: cool key + magenta. */}
-      <ambientLight color={theme === 'desert' ? '#6d5270' : AMBIENT_COLOR} intensity={0.3} />
+      {/* Deliberately dark: unlit floor should approach black on screen. */}
+      <ambientLight color={theme === 'desert' ? '#5a4460' : AMBIENT_COLOR} intensity={0.25} />
       <directionalLight
         ref={dirRef}
         color={theme === 'desert' ? '#ffd9b0' : KEY_LIGHT_COLOR}
@@ -52,14 +73,16 @@ export function Lights({ width, height, theme = 'city' }: {
         shadow-bias={-0.0004}
         shadow-normalBias={0.02}
       />
-      {/* Physically-based point intensity (three r155+): ≈ the classic 0.6 at
-          the ~10-unit range that matters, with distance-30 cutoff. */}
-      <pointLight
-        color={theme === 'desert' ? '#ff8f3a' : CORNER_LIGHT_COLOR}
-        intensity={60}
-        distance={30}
-        position={[-2, 6, -2]}
-      />
+      {fills.map((f, i) => (
+        <pointLight
+          key={i}
+          color={f.color}
+          intensity={f.intensity}
+          distance={f.distance}
+          decay={2}
+          position={[f.pos[0] * width, f.pos[1], f.pos[2] * height]}
+        />
+      ))}
     </>
   );
 }
