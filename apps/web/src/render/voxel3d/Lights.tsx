@@ -33,11 +33,13 @@ export function Lights({ width, height }: { width: number; height: number }) {
 
   return (
     <>
-      <ambientLight color={AMBIENT_COLOR} intensity={0.5} />
+      {/* Intensities sit above the spec'd legacy values (0.5 / 1.1) because
+          three r155+ physically-based lighting + ACES render those too dark. */}
+      <ambientLight color={AMBIENT_COLOR} intensity={0.65} />
       <directionalLight
         ref={dirRef}
         color={KEY_LIGHT_COLOR}
-        intensity={1.1}
+        intensity={1.7}
         position={[cx - 6, 10, cz - 4]}
         castShadow
         shadow-mapSize={[1024, 1024]}

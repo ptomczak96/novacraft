@@ -2,7 +2,8 @@ import * as THREE from 'three';
 import React from 'react';
 import { Canvas } from '@react-three/fiber';
 import type { VoxelArenaProps } from './types.js';
-import { BACKGROUND_COLOR } from './palette.js';
+import { BACKGROUND_COLOR, FOG_COLOR } from './palette.js';
+import { CityCards, Rain, FrameStats } from './Atmosphere.js';
 import { CameraRig } from './CameraRig.js';
 import { Lights } from './Lights.js';
 import { Floor } from './Floor.js';
@@ -26,11 +27,23 @@ export function VoxelArena({
     [],
   );
 
+  // Fog tuned so the arena stays clear and the background city softens: it
+  // starts just past the arena's far edge as seen by the fixed camera.
+  const [fogNear, fogFar] = React.useMemo(() => {
+    const d = Math.max(map.width, map.height) * 1.25;
+    const camDist = d * Math.sqrt(1 + 0.82 * 0.82 + 1);
+    const diag = Math.hypot(map.width, map.height);
+    const near = camDist + diag * 0.55;
+    return [near, near + 55];
+  }, [map.width, map.height]);
+
   return (
     <Canvas
       shadows
       dpr={quality === 'low' ? [1, 1.5] : [1, 2]}
-      gl={{ antialias: true }}
+      // preserveDrawingBuffer only in dev: lets tooling read the canvas for
+      // screenshots; never enabled in production builds (costs performance).
+      gl={{ antialias: true, preserveDrawingBuffer: import.meta.env.DEV }}
       onCreated={({ gl }) => {
         gl.toneMapping = THREE.ACESFilmicToneMapping;
         gl.outputColorSpace = THREE.SRGBColorSpace;
@@ -39,6 +52,7 @@ export function VoxelArena({
       style={{ position: 'absolute', inset: 0 }}
     >
       <color attach="background" args={[BACKGROUND_COLOR]} />
+      <fog attach="fog" args={[FOG_COLOR, fogNear, fogFar]} />
       <CameraRig width={map.width} height={map.height} debugCam={debugCam} />
       <Lights width={map.width} height={map.height} />
       <Floor
@@ -52,6 +66,13 @@ export function VoxelArena({
       <TerrainBlocks map={map} visibility={visibility} />
       <Highlights highlights={highlights} />
       <Units units={units} onTileClick={onTileClick} />
+      {quality === 'high' && (
+        <>
+          <CityCards width={map.width} height={map.height} />
+          <Rain width={map.width} height={map.height} />
+        </>
+      )}
+      <FrameStats quality={quality} />
       <PostFX quality={quality} />
     </Canvas>
   );

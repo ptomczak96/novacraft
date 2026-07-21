@@ -100,9 +100,16 @@ function buildTerrain(map: MapData, visibility?: TileVisibility[][]): TerrainSet
       const cx = x + 0.5;
       const cz = y + 0.5;
       // Fog of war: never-seen tiles are opaque cloud blocks; nothing under
-      // them is placed, so terrain can't leak through the 3D view.
+      // them is placed, so terrain can't leak through the 3D view. Height and
+      // tint jitter so the cloud layer reads as clouds, not as black floor.
       if (visibility && visibility[y]?.[x] === 'hidden') {
-        s.fogCloud.push({ pos: [cx, 0.16, cz], scale: [0.98, 0.32, 0.98] });
+        const j = ((x * 11 + y * 17) % 7) / 7;
+        const lum = 0.85 + j * 0.5;
+        s.fogCloud.push({
+          pos: [cx, 0.18 + j * 0.08, cz],
+          scale: [0.99, 0.36 + j * 0.16, 0.99],
+          color: `rgb(${Math.round(30 * lum)}, ${Math.round(35 * lum)}, ${Math.round(56 * lum)})`,
+        });
         continue;
       }
       const jitter = ((x * 7 + y * 13) % 5) / 5 - 0.4; // deterministic ±0.4 variation
@@ -155,10 +162,10 @@ export function TerrainBlocks({ map, visibility }: {
   const sets = React.useMemo(() => buildTerrain(map, visibility), [map, visibility]);
   return (
     <>
-      <Blocks instances={sets.mountainBase} color="#39415a" />
-      <Blocks instances={sets.mountainPeak} color="#4a5470" />
-      <Blocks instances={sets.forestTrunk} color="#2a2333" />
-      <Blocks instances={sets.forestCanopy} color="#1f4d3a" />
+      <Blocks instances={sets.mountainBase} color="#454f6b" />
+      <Blocks instances={sets.mountainPeak} color="#57627e" />
+      <Blocks instances={sets.forestTrunk} color="#33293f" />
+      <Blocks instances={sets.forestCanopy} color="#2a6b4f" />
       <Blocks instances={sets.waterPane} color="#1e3a5f" opacity={0.65} castShadow={false} />
       <Blocks instances={sets.lavaPane} color="#000000" emissive="#ff5a1f" emissiveIntensity={2.5} castShadow={false} />
       <Blocks instances={sets.oreCrystal} color="#000000" emissive="#ffb84d" emissiveIntensity={3} />
@@ -174,7 +181,7 @@ export function TerrainBlocks({ map, visibility }: {
           <meshStandardMaterial color="#000000" emissive={b.color} emissiveIntensity={3} />
         </mesh>
       ))}
-      <Blocks instances={sets.fogCloud} color="#0b0d16" castShadow={false} />
+      <Blocks instances={sets.fogCloud} color="#ffffff" castShadow={false} />
     </>
   );
 }

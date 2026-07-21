@@ -2,6 +2,7 @@ import React from 'react';
 import type { Action } from '@tactica/engine';
 import { useGameStore } from '../../store/gameStore.js';
 import { VoxelArena } from './VoxelArena.js';
+import { VoxelErrorBoundary } from './VoxelErrorBoundary.js';
 import type { Facing, TileHighlight, UnitView } from './types.js';
 import { TEAM_COLORS } from './palette.js';
 
@@ -138,14 +139,16 @@ export function VoxelMapView() {
 
   return (
     <div style={{ position: 'absolute', inset: 0 }}>
-      <VoxelArena
-        map={visibleState.map}
-        units={unitViews}
-        highlights={highlights}
-        quality={quality}
-        onTileClick={onTileClick}
-        visibility={visibleState.visibility}
-      />
+      <VoxelErrorBoundary>
+        <VoxelArena
+          map={visibleState.map}
+          units={unitViews}
+          highlights={highlights}
+          quality={quality}
+          onTileClick={onTileClick}
+          visibility={visibleState.visibility}
+        />
+      </VoxelErrorBoundary>
     </div>
   );
 }

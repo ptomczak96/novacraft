@@ -23,9 +23,9 @@ export interface UnitDef {
   parts: UnitPartDef[];
 }
 
-const GUNMETAL = '#3a4152';
-const DARK = '#232838';
-const JOINT = '#161a26';
+const GUNMETAL = '#57627a';
+const DARK = '#39415a';
+const JOINT = '#232838';
 
 /** Standard infantry silhouette: legs, torso, head with emissive visor, rifle. */
 const TROOPER: UnitDef = {
