@@ -3,6 +3,7 @@ import React from 'react';
 import { useLoader, type ThreeEvent } from '@react-three/fiber';
 import { MeshReflectorMaterial } from '@react-three/drei';
 import type { FloorTextures } from './types.js';
+import type { CameraInteraction } from './CameraRig.js';
 import { GRID_LINE, GRID_LINE_BRIGHT } from './palette.js';
 import { LAYER_NO_REFLECT } from './layers.js';
 import { makeFloorPlateTextures } from './proceduralTextures.js';
@@ -12,12 +13,13 @@ import { makeFloorPlateTextures } from './proceduralTextures.js';
  * 1×1 world units, tile (x,y) centered at (x+0.5, 0, y+0.5), so the plane spans
  * [0..width]×[0..height]. Clicks raycast this plane and floor() to grid coords.
  */
-export function Floor({ width, height, quality, floorTextures, onTileClick }: {
+export function Floor({ width, height, quality, floorTextures, onTileClick, interaction }: {
   width: number;
   height: number;
   quality: 'high' | 'low';
   floorTextures?: FloorTextures;
   onTileClick?: (x: number, y: number) => void;
+  interaction?: React.MutableRefObject<CameraInteraction>;
 }) {
   // Worn metal plates, one per tile, baked into albedo+roughness (1:1 UV over
   // the arena). Hand-authored maps via floorTextures take precedence.
@@ -39,11 +41,12 @@ export function Floor({ width, height, quality, floorTextures, onTileClick }: {
 
   const handleClick = React.useCallback((e: ThreeEvent<MouseEvent>) => {
     if (!onTileClick) return;
+    if (interaction?.current.suppressClick) return; // release of a grab-pan
     e.stopPropagation();
     const x = Math.min(width - 1, Math.max(0, Math.floor(e.point.x)));
     const y = Math.min(height - 1, Math.max(0, Math.floor(e.point.z)));
     onTileClick(x, y);
-  }, [onTileClick, width, height]);
+  }, [onTileClick, width, height, interaction]);
 
   return (
     <>

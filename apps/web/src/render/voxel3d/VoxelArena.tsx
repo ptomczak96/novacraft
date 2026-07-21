@@ -6,7 +6,7 @@ import type { VoxelArenaProps } from './types.js';
 import { BACKGROUND_COLOR, FOG_COLOR } from './palette.js';
 import { CityBlocks, Rain, FogClouds, DustMotes, FrameStats } from './Atmosphere.js';
 import { Signage } from './Signage.js';
-import { CameraRig } from './CameraRig.js';
+import { CameraRig, type CameraInteraction } from './CameraRig.js';
 import { Lights } from './Lights.js';
 import { Floor } from './Floor.js';
 import { EdgeRim } from './EdgeRim.js';
@@ -28,6 +28,9 @@ export function VoxelArena({
     () => new URLSearchParams(window.location.search).get('debugCam') === '1',
     [],
   );
+
+  // Shared with CameraRig: a grab-pan drag must not fire a tile click on release.
+  const interaction = React.useRef<CameraInteraction>({ suppressClick: false });
 
   // Fog tuned so the arena stays clear and the background city softens: it
   // starts just past the arena's far edge as seen by the fixed camera.
@@ -55,7 +58,7 @@ export function VoxelArena({
     >
       <color attach="background" args={[BACKGROUND_COLOR]} />
       <fog attach="fog" args={[FOG_COLOR, fogNear, fogFar]} />
-      <CameraRig width={map.width} height={map.height} debugCam={debugCam} />
+      <CameraRig width={map.width} height={map.height} debugCam={debugCam} interaction={interaction} />
       <Lights width={map.width} height={map.height} />
       <React.Suspense fallback={null}>
         <Floor
@@ -64,12 +67,13 @@ export function VoxelArena({
           quality={quality}
           floorTextures={floorTextures}
           onTileClick={onTileClick}
+          interaction={interaction}
         />
       </React.Suspense>
       <EdgeRim width={map.width} height={map.height} />
       <TerrainBlocks map={map} visibility={visibility} />
       <Highlights highlights={highlights} />
-      <Units units={units} onTileClick={onTileClick} />
+      <Units units={units} onTileClick={onTileClick} interaction={interaction} />
       <FogClouds map={map} visibility={visibility} />
       {quality === 'high' && (
         <>

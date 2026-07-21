@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import React from 'react';
 import { useFrame } from '@react-three/fiber';
 import type { Facing, UnitView } from './types.js';
+import type { CameraInteraction } from './CameraRig.js';
 import { defForKind, isHeavyKind } from './units/unitDefs.js';
 import { buildUnit, disposeUnit } from './units/buildUnit.js';
 import { GltfUnit } from './units/GltfUnit.js';
@@ -24,9 +25,10 @@ function BoxUnit({ unit }: { unit: UnitView }) {
   return <primitive object={model} />;
 }
 
-function UnitMesh({ unit, onTileClick }: {
+function UnitMesh({ unit, onTileClick, interaction }: {
   unit: UnitView;
   onTileClick?: (x: number, y: number) => void;
+  interaction?: React.MutableRefObject<CameraInteraction>;
 }) {
   const bobRef = React.useRef<THREE.Group>(null);
   // Human-scale kinds use the vendored Kenney glTF characters; heavies keep
@@ -60,6 +62,7 @@ function UnitMesh({ unit, onTileClick }: {
             visible={false}
             position={[0, 0.4, 0]}
             onClick={e => {
+              if (interaction?.current.suppressClick) return; // grab-pan release
               e.stopPropagation();
               onTileClick(unit.gridPos.x, unit.gridPos.y);
             }}
@@ -72,13 +75,16 @@ function UnitMesh({ unit, onTileClick }: {
   );
 }
 
-export function Units({ units, onTileClick }: {
+export function Units({ units, onTileClick, interaction }: {
   units: UnitView[];
   onTileClick?: (x: number, y: number) => void;
+  interaction?: React.MutableRefObject<CameraInteraction>;
 }) {
   return (
     <>
-      {units.map(u => <UnitMesh key={u.id} unit={u} onTileClick={onTileClick} />)}
+      {units.map(u => (
+        <UnitMesh key={u.id} unit={u} onTileClick={onTileClick} interaction={interaction} />
+      ))}
     </>
   );
 }
