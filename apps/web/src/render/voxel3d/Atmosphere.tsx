@@ -162,9 +162,15 @@ export function FogClouds({ map, visibility }: {
     return out;
   }, [map, visibility]);
 
-  React.useLayoutEffect(() => {
-    groupRef.current?.traverse(o => o.layers.set(LAYER_NO_REFLECT));
-  }, [tiles.length]);
+  // drei Clouds mounts its mesh only after the sprite texture resolves — a
+  // one-shot mount effect misses it and the clouds leak into the floor
+  // reflection (dark cloud silhouettes stamped on the mirror). Re-assert the
+  // layer every frame; the traverse is a few dozen nodes, negligible.
+  useFrame(() => {
+    groupRef.current?.traverse(o => {
+      if (o.layers.mask !== 1 << LAYER_NO_REFLECT) o.layers.set(LAYER_NO_REFLECT);
+    });
+  });
 
   if (tiles.length === 0) return null;
   return (
@@ -180,14 +186,14 @@ export function FogClouds({ map, visibility }: {
             key={`${t.x},${t.y}`}
             seed={t.x * 31 + t.y}
             segments={4}
-            bounds={[0.34, 0.16, 0.34]}
-            volume={0.6}
-            growth={0.2}
-            speed={0.08}
-            opacity={0.9}
+            bounds={[0.46, 0.16, 0.46]}
+            volume={0.8}
+            growth={0.12}
+            speed={0.06}
+            opacity={0.72}
             fade={0}
-            color="#454f6e"
-            position={[t.x + 0.5, 0.3, t.y + 0.5]}
+            color="#525d80"
+            position={[t.x + 0.5, 0.28, t.y + 0.5]}
           />
         ))}
       </Clouds>
