@@ -1,7 +1,6 @@
 import React from 'react';
 import {
   EffectComposer, N8AO, Bloom, HueSaturation, BrightnessContrast, Vignette, Noise,
-  Pixelation,
 } from '@react-three/postprocessing';
 
 /**
@@ -11,16 +10,6 @@ import {
  * Low quality: no AO, bloom at half resolution, film noise dropped.
  */
 export function PostFX({ quality }: { quality: 'high' | 'low' }) {
-  // Fat-pixel pass, last in the chain, so bloom/grade/neon all land on the
-  // same chunky pixel grid — the reference frame's pixel-art look.
-  // Granularity is in device pixels; override with ?pixel=N, disable ?pixel=0.
-  const granularity = React.useMemo(() => {
-    const raw = new URLSearchParams(window.location.search).get('pixel');
-    if (raw === null) return 5;
-    const n = Number(raw);
-    return Number.isFinite(n) && n >= 0 ? n : 5;
-  }, []);
-
   return (
     <EffectComposer multisampling={quality === 'high' ? 4 : 0}>
       {quality === 'high' ? (
@@ -40,7 +29,6 @@ export function PostFX({ quality }: { quality: 'high' | 'low' }) {
       <BrightnessContrast brightness={0} contrast={0.06} />
       <Vignette offset={0.25} darkness={0.65} />
       {quality === 'high' ? <Noise opacity={0.022} /> : <></>}
-      {granularity >= 2 ? <Pixelation granularity={granularity} /> : <></>}
     </EffectComposer>
   );
 }
