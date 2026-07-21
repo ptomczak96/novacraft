@@ -60,13 +60,16 @@ export function Floor({ width, height, quality, floorTextures, onTileClick, inte
       >
         <planeGeometry args={[width, height]} />
         <MeshReflectorMaterial
-          blur={[300, 100]}
+          // blur kept moderate so reflected strips/units stay identifiable;
+          // the roughnessMap modulates blurFactor per-pixel (puddles sharp,
+          // grime fully blurred — drei's shader multiplies roughness × map.g).
+          blur={[200, 80]}
           resolution={quality === 'high' ? 1024 : 512}
-          mixBlur={1}
-          mixStrength={2}
+          mixBlur={1.6}
+          mixStrength={4}
           roughness={0.7}
-          metalness={theme === 'desert' ? 0.12 : 0.4}
-          mirror={0.5}
+          metalness={theme === 'desert' ? 0.1 : 0.2}
+          mirror={0.7}
           depthScale={1.2}
           minDepthThreshold={0.4}
           maxDepthThreshold={1.4}
