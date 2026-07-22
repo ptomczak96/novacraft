@@ -77,8 +77,6 @@ interface TerrainSets {
   mountainPeak: BlockInstance[];
   forestCanopy: BlockInstance[];
   forestTrunk: BlockInstance[];
-  waterPane: BlockInstance[];
-  lavaPane: BlockInstance[];
   oreCrystal: BlockInstance[];
   plasmaCrystal: BlockInstance[];
   orePatch: BlockInstance[];
@@ -92,7 +90,7 @@ interface TerrainSets {
 function buildTerrain(map: MapData, visibility: TileVisibility[][] | undefined, desert: boolean): TerrainSets {
   const s: TerrainSets = {
     mountainBase: [], mountainPeak: [], forestCanopy: [], forestTrunk: [],
-    waterPane: [], lavaPane: [], oreCrystal: [], plasmaCrystal: [],
+    oreCrystal: [], plasmaCrystal: [],
     orePatch: [], plasmaPatch: [],
     ruinPillar: [], cityBase: [], cityTower: [], cityWindow: [],
   };
@@ -120,43 +118,26 @@ function buildTerrain(map: MapData, visibility: TileVisibility[][] | undefined, 
       } else if (tile.terrain === 'mountain') {
         // A low cluster of rocks, not a tile-filling monolith — units (0.7
         // tall) should still dominate the silhouette.
-        s.mountainBase.push({ pos: [cx - 0.18, 0.16, cz - 0.12], scale: [0.55, 0.32, 0.55], rotY: jitter * 0.4 });
-        s.mountainBase.push({ pos: [cx + 0.24, 0.1, cz - 0.24], scale: [0.32, 0.2, 0.32], rotY: -jitter * 0.6 });
-        s.mountainPeak.push({
-          pos: [cx - 0.15 + jitter * 0.08, 0.4, cz - 0.14],
-          scale: [0.3, 0.18, 0.3],
-          rotY: jitter * 0.5,
-        });
+        // One clean raised block — simple SC1-style high ground.
+        s.mountainBase.push({ pos: [cx - 0.12, 0.16, cz - 0.12], scale: [0.56, 0.32, 0.56] });
+        s.mountainPeak.push({ pos: [cx - 0.12, 0.38, cz - 0.12], scale: [0.4, 0.12, 0.4] });
       } else if (tile.terrain === 'forest') {
         if (desert) {
-          // Oasis scrub: a slim saguaro (trunk + two arms) and a small bush.
-          s.forestTrunk.push({ pos: [cx - 0.22, 0.26, cz - 0.18], scale: [0.14, 0.52, 0.14], rotY: jitter * 0.3 });
-          s.forestTrunk.push({ pos: [cx - 0.39, 0.34, cz - 0.18], scale: [0.08, 0.2, 0.08] });
-          s.forestTrunk.push({ pos: [cx - 0.05, 0.28, cz - 0.18], scale: [0.08, 0.16, 0.08] });
-          s.forestTrunk.push({ pos: [cx - 0.35, 0.26, cz - 0.18], scale: [0.1, 0.07, 0.07] });
-          s.forestTrunk.push({ pos: [cx - 0.09, 0.22, cz - 0.18], scale: [0.1, 0.07, 0.07] });
-          s.forestCanopy.push({ pos: [cx + 0.26, 0.07, cz - 0.26], scale: [0.2, 0.14, 0.2], rotY: jitter });
+          // Simple saguaro: trunk + two arms.
+          s.forestTrunk.push({ pos: [cx - 0.18, 0.24, cz - 0.16], scale: [0.13, 0.48, 0.13] });
+          s.forestTrunk.push({ pos: [cx - 0.32, 0.3, cz - 0.16], scale: [0.08, 0.18, 0.08] });
+          s.forestTrunk.push({ pos: [cx - 0.04, 0.26, cz - 0.16], scale: [0.08, 0.14, 0.08] });
         } else {
-          // Two small trees + a bush per tile instead of one huge cube.
-          s.forestTrunk.push({ pos: [cx - 0.24, 0.09, cz - 0.14], scale: [0.07, 0.18, 0.07] });
+          // One simple tree: trunk + canopy cube.
+          s.forestTrunk.push({ pos: [cx - 0.16, 0.1, cz - 0.14], scale: [0.07, 0.2, 0.07] });
           s.forestCanopy.push({
-            pos: [cx - 0.24, 0.3 + jitter * 0.04, cz - 0.14],
-            scale: [0.3, 0.26, 0.3],
+            pos: [cx - 0.16, 0.34, cz - 0.14],
+            scale: [0.28, 0.26, 0.28],
             rotY: jitter,
           });
-          s.forestTrunk.push({ pos: [cx + 0.2, 0.07, cz - 0.16], scale: [0.06, 0.14, 0.06] });
-          s.forestCanopy.push({
-            pos: [cx + 0.2, 0.24, cz - 0.16],
-            scale: [0.24, 0.2, 0.24],
-            rotY: -jitter,
-          });
-          s.forestCanopy.push({ pos: [cx + 0.05, 0.07, cz + 0.3], scale: [0.14, 0.12, 0.14], rotY: jitter * 2 });
         }
-      } else if (tile.terrain === 'water' || tile.terrain === 'river') {
-        s.waterPane.push({ pos: [cx, 0.02, cz], scale: [0.92, 0.03, 0.92] });
-      } else if (tile.terrain === 'lava') {
-        s.lavaPane.push({ pos: [cx, 0.02, cz], scale: [0.92, 0.03, 0.92] });
       }
+      // water/lava render as holes in the platform (see Floor holes) — no props.
 
       if (tile.isRuin) {
         s.ruinPillar.push({ pos: [cx + 0.18, 0.18, cz - 0.15], scale: [0.18, 0.36, 0.18], rotY: jitter });
@@ -196,8 +177,6 @@ export function TerrainBlocks({ map, visibility, theme = 'city' }: {
       <Blocks instances={sets.mountainPeak} color={desert ? '#7d5940' : '#57627e'} />
       <Blocks instances={sets.forestTrunk} color={desert ? '#3f7a4a' : '#33293f'} />
       <Blocks instances={sets.forestCanopy} color={desert ? '#2f5c3a' : '#2a6b4f'} />
-      <Blocks instances={sets.waterPane} color="#1e3a5f" opacity={0.65} castShadow={false} />
-      <Blocks instances={sets.lavaPane} color="#2a0d05" emissive="#ff5a1f" emissiveIntensity={1.4} castShadow={false} />
       {/* Shards: dim self-lit mineral, well under the bloom threshold. */}
       <Blocks instances={sets.oreCrystal} color="#3a2c18" emissive="#c8842e" emissiveIntensity={0.55} />
       <Blocks instances={sets.plasmaCrystal} color="#123338" emissive="#2ab8c8" emissiveIntensity={0.55} />

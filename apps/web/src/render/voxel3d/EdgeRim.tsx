@@ -13,9 +13,6 @@ function hash(i: number): number {
 
 interface RimData {
   lip: { pos: [number, number, number]; tint: number }[];
-  strips: THREE.Matrix4[];
-  greebles: { pos: [number, number, number]; scale: [number, number, number] }[];
-  posts: [number, number, number][];
 }
 
 function buildRim(width: number, height: number): RimData {
@@ -30,60 +27,7 @@ function buildRim(width: number, height: number): RimData {
     }
   }
 
-  // Double dashed light border like the reference: one dash row on the floor
-  // perimeter, a second on the lip just outside it. Emissive-only.
-  const strips: THREE.Matrix4[] = [];
-  const addStrip = (x: number, y: number, z: number, rotY: number) => {
-    strips.push(new THREE.Matrix4().makeRotationY(rotY).setPosition(x, y, z));
-  };
-  for (let x = 0; x < width; x += 2) {
-    addStrip(x + 0.5, 0.035, 0.09, 0);
-    addStrip(x + 0.5, 0.035, height - 0.09, 0);
-    if (x + 1.5 <= width) {
-      addStrip(x + 1.5, 0.085, -0.42, 0);
-      addStrip(x + 1.5, 0.085, height + 0.42, 0);
-    }
-  }
-  for (let z = 0; z < height; z += 2) {
-    addStrip(0.09, 0.035, z + 0.5, Math.PI / 2);
-    addStrip(width - 0.09, 0.035, z + 0.5, Math.PI / 2);
-    if (z + 1.5 <= height) {
-      addStrip(-0.42, 0.085, z + 1.5, Math.PI / 2);
-      addStrip(width + 0.42, 0.085, z + 1.5, Math.PI / 2);
-    }
-  }
-
-  // Greebles: vents/boxes studded on the two camera-facing hull faces, plus
-  // clutter hanging under the hull (the reference platform drips with tech).
-  const greebles: RimData['greebles'] = [];
-  const faceX = width + 1.02;
-  const faceZ = height + 1.02;
-  for (let i = 0; i < 14; i++) {
-    const w = 0.35 + hash(i * 3) * 0.6;
-    const h = 0.14 + hash(i * 3 + 1) * 0.22;
-    const y = -0.4 - hash(i * 3 + 2) * 0.85;
-    if (i % 2 === 0) {
-      greebles.push({ pos: [hash(i * 7) * (width - 1) + 0.5, y, faceZ], scale: [w, h, 0.1] });
-    } else {
-      greebles.push({ pos: [faceX, y, hash(i * 7) * (height - 1) + 0.5], scale: [0.1, h, w] });
-    }
-  }
-  for (let i = 0; i < 10; i++) {
-    const w = 0.25 + hash(i * 11) * 0.5;
-    const hgt = 0.3 + hash(i * 11 + 1) * 0.9;
-    const y = -1.5 - hash(i * 11 + 2) * 1.2;
-    if (i % 2 === 0) {
-      greebles.push({ pos: [0.8 + hash(i * 13) * (width - 1.6), y, height + 0.6 + hash(i * 17) * 0.5], scale: [w, hgt, w] });
-    } else {
-      greebles.push({ pos: [width + 0.6 + hash(i * 17) * 0.5, y, 0.8 + hash(i * 13) * (height - 1.6)], scale: [w, hgt, w] });
-    }
-  }
-
-  // Railing posts along the two far edges (screen-top in the dimetric view).
-  const posts: RimData['posts'] = [];
-  for (let x = 0.5; x < width; x += 1) posts.push([x, 0.2, 0.06]);
-  for (let z = 0.5; z < height; z += 1) posts.push([0.06, 0.2, z]);
-  return { lip, strips, greebles, posts };
+  return { lip };
 }
 
 function InstancedSet({ items, color, emissive, emissiveIntensity = 0, geo, castShadow = false }: {
@@ -133,9 +77,8 @@ function InstancedSet({ items, color, emissive, emissiveIntensity = 0, geo, cast
 }
 
 /**
- * Platform edge + hull: flush voxel lip, white-cyan light dashes on the floor
- * perimeter (emissive-only, no point lights), tiered hull below with corner
- * support pillars and greebled faces, and railings along the two far edges.
+ * Platform edge + hull, kept simple (SC1 space-platform style): flush voxel
+ * lip and a clean tiered hull with corner support pillars below. No lights.
  */
 export function EdgeRim({ width, height, theme = 'city' }: {
   width: number;
@@ -150,42 +93,10 @@ export function EdgeRim({ width, height, theme = 'city' }: {
     () => rim.lip.map(b => ({ m: new THREE.Matrix4().setPosition(...b.pos), tint: b.tint })),
     [rim],
   );
-  const stripItems = React.useMemo(() => rim.strips.map(m => ({ m })), [rim]);
-  const greebleItems = React.useMemo(
-    () => rim.greebles.map(g => ({
-      m: new THREE.Matrix4()
-        .makeScale(g.scale[0] * 10, g.scale[1] * 10, g.scale[2] * 10)
-        .setPosition(...g.pos),
-    })),
-    [rim],
-  );
-  const postItems = React.useMemo(
-    () => rim.posts.map(p => ({ m: new THREE.Matrix4().setPosition(...p) })),
-    [rim],
-  );
 
   return (
     <>
       <InstancedSet items={lipItems} color={RIM_BLOCK} geo={[1, 0.9, 1]} castShadow />
-      <InstancedSet
-        items={stripItems}
-        color="#000000"
-        emissive={'#bfe8ff'}
-        emissiveIntensity={7}
-        geo={[0.55, 0.03, 0.05]}
-      />
-      {/* greebles: base box 0.1³ scaled per instance */}
-      <InstancedSet items={greebleItems} color="#232838" geo={[0.1, 0.1, 0.1]} />
-      <InstancedSet items={postItems} color="#333b4e" geo={[0.045, 0.36, 0.045]} />
-      {/* Railing bars along the far edges */}
-      <mesh position={[cx, 0.37, 0.06]}>
-        <boxGeometry args={[width, 0.035, 0.035]} />
-        <meshStandardMaterial color="#3a4356" roughness={0.5} metalness={0.5} />
-      </mesh>
-      <mesh position={[0.06, 0.37, cz]}>
-        <boxGeometry args={[0.035, 0.035, height]} />
-        <meshStandardMaterial color="#3a4356" roughness={0.5} metalness={0.5} />
-      </mesh>
       {/* Hull: tiered underside + corner support pillars */}
       <mesh position={[cx, -0.78, cz]}>
         <boxGeometry args={[width + 2, 1.25, height + 2]} />

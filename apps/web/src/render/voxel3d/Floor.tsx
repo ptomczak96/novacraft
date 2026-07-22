@@ -13,7 +13,7 @@ import { makeFloorPlateTextures } from './proceduralTextures.js';
  * 1×1 world units, tile (x,y) centered at (x+0.5, 0, y+0.5), so the plane spans
  * [0..width]×[0..height]. Clicks raycast this plane and floor() to grid coords.
  */
-export function Floor({ width, height, quality, floorTextures, onTileClick, interaction, theme = 'city' }: {
+export function Floor({ width, height, quality, floorTextures, onTileClick, interaction, theme = 'city', holes }: {
   width: number;
   height: number;
   quality: 'high' | 'low';
@@ -21,12 +21,14 @@ export function Floor({ width, height, quality, floorTextures, onTileClick, inte
   onTileClick?: (x: number, y: number) => void;
   interaction?: React.MutableRefObject<CameraInteraction>;
   theme?: ArenaTheme;
+  /** [y][x] tiles rendered as holes in the platform (impassable terrain). */
+  holes?: boolean[][];
 }) {
-  // Worn metal plates, one per tile, baked into albedo+roughness (1:1 UV over
-  // the arena). Hand-authored maps via floorTextures take precedence.
+  // Clean platform plates, one per tile, baked into albedo+roughness (1:1 UV
+  // over the arena). Hand-authored maps via floorTextures take precedence.
   const plates = React.useMemo(
-    () => makeFloorPlateTextures(width, height, 99, theme, quality),
-    [width, height, theme, quality],
+    () => makeFloorPlateTextures(width, height, 99, theme, quality, holes),
+    [width, height, theme, quality, holes],
   );
   const albedoMap = floorTextures?.albedo ?? plates.albedo;
   const roughnessMap = floorTextures?.roughness ?? plates.roughness;
@@ -74,9 +76,12 @@ export function Floor({ width, height, quality, floorTextures, onTileClick, inte
           roughnessMap={roughnessMap}
           map={albedoMap}
           normalMap={normalMap}
+          // Impassable tiles are alpha-0 in the albedo — cut clean holes.
+          transparent
+          alphaTest={0.5}
         />
       </mesh>
-      <GridOverlay width={width} height={height} />
+      <GridOverlay width={width} height={height} holeMask={plates.holeMask} />
     </>
   );
 }
@@ -87,7 +92,11 @@ export function Floor({ width, height, quality, floorTextures, onTileClick, inte
  * Procedural shader: dim half-tile lines, brighter lines on every tile edge,
  * subtle glow falloff around the tile edges.
  */
-function GridOverlay({ width, height }: { width: number; height: number }) {
+function GridOverlay({ width, height, holeMask }: {
+  width: number;
+  height: number;
+  holeMask: THREE.Texture;
+}) {
   const meshRef = React.useRef<THREE.Mesh>(null);
   React.useLayoutEffect(() => {
     meshRef.current?.layers.set(LAYER_NO_REFLECT);
@@ -97,7 +106,8 @@ function GridOverlay({ width, height }: { width: number; height: number }) {
     uSize: { value: new THREE.Vector2(width, height) },
     uLine: { value: new THREE.Color(GRID_LINE) },
     uLineBright: { value: new THREE.Color(GRID_LINE_BRIGHT) },
-  }), [width, height]);
+    uHoles: { value: holeMask },
+  }), [width, height, holeMask]);
 
   return (
     <mesh
@@ -121,6 +131,7 @@ function GridOverlay({ width, height }: { width: number; height: number }) {
           uniform vec2 uSize;
           uniform vec3 uLine;
           uniform vec3 uLineBright;
+          uniform sampler2D uHoles;
           varying vec2 vUv;
 
           // Antialiased distance-to-line mask for lines every 'step' units.
@@ -130,6 +141,8 @@ function GridOverlay({ width, height }: { width: number; height: number }) {
           }
 
           void main() {
+            // No grid over holes in the platform.
+            if (texture2D(uHoles, vUv).r < 0.5) discard;
             vec2 coord = vUv * uSize;
             float tile = lineMask(coord, 1.0);     // tile edges only
             // Soft 1px-ish glow falloff around tile edges.

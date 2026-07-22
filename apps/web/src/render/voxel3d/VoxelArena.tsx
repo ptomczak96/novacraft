@@ -3,9 +3,8 @@ import React from 'react';
 import { Canvas } from '@react-three/fiber';
 import { Environment } from '@react-three/drei';
 import type { ArenaTheme, VoxelArenaProps } from './types.js';
-import { BACKGROUND_COLOR, FOG_COLOR } from './palette.js';
-import { CityBlocks, HazeLayers, Bokeh, FogClouds, DustMotes, FrameStats } from './Atmosphere.js';
-import { Signage } from './Signage.js';
+import { BACKGROUND_COLOR } from './palette.js';
+import { SpaceStars, FogClouds, FrameStats } from './Atmosphere.js';
 import { CameraRig, type CameraInteraction } from './CameraRig.js';
 import { Lights } from './Lights.js';
 import { Floor } from './Floor.js';
@@ -57,15 +56,11 @@ export function VoxelArena({
     return total > 0 && sand / total > 0.3 ? 'desert' : 'city';
   }, [map]);
 
-  // Fog tuned so the arena stays clear and the background city softens: it
-  // starts just past the arena's far edge as seen by the fixed camera.
-  const [fogNear, fogFar] = React.useMemo(() => {
-    const d = Math.max(map.width, map.height) * 1.25;
-    const camDist = d * Math.sqrt(1 + 0.82 * 0.82 + 1);
-    const diag = Math.hypot(map.width, map.height);
-    const near = camDist + diag * 0.55;
-    return [near, near + 38];
-  }, [map.width, map.height]);
+  // Impassable terrain renders as holes in the platform (SC1 space-platform
+  // style): no floor tile, space visible through the gap.
+  const holes = React.useMemo(() => {
+    return map.tiles.map(row => row.map(t => t.terrain === 'water' || t.terrain === 'lava'));
+  }, [map]);
 
   return (
     <Canvas
@@ -81,8 +76,8 @@ export function VoxelArena({
       }}
       style={{ position: 'absolute', inset: 0 }}
     >
-      <color attach="background" args={[theme === 'desert' ? '#241628' : BACKGROUND_COLOR]} />
-      <fog attach="fog" args={[theme === 'desert' ? '#3a2145' : FOG_COLOR, fogNear, fogFar]} />
+      {/* Open space: near-black void, no atmospheric fog. */}
+      <color attach="background" args={[BACKGROUND_COLOR]} />
       <CameraRig width={map.width} height={map.height} debugCam={debugCam} interaction={interaction} focus={focus} />
       <Lights width={map.width} height={map.height} theme={theme} quality={quality} />
       <React.Suspense fallback={null}>
@@ -94,6 +89,7 @@ export function VoxelArena({
           onTileClick={onTileClick}
           interaction={interaction}
           theme={theme}
+          holes={holes}
         />
       </React.Suspense>
       <EdgeRim width={map.width} height={map.height} theme={theme} />
@@ -101,26 +97,12 @@ export function VoxelArena({
       <Highlights highlights={highlights} />
       <Units units={units} ghosts={ghosts} combat={combat} onTileClick={onTileClick} interaction={interaction} />
       <FogClouds map={map} visibility={visibility} theme={theme} />
+      <SpaceStars width={map.width} height={map.height} quality={quality} />
       {quality === 'high' && (
-        <>
-          {/* Night-city IBL (Poly Haven, CC0, vendored) — subtle sheen on the
-              metal floor and units; lighting-only, never the background. */}
-          <React.Suspense fallback={null}>
-            <Environment files="/voxel3d/env_night.hdr" environmentIntensity={0.18} />
-          </React.Suspense>
-          <HazeLayers width={map.width} height={map.height} theme={theme} />
-          <CityBlocks width={map.width} height={map.height} theme={theme} />
-          {/* City-only: window bokeh, neon signage, rain. The desert horizon
-              is buttes + two radio masts; dust carries its atmosphere. */}
-          {theme === 'city' && (
-            <>
-              <Bokeh width={map.width} height={map.height} />
-              <Signage width={map.width} height={map.height} />
-              {/* Rain temporarily disabled (Patrick, 2026-07-22). */}
-            </>
-          )}
-          <DustMotes width={map.width} height={map.height} theme={theme} />
-        </>
+        // Night IBL (Poly Haven, CC0, vendored) — subtle sheen; lighting-only.
+        <React.Suspense fallback={null}>
+          <Environment files="/voxel3d/env_night.hdr" environmentIntensity={0.18} />
+        </React.Suspense>
       )}
       <FrameStats quality={quality} />
       <PostFX quality={quality} />
