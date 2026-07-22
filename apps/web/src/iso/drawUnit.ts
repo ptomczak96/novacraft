@@ -107,7 +107,7 @@ export function drawUnitAt(
   const dark = shade(color, 0.65);
   const light = shade(color, 1.25);
 
-  const sprite = getUnitSprite(unit.typeId, facing, factionId);
+  const sprite = getUnitSprite(unit.typeId, facing, factionId, unit.owner);
 
   // Sprite units plant their feet exactly on the diamond center so the figure is
   // perfectly centered in its tile; vector units keep their slight FOOT_Y forward
@@ -136,16 +136,6 @@ export function drawUnitAt(
   ctx.save();
   ctx.globalAlpha = baseAlpha;
   if (sprite) {
-    // ── Directional sprite (art isn't team-colored, so mark ownership with a rim) ──
-    if (!isSelected) {
-      ctx.beginPath();
-      ctx.ellipse(cx, groundY + 1, 16, 6, 0, 0, Math.PI * 2);
-      ctx.strokeStyle = color;
-      ctx.globalAlpha = 0.55 * baseAlpha;
-      ctx.lineWidth = 1.5;
-      ctx.stroke();
-      ctx.globalAlpha = baseAlpha;
-    }
     const { img, def, flip } = sprite;
     const s = def.drawW / def.srcW;
     const dx = cx - def.drawW / 2;

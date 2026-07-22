@@ -43,6 +43,11 @@ export const TERRAIN_COLORS: Record<string, [string, string, string]> = {
 // ── Player / faction colors ──
 export const PLAYER_COLORS: [string, string] = ['#4fc3f7', '#ef5350'];
 
+// Muted team colors, applied to unit art by replacing the magenta mask regions
+// baked into the sprites (see unitSprites.ts). Deliberately desaturated so two
+// same-faction armies read as teams without the board turning neon.
+export const TEAM_COLORS: [string, string] = ['#5f7a9a', '#9a5f5f'];
+
 // ── Overlay colors ──
 export const MOVE_HIGHLIGHT = 'rgba(79, 195, 247, 0.35)';
 export const ATTACK_HIGHLIGHT = 'rgba(239, 83, 80, 0.35)';

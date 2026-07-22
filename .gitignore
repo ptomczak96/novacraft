@@ -15,3 +15,6 @@ mapgen/**/Coupon*
 mapgen/**/*.pdf
 mapgen/**/*.url
 mapgen/**/*.txt
+
+# Raw imported asset packs (Evo UI, sound packs) — vendored selections live in apps/web/public
+imported_assets/

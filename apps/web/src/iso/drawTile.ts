@@ -31,7 +31,11 @@ const RESOURCE_ICON_LIFT = 10;
 // base-footprint CENTROID sits on the tile-surface centre — so the prop reads as
 // centred on the tile, not shoved into its back half.
 const RESOURCE_OBJECT_SCALE = 0.434;   // draw width as a fraction of spriteW
-const RESOURCE_OBJECT_BASEFRAC = 0.86; // base-footprint centroid as a fraction of art height
+// Tight-cropped props with no baked ground shadow (MTP ore/plasma) read best
+// with their mass straddling the diamond centre and a slight downward bias —
+// like the rocks drawn into the tile art itself. 0.60 puts ~40% of the prop
+// height below the centre point (0.86 left them hugging the tile's top half).
+const RESOURCE_OBJECT_BASEFRAC = 0.60; // base point as a fraction of art height
 const RESOURCE_OBJECT_LIFT = 5;        // extra nudge below the surface centre (px)
 
 // City/base marker scale for the vector drawing (50% larger than the drawing).

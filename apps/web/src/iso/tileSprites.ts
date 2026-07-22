@@ -10,6 +10,7 @@
 
 export type TileTheme =
   | 'default' | 'gen2_volcanic' | 'grass_iso' | 'gen3_desert' | 'gen5_desert'
+  | 'gen6_desert' | 'itb_desert' | 'gen7_industrial'
   | 'variety_neon_blue' | 'variety_toxic_green' | 'variety_violet_ash'
   | 'variety_ember_red' | 'variety_frost_teal';
 
@@ -289,6 +290,111 @@ const THEMES: Record<TileTheme, ThemeDef> = {
     flushLiquids: true,
     nudge: { barrier_02: -81, barrier_03: -81 },
     draw: { spriteW: 108, topOffsetY: -6.75 },
+  },
+
+  // ── GEN 6 desert (MJ "Scenario" pixel-art set, DESERT - MJ_Scenario.png) ──
+  // 20 tiles normalised by Tileset_Script/tile_normalizer.py onto ONE uniform
+  // 512×768 canvas (anchor 256,672 → top-face top vertex at row 416), so a
+  // single topOffsetY = −416·(108/512) = −87.75 places every sprite and no
+  // per-file nudges are needed. Plain ground is weighted heavier than decor
+  // variants so the board doesn't read as cluttered.
+  gen6_desert: {
+    base: '/tiles/gen6_desert',
+    files: [
+      'open_01', 'open_02', 'scatter_01', 'scatter_02', 'pebbles_01',
+      'cactus_01', 'cactus_02', 'cactus_03', 'cactus_04', 'cactus_05',
+      'cactus_06', 'cactus_07', 'rocks_01', 'rocks_02',
+      'boulder_01', 'boulder_02', 'boulder_03',
+      'tower_01', 'tower_02', 'arch_01',
+      'ore', 'plasma',
+    ],
+    variants: {
+      plains:   ['open_01', 'open_01', 'open_02', 'open_02', 'scatter_01',
+                 'scatter_02', 'pebbles_01', 'cactus_02', 'cactus_05', 'rocks_01'],
+      forest:   ['boulder_01', 'boulder_02', 'boulder_03', 'cactus_04',
+                 'cactus_06', 'cactus_07'],
+      mountain: ['tower_01', 'tower_02', 'arch_01'],
+      water:    ['tower_01', 'tower_02'],
+      lava:     ['tower_01', 'tower_02'],
+      river:    ['open_01', 'open_02', 'scatter_01'],
+      sand:     ['open_01', 'open_02', 'scatter_01', 'scatter_02'],
+      snow:     ['open_01', 'open_02'],
+      resource: ['open_01', 'open_02'],
+    },
+    featureVariants: ['open_01', 'open_02', 'scatter_01', 'scatter_02'],
+    flushLiquids: true,
+    // Resource props from Resources - MTP.png (shared with itb_desert)
+    resources: { ore: 'ore', plasma: 'plasma' },
+    draw: { spriteW: 108, topOffsetY: -87.75, resourceMode: 'object' },
+  },
+
+  // ── ITB desert (MJ pixel-art set, Maps/ITB/DESERT/Desert - ITB.png) ──
+  // Source sheet had a baked white background; keyed via border flood-fill +
+  // defringe, then normalised by Tileset_Script/tile_normalizer.py onto ONE
+  // uniform 512×768 canvas. This set's slab sides are thicker (two block rows),
+  // so the anchor sits at (256, 624) → top-face top vertex at row 368 →
+  // topOffsetY = −368·(108/512) = −77.625. No per-file nudges.
+  itb_desert: {
+    base: '/tiles/itb_desert',
+    files: [
+      'open_01', 'open_02', 'scatter_01', 'scatter_02',
+      'cactus_01', 'cactus_02', 'cactus_03', 'cactus_04', 'cactus_05',
+      'cactus_06', 'cactus_07', 'rocks_01', 'rocks_02', 'rocks_03',
+      'boulder_01', 'boulder_02', 'boulder_03',
+      'tower_01', 'tower_02', 'arch_01',
+      'ore', 'plasma',
+    ],
+    variants: {
+      plains:   ['open_01', 'open_01', 'open_02', 'open_02', 'scatter_01',
+                 'scatter_02', 'cactus_02', 'cactus_06', 'rocks_01', 'rocks_03'],
+      forest:   ['boulder_01', 'boulder_02', 'boulder_03', 'cactus_01',
+                 'cactus_04', 'cactus_05'],
+      mountain: ['tower_01', 'tower_02', 'arch_01'],
+      water:    ['tower_01', 'tower_02'],
+      lava:     ['tower_01', 'tower_02'],
+      river:    ['open_01', 'open_02', 'scatter_01'],
+      sand:     ['open_01', 'open_02', 'scatter_01', 'scatter_02'],
+      snow:     ['open_01', 'open_02'],
+      resource: ['open_01', 'open_02'],
+    },
+    featureVariants: ['open_01', 'open_02', 'scatter_01', 'scatter_02'],
+    flushLiquids: true,
+    // Resource props from Resources - MTP.png (shared with gen6_desert)
+    resources: { ore: 'ore', plasma: 'plasma' },
+    draw: { spriteW: 108, topOffsetY: -77.625, resourceMode: 'object' },
+  },
+
+  // ── GEN 7 industrial (MJ asset dump, tiles only — walls/buildings/props from
+  // the same sheet are not used). 15 thin floor plates normalised to the
+  // uniform 512×384 / anchor-96 contract, so topOffsetY = −6.75 like gen5.
+  // This theme also carries its own Vanguard unit skin (see unitSprites.ts
+  // theme-scoped sets). No tall formation art exists in this pack: impassable
+  // terrain reads as heavy rubble instead of mountains.
+  gen7_industrial: {
+    base: '/tiles/gen7_industrial',
+    files: [
+      'metal_01', 'metal_02', 'metal_03', 'metal_04', 'metal_05', 'metal_06',
+      'metal_07', 'hazard_01', 'hazard_02',
+      'cracked_01', 'cracked_02', 'cracked_03',
+      'rubble_01', 'rubble_02', 'rubble_03',
+      'ore', 'plasma',
+    ],
+    variants: {
+      plains:   ['metal_01', 'metal_01', 'metal_02', 'metal_03', 'metal_04',
+                 'metal_05', 'metal_06', 'metal_07', 'hazard_01', 'cracked_01'],
+      forest:   ['cracked_01', 'cracked_02', 'cracked_03', 'hazard_02'],
+      mountain: ['rubble_01', 'rubble_02', 'rubble_03'],
+      water:    ['rubble_01', 'rubble_02'],
+      lava:     ['rubble_02', 'rubble_03'],
+      river:    ['metal_01', 'metal_02', 'metal_07'],
+      sand:     ['metal_01', 'metal_03', 'cracked_01'],
+      snow:     ['metal_01', 'metal_02'],
+      resource: ['metal_01', 'metal_02', 'metal_07'],
+    },
+    featureVariants: ['metal_01', 'metal_02', 'metal_03', 'metal_07'],
+    flushLiquids: true,
+    resources: { ore: 'ore', plasma: 'plasma' },
+    draw: { spriteW: 108, topOffsetY: -6.75, resourceMode: 'object' },
   },
 };
 
