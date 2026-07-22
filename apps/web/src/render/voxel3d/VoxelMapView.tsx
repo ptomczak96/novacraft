@@ -201,6 +201,16 @@ export function VoxelMapView() {
 
   return (
     <div style={{ position: 'absolute', inset: 0 }}>
+      {gallery && (
+        <div style={{
+          position: 'absolute', top: 8, left: '50%', transform: 'translateX(-50%)',
+          zIndex: 20, padding: '4px 12px', borderRadius: 4,
+          background: 'rgba(255, 45, 149, 0.9)', color: '#fff',
+          fontFamily: 'monospace', fontSize: 12, pointerEvents: 'none',
+        }}>
+          UNIT GALLERY (dev preview — units are not playable). Remove ?unitGallery=1 from the URL.
+        </div>
+      )}
       <VoxelErrorBoundary>
         <VoxelArena
           map={visibleState.map}
