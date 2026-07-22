@@ -50,7 +50,7 @@ interface GameStore {
   // Tile art theme (pure render setting — not part of deterministic engine state).
   tileTheme: TileTheme;
   setTileTheme: (t: TileTheme) => void;
-  // Background music mute (session-only; toggled from the setup screen).
+  // Soundtrack mute only — SFX are always audible (session-only setting).
   musicMuted: boolean;
   setMusicMuted: (v: boolean) => void;
   rebuildRegistry: () => void;

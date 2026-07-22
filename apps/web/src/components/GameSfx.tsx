@@ -6,7 +6,7 @@ import { useGameStore } from '../store/gameStore.js';
  * public/audio/sfx). Subscribes to the store and diffs state — the engine's
  * actionLog drives action sounds (works for bot actions too), the combat
  * event drives kill sounds, and phase drives the end-of-game ring.
- * All gated by the master audio mute.
+ * SFX are always on — the mute toggle only silences the soundtrack.
  */
 const SFX = {
   select: ['/audio/sfx/select.wav', 0.3],
@@ -25,7 +25,6 @@ type SfxName = keyof typeof SFX;
 const cache = new Map<string, HTMLAudioElement>();
 
 function play(name: SfxName, delayMs = 0): void {
-  if (useGameStore.getState().musicMuted) return;
   const [src, volume] = SFX[name];
   const fire = () => {
     let base = cache.get(src);

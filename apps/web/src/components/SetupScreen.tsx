@@ -148,7 +148,7 @@ export function SetupScreen() {
           <EvoCheckbox id="rich-start" label="Rich start - for testing"
             checked={config.richStart ?? false}
             onChange={v => setConfig({ ...config, richStart: v })} />
-          <EvoCheckbox id="mute-audio" label="Mute audio" checked={musicMuted}
+          <EvoCheckbox id="mute-audio" label="Mute soundtrack" checked={musicMuted}
             onChange={setMusicMuted} />
         </div>
 
