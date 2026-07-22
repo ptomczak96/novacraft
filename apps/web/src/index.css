@@ -5,19 +5,20 @@
 }
 
 :root {
-  --bg: #1a1a2e;
-  --bg-surface: #16213e;
-  --bg-card: #1e2a4a;
-  --text: #e0e0e0;
-  --text-muted: #8892a4;
-  --accent: #4fc3f7;
-  --accent-dim: #2a6a8a;
+  /* EvoUI skin tokens — dark slate, amber accent (see setup screen) */
+  --bg: #0a0b0d;
+  --bg-surface: #131417;
+  --bg-card: #101114;
+  --text: #d7d9dd;
+  --text-muted: #8a8d93;
+  --accent: #ff9f2e;
+  --accent-dim: #8a5a1e;
   --danger: #ef5350;
-  --success: #66bb6a;
+  --success: #9dff8a;
   --warning: #ffa726;
-  --p0-color: #4fc3f7;
-  --p1-color: #ef5350;
-  --border: #2a3a5a;
+  --p0-color: #33f0ff;
+  --p1-color: #ff2d95;
+  --border: #26272b;
 }
 
 html, body, #root {
@@ -48,8 +49,11 @@ button:hover {
 }
 
 button.primary {
-  background: var(--accent);
-  color: #0a0a1a;
+  background: linear-gradient(180deg, #ff9f2e, #e07d14);
+  border: 1px solid #ffb35c;
+  color: #16110a;
+  clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px);
+  border-radius: 2px;
 }
 
 button.danger {
@@ -58,9 +62,10 @@ button.danger {
 }
 
 button.ghost {
-  background: transparent;
-  color: var(--text-muted);
-  border: 1px solid var(--border);
+  background: #101114;
+  color: #c6c9ce;
+  border: 1px solid #34363b;
+  border-radius: 2px;
 }
 
 button.ghost:hover {
@@ -97,39 +102,335 @@ label {
   width: 100vw;
 }
 
+/* In-game chrome: Evo skin */
+.top-bar {
+  position: relative;
+}
+.top-bar-logo {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  height: 40px;
+  pointer-events: none;
+  filter: drop-shadow(0 3px 12px rgba(255, 143, 42, 0.25));
+}
+
 /* Setup Screen */
+@font-face {
+  font-family: 'Inter';
+  src: url('/fonts/Inter-Regular.ttf') format('truetype');
+  font-weight: 400;
+}
+@font-face {
+  font-family: 'Inter';
+  src: url('/fonts/Inter-SemiBold.ttf') format('truetype');
+  font-weight: 600;
+}
+@font-face {
+  font-family: 'Inter';
+  src: url('/fonts/Inter-Bold.ttf') format('truetype');
+  font-weight: 700;
+}
+
+/* ── Setup menu: EvoUI pack skin — dark, gritty, amber accents ── */
 .setup-screen {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  justify-content: flex-start;
-  gap: 20px;
+  justify-content: center;
   width: 100%;
   height: 100%;
   overflow-y: auto;
-  padding: 28px 0;
+  padding: 24px 0;
+  font-family: 'Inter', system-ui, sans-serif;
+  background:
+    radial-gradient(ellipse at 50% -20%, rgba(255, 143, 42, 0.06), transparent 55%),
+    radial-gradient(ellipse at 50% 120%, rgba(0, 0, 0, 0.6), transparent 60%),
+    #0a0b0d;
 }
 
 .setup-card {
-  background: var(--bg-surface);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 40px;
-  width: 480px;
-  max-width: 90vw;
+  position: relative;
+  background: linear-gradient(178deg, #131417 0%, #0e0f11 100%);
+  /* EvoUI "Cut Frame (With Lines)" bracket chrome as the panel border */
+  border: 10px solid transparent;
+  border-image: url('/ui/frame-lines.png') 24 / 12px stretch;
+  border-radius: 0;
+  padding: 30px 36px 34px;
+  width: 500px;
+  max-width: 92vw;
+  animation: evo-card-in 0.45s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.7);
 }
 
-.setup-card h1 {
-  font-size: 28px;
-  font-weight: 800;
-  letter-spacing: -0.5px;
-  margin-bottom: 4px;
+@keyframes evo-card-in {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.setup-logo {
+  display: block;
+  width: 230px;
+  max-width: 70%;
+  margin: 0 auto 8px;
+  filter: drop-shadow(0 6px 24px rgba(255, 143, 42, 0.18));
 }
 
 .setup-card .subtitle {
-  color: var(--text-muted);
-  font-size: 14px;
-  margin-bottom: 28px;
+  color: #6d7076;
+  font-size: 12px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  text-align: center;
+  margin-bottom: 22px;
+}
+
+.evo-section {
+  color: #ff9f2e;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  margin: 20px 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #232427;
+  position: relative;
+}
+.evo-section::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: -1px;
+  width: 42px;
+  height: 1px;
+  background: #ff9f2e;
+}
+
+/* Inputs (number fields) */
+.setup-screen.evo .setup-field input {
+  background: #0a0b0d;
+  border: 1px solid #26272b;
+  border-radius: 2px;
+  color: #d7d9dd;
+  font-family: inherit;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.setup-screen.evo .setup-field input:focus {
+  outline: none;
+  border-color: #ff9f2e;
+  box-shadow: 0 0 0 1px rgba(255, 159, 46, 0.35), inset 0 0 12px rgba(255, 159, 46, 0.06);
+}
+
+/* ── EvoSelect: custom dropdown with slide+fade panel ── */
+.evo-select {
+  position: relative;
+  width: 100%;
+}
+.evo-select-trigger {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  background: #0a0b0d;
+  border: 1px solid #26272b;
+  border-radius: 2px;
+  color: #d7d9dd;
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.evo-select-trigger:hover {
+  border-color: #3a3c41;
+  background: #101114;
+}
+.evo-select.open .evo-select-trigger {
+  border-color: #ff9f2e;
+}
+.evo-arrow {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  background: #8a8d93;
+  -webkit-mask: url('/ui/arrow-down.png') center / contain no-repeat;
+  mask: url('/ui/arrow-down.png') center / contain no-repeat;
+  transition: transform 0.18s ease;
+}
+.evo-select.open .evo-arrow {
+  transform: rotate(180deg);
+}
+.evo-select-panel {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 40;
+  background: #101114;
+  border: 1px solid #2c2d31;
+  border-top-color: #ff9f2e;
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.65);
+  max-height: 240px;
+  overflow-y: auto;
+  opacity: 0;
+  transform: translateY(-6px) scaleY(0.96);
+  transform-origin: top;
+  pointer-events: none;
+  /* visibility delays out so the close animation still plays, and closed
+     panels leave the accessibility tree entirely */
+  visibility: hidden;
+  transition: opacity 0.16s ease, transform 0.16s ease, visibility 0s linear 0.16s;
+}
+.evo-select.open .evo-select-panel {
+  opacity: 1;
+  transform: translateY(0) scaleY(1);
+  pointer-events: auto;
+  visibility: visible;
+  transition-delay: 0s;
+}
+.evo-option {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 8px 10px;
+  background: transparent;
+  border: none;
+  border-left: 2px solid transparent;
+  color: #b9bcc2;
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+}
+.evo-option:hover {
+  background: #1a1b1f;
+  color: #f0f1f3;
+  border-left-color: #ff9f2e;
+}
+.evo-option.selected {
+  color: #ff9f2e;
+  border-left-color: #ff9f2e;
+}
+
+/* ── EvoCheckbox ── */
+.evo-checkbox-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 16px;
+  margin: 14px 0 6px;
+}
+.evo-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  cursor: pointer;
+  color: #b9bcc2;
+  font-size: 13px;
+  user-select: none;
+}
+.evo-checkbox {
+  position: relative;
+}
+.evo-checkbox input {
+  /* invisible but real & clickable, covering the box — keeps native
+     behaviour working for keyboard, automation and assistive tech */
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.evo-checkbox-box {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  background: #0a0b0d;
+  border: 1px solid #34363b;
+  border-radius: 2px;
+  position: relative;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.evo-checkbox-box::after {
+  content: '';
+  position: absolute;
+  inset: 1px;
+  background: #ff9f2e;
+  -webkit-mask: url('/ui/check.png') center / contain no-repeat;
+  mask: url('/ui/check.png') center / contain no-repeat;
+  transform: scale(0);
+  transition: transform 0.16s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.evo-checkbox input:checked + .evo-checkbox-box {
+  border-color: #ff9f2e;
+}
+.evo-checkbox input:checked + .evo-checkbox-box::after {
+  transform: scale(1);
+}
+.evo-checkbox:hover .evo-checkbox-box {
+  border-color: #4a4d53;
+}
+.evo-checkbox input:checked:hover + .evo-checkbox-box {
+  border-color: #ffb35c;
+}
+
+/* ── EvoButton ── */
+.setup-screen.evo .setup-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 22px;
+}
+.evo-button {
+  position: relative;
+  overflow: hidden;
+  padding: 10px 18px;
+  background: #131417;
+  border: 1px solid #34363b;
+  border-radius: 2px;
+  color: #c6c9ce;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease, transform 0.08s ease;
+}
+.evo-button:hover {
+  border-color: #55585f;
+  color: #f0f1f3;
+}
+.evo-button:active {
+  transform: translateY(1px);
+}
+/* hover sheen sweep */
+.evo-button::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -60%;
+  width: 40%;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.07), transparent);
+  transform: skewX(-18deg);
+  transition: left 0.4s ease;
+  pointer-events: none;
+}
+.evo-button:hover::after {
+  left: 120%;
+}
+.evo-button.primary {
+  background: linear-gradient(180deg, #ff9f2e, #e07d14);
+  border-color: #ffb35c;
+  color: #16110a;
+}
+.evo-button.primary:hover {
+  background: linear-gradient(180deg, #ffb04e, #ef8c1e);
+  color: #0d0a06;
 }
 
 .setup-field {
@@ -144,10 +445,6 @@ label {
 .setup-field input,
 .setup-field select {
   width: 100%;
-}
-.setup-field input:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
 }
 
 .setup-row {
@@ -189,47 +486,6 @@ label {
   font-size: 13px;
   font-weight: 400;
   color: var(--text);
-}
-
-/* Grouped option sections (Win Conditions / Resources / Mechanics) */
-.setup-section {
-  margin: 10px 0 4px;
-  padding: 10px 12px;
-  border: 1px solid var(--border, #2a3550);
-  border-radius: 8px;
-}
-
-.setup-section-title {
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--muted, #8a97b5);
-  margin-bottom: 8px;
-}
-
-.radio-row,
-.setup-section .checkbox-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 6px;
-  font-size: 13px;
-  color: var(--text);
-  cursor: pointer;
-}
-
-.radio-row:last-child,
-.setup-section .checkbox-row:last-child {
-  margin-bottom: 0;
-}
-
-.radio-row input[type="radio"],
-.setup-section .checkbox-row input[type="checkbox"] {
-  width: 16px;
-  height: 16px;
-  accent-color: var(--accent);
-  cursor: pointer;
 }
 
 /* Game Screen */
@@ -289,17 +545,6 @@ label {
 /* Map container */
 .map-container {
   flex: 1;
-  position: relative;
-  /* Non-scrolling positioning context: pan/zoom overflow is confined to .map-scroll
-     inside, so absolutely-positioned overlays (recruit button, city info, territory
-     bar) stay pinned to the VISIBLE box instead of drifting with the scrolled canvas. */
-  overflow: hidden;
-}
-
-/* Inner scroll layer that actually holds (and scrolls/zooms) the board canvas. */
-.map-scroll {
-  position: absolute;
-  inset: 0;
   overflow: auto;
   display: flex;
   align-items: center;
@@ -521,124 +766,6 @@ label {
 }
 .recruit-card--locked:hover { border-color: var(--border); }
 .recruit-card--locked .cost { color: var(--text-muted); font-weight: 600; }
-
-/* Pop-blocked units: the city has no population room — shown, dimmed, not clickable. */
-.recruit-card--nopop {
-  opacity: 0.5;
-  cursor: not-allowed;
-  filter: grayscale(0.5);
-}
-.recruit-card--nopop:hover { border-color: var(--border); }
-
-/* "Population Full" banner across the top of the recruit panel. */
-.recruit-popfull {
-  flex-basis: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--warning);
-  padding: 2px 0 4px;
-}
-.recruit-popfull-ico { font-size: 14px; line-height: 1; }
-
-/* ── Recruit panel: table layout ── */
-.recruit-panel--table {
-  display: block;
-  overflow: visible;      /* let ability popups escape the panel instead of clipping */
-  max-height: none;
-  padding: 10px;
-}
-.recruit-table {
-  border-collapse: collapse;
-  font-size: 12px;
-}
-.recruit-table th,
-.recruit-table td {
-  padding: 5px 10px;
-  text-align: center;
-  white-space: nowrap;
-}
-.recruit-table thead th {
-  color: var(--text-muted);
-  font-weight: 700;
-  font-size: 10.5px;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-  border-bottom: 1px solid var(--border);
-}
-.recruit-table th.ru-unit,
-.recruit-table td.ru-unit { text-align: left; }
-.recruit-table tbody td {
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-  font-variant-numeric: tabular-nums;
-}
-
-.recruit-row { cursor: pointer; transition: background 0.12s; }
-.recruit-row:hover { background: rgba(90, 169, 230, 0.14); }
-
-/* Unit (first) cell: icon + name + cost subtext. */
-.ru-ico { margin-right: 6px; }
-.ru-name { font-weight: 600; }
-.ru-cost { display: block; font-size: 10.5px; color: var(--warning); margin-top: 1px; }
-
-/* Non-recruitable rows: greyed, not clickable, no hover highlight. */
-.recruit-row--locked,
-.recruit-row--nopop,
-.recruit-row--unaffordable { cursor: not-allowed; }
-.recruit-row--locked:hover,
-.recruit-row--nopop:hover,
-.recruit-row--unaffordable:hover { background: transparent; }
-.recruit-row--locked { opacity: 0.5; filter: grayscale(0.7); }
-.recruit-row--nopop { opacity: 0.5; filter: grayscale(0.5); }
-.recruit-row--unaffordable { opacity: 0.85; }
-.recruit-row--unaffordable .ru-cost { color: #ff6b6b; }
-
-/* Abilities cell: "None", or a ? that reveals a table on hover / click (focus). */
-.ru-none { color: var(--text-muted); }
-.ru-abil { position: relative; cursor: help; outline: none; }
-.ru-abil-q { font-size: 13px; }
-.ru-abil-pop {
-  display: none;
-  position: absolute;
-  right: 0;
-  bottom: 100%;
-  margin-bottom: 6px;
-  z-index: 40;
-  min-width: 280px;
-  max-width: 380px;
-  background: var(--bg-surface);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 9px 11px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55);
-  text-align: left;
-  white-space: normal;
-}
-.ru-abil:hover .ru-abil-pop,
-.ru-abil:focus .ru-abil-pop,
-.ru-abil:focus-within .ru-abil-pop { display: block; }
-.ru-abil-title { display: block; font-weight: 700; font-size: 12px; margin-bottom: 6px; }
-.ru-abil-table { border-collapse: collapse; width: 100%; font-size: 11px; }
-.ru-abil-table th {
-  text-align: left;
-  color: var(--text-muted);
-  font-weight: 700;
-  padding: 2px 6px;
-  border-bottom: 1px solid var(--border);
-}
-.ru-abil-table td {
-  padding: 3px 6px;
-  vertical-align: top;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-}
-.ru-abil-kind { font-weight: 700; white-space: nowrap; }
-.ru-abil-kind.active { color: #6fd08a; }
-.ru-abil-kind.passive { color: #5aa9e6; }
-.ru-abil-name { font-weight: 600; white-space: nowrap; }
-.ru-abil-desc { color: var(--text-muted); }
 
 .recruit-card .name {
   font-size: 12px;
@@ -922,44 +1049,6 @@ label {
    Combat Log Panel (left side)
    ============================================ */
 
-/* ── Coaching sidebar (right edge) ── */
-.coach-panel {
-  position: absolute; top: 0; right: 0; bottom: 0;
-  width: 340px; z-index: 30;
-  background: var(--bg-surface);
-  border-left: 1px solid var(--border);
-  display: flex; flex-direction: column;
-  font-size: 12px;
-}
-.coach-head { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; border-bottom: 1px solid var(--border); }
-.coach-head h3 { margin: 0; font-size: 14px; }
-.coach-head-actions { display: flex; gap: 4px; align-items: center; }
-.coach-autosave { color: #7ee0a0; font-size: 10px; opacity: 0.8; margin-right: 2px; }
-.coach-head-actions .ghost { padding: 3px 8px; font-size: 11px; }
-.coach-section { padding: 10px 12px; border-bottom: 1px solid var(--border); }
-.coach-section-title { color: var(--text-muted); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 6px; }
-.coach-log { flex: 1; overflow-y: auto; }
-.coach-turn { font-weight: 700; font-variant-numeric: tabular-nums; padding: 0 5px; border-radius: 4px; background: rgba(255,255,255,0.06); }
-.coach-turn.p0 { color: var(--p0-color, #5aa9e6); }
-.coach-turn.p1 { color: var(--p1-color, #e06666); }
-.coach-notes { display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px; }
-.coach-note { line-height: 1.35; }
-.coach-note-input { display: flex; flex-direction: column; gap: 5px; }
-.coach-note-input textarea, .coach-comment { width: 100%; box-sizing: border-box; background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; color: var(--text); padding: 5px 7px; font: inherit; resize: vertical; }
-.coach-entry { padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
-.coach-entry.ai { background: rgba(120,200,255,0.04); }
-.coach-entry-head { display: flex; align-items: center; gap: 6px; }
-.coach-actor { width: 16px; text-align: center; }
-.coach-desc { flex: 1; font-variant-numeric: tabular-nums; }
-.coach-why { background: none; border: 1px solid var(--border); border-radius: 4px; color: var(--accent); font-size: 10px; padding: 1px 6px; cursor: pointer; }
-.coach-cands { width: 100%; border-collapse: collapse; margin: 5px 0; font-size: 11px; }
-.coach-cands td { padding: 2px 6px; vertical-align: top; }
-.coach-cand-score { text-align: right; color: var(--text-muted); font-variant-numeric: tabular-nums; width: 44px; }
-.coach-cands tr.chosen { background: rgba(102,187,106,0.14); }
-.coach-cands tr.chosen .coach-cand-desc { color: #7ee0a0; font-weight: 600; }
-.coach-comment { margin-top: 5px; font-size: 11px; }
-.coach-empty { color: var(--text-muted); padding: 8px 0; }
-
 .combat-log-panel {
   width: 280px;
   background: var(--bg-surface);
@@ -1081,19 +1170,6 @@ label {
   margin-left: 4px;
 }
 
-/* Buff/debuff breakdown line: "Base ×mod ×mod = Effective" */
-.cb-modline .cb-formula { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; justify-content: flex-end; }
-.cb-base { font-weight: 700; }
-.cb-eff { font-weight: 700; }
-.cb-mod {
-  font-size: 10px;
-  padding: 0 5px;
-  border-radius: 6px;
-  white-space: nowrap;
-}
-.cb-mod.cb-buff { color: #7ee0a0; background: rgba(64, 200, 120, 0.14); }
-.cb-mod.cb-debuff { color: #f0a0a0; background: rgba(220, 80, 80, 0.16); }
-
 .cb-damage {
   color: var(--danger);
   font-weight: 700;
@@ -1148,18 +1224,6 @@ label {
   font-size: 16px;
   font-weight: 800;
   color: var(--text);
-}
-.unit-sheet-code {
-  display: inline-block;
-  margin-right: 7px;
-  padding: 1px 6px;
-  border-radius: 5px;
-  background: rgba(120, 200, 255, 0.16);
-  color: #9fd0f0;
-  font-size: 12px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  vertical-align: middle;
 }
 
 .unit-sheet-owner {
@@ -1511,22 +1575,6 @@ label {
 .tech-node-name { font-size: 12px; font-weight: 600; letter-spacing: 0.3px; line-height: 1.2; }
 .tech-node-status { font-size: 10px; letter-spacing: 1.5px; padding-top: 3px; width: 100%; border-top: 1px solid var(--border); }
 
-/* Per-tech unlock detail: units (+ their passives), granted passives, and upgrade lines. */
-.tech-node-detail {
-  width: 100%;
-  text-align: left;
-  font-size: 10.5px;
-  line-height: 1.35;
-  display: flex; flex-direction: column; gap: 2px;
-  padding-top: 4px; margin-top: 2px;
-  border-top: 1px dashed var(--border);
-}
-.tnd-unit { margin-bottom: 1px; }
-.tnd-unit-name { font-weight: 700; color: var(--accent); }
-.tnd-passive { color: var(--text-muted); padding-left: 8px; }
-.tnd-passive-line { color: #7ee0a0; font-weight: 600; }
-.tnd-upgrade { color: var(--text-muted); }
-
 .tech-node.available { cursor: pointer; border-color: var(--accent-dim); }
 .tech-node.available:hover { transform: translateY(-2px); border-color: var(--accent); box-shadow: 0 0 16px rgba(79, 195, 247, 0.28); }
 .tech-node.available .tech-node-icon { border-color: var(--accent); box-shadow: 0 0 10px rgba(79, 195, 247, 0.4); }
@@ -1540,22 +1588,148 @@ label {
 .tech-node.locked .tech-node-icon img { filter: grayscale(1); }
 .tech-node.locked .tech-node-status { color: var(--text-muted); }
 
-/* Always-available Lvl-0 base node (e.g. Mine Lvl 1). */
-.tech-node.root { border-color: var(--border); background: rgba(255,255,255,0.04); cursor: default; }
-.tech-node.root .tech-node-status { color: var(--text-muted); letter-spacing: 1.5px; }
+/* ── Evo recruit panel (instant on base selection) ── */
+.evo-recruit-panel {
+  position: absolute;
+  bottom: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 30;
+  width: min(860px, 94%);
+  background: linear-gradient(178deg, #131417 0%, #0e0f11 100%);
+  border: 8px solid transparent;
+  border-image: url('/ui/frame-lines.png') 24 / 10px stretch;
+  padding: 10px 14px 12px;
+  font-family: 'Inter', system-ui, sans-serif;
+  animation: evo-card-in 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.65);
+}
+.evo-recruit-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  border-bottom: 1px solid #232427;
+  padding-bottom: 5px;
+  position: relative;
+}
+.evo-recruit-head::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: -1px;
+  width: 42px;
+  height: 1px;
+  background: #ff9f2e;
+}
+.evo-recruit-title {
+  color: #ff9f2e;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+}
+.evo-recruit-close {
+  background: none;
+  border: none;
+  color: #6d7076;
+  font-size: 17px;
+  line-height: 1;
+  padding: 0 4px;
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+.evo-recruit-close:hover {
+  color: #f0f1f3;
+}
+.evo-recruit-cards {
+  /* wrapping grid — a horizontal scrollbar must never appear here */
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(124px, 1fr));
+  gap: 8px;
+}
+.evo-recruit-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  padding: 8px 10px;
+  background: #0a0b0d;
+  border: 1px solid #26272b;
+  border-radius: 2px;
+  color: #d7d9dd;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px);
+  transition: border-color 0.14s ease, background 0.14s ease, transform 0.08s ease;
+}
+.evo-recruit-card:hover:not(.locked):not(.unaffordable) {
+  border-color: #ff9f2e;
+  background: #121316;
+  transform: translateY(-1px);
+}
+.evo-recruit-card:active:not(.locked):not(.unaffordable) {
+  transform: translateY(0);
+}
+.evo-recruit-card.locked,
+.evo-recruit-card.unaffordable {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.evo-recruit-card.unaffordable {
+  border-color: #5a2a28;
+}
+.evo-recruit-icon {
+  font-size: 17px;
+}
+.evo-recruit-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: #f0f1f3;
+}
+.evo-recruit-cost {
+  font-size: 12px;
+}
+.evo-recruit-cost em {
+  font-style: normal;
+  color: #ff9f2e;
+  font-weight: 700;
+}
+.evo-recruit-cost em.plasma {
+  color: #33f0ff;
+}
+.evo-recruit-stats {
+  font-size: 10px;
+  color: #6d7076;
+  letter-spacing: 0.02em;
+}
+.evo-recruit-hint {
+  color: #8a8d93;
+  font-size: 12px;
+  padding: 6px 2px 4px;
+}
 
-/* Research price shown on each tech card. */
-.tech-node-cost { margin-left: 6px; color: var(--warning); font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: 0; }
-.tech-node.locked .tech-node-cost { color: var(--text-muted); }
-
-/* Mutually-exclusive choice locked out by its sibling: crossed out, non-clickable. */
-.tech-node.excluded { opacity: 0.42; cursor: not-allowed; border-color: rgba(214, 69, 69, 0.5); }
-.tech-node.excluded .tech-node-icon img { filter: grayscale(1); }
-.tech-node.excluded .tech-node-name,
-.tech-node.excluded .tech-node-detail { text-decoration: line-through; }
-.tech-node.excluded .tech-node-status { color: #d98a8a; }
-.tech-node.excluded::after {
-  content: ''; position: absolute; inset: 0;
-  background: linear-gradient(to top left, transparent 48%, rgba(214,69,69,0.55) 49%, rgba(214,69,69,0.55) 51%, transparent 52%);
-  border-radius: 8px; pointer-events: none;
+/* Evo bracket chrome for in-game panels */
+.side-panel,
+.city-info,
+.levelup-modal,
+.game-over-banner {
+  background: linear-gradient(178deg, #131417 0%, #0e0f11 100%);
+  border: 8px solid transparent;
+  border-image: url('/ui/frame-lines.png') 24 / 10px stretch;
+  border-radius: 0;
+  font-family: 'Inter', system-ui, sans-serif;
+}
+.side-panel h3,
+.levelup-title {
+  color: #ff9f2e;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  font-size: 12px;
+}
+.top-bar {
+  background: linear-gradient(180deg, #101114, #0c0d10);
+  border-bottom: 1px solid #26272b;
+  font-family: 'Inter', system-ui, sans-serif;
 }

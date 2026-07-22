@@ -107,7 +107,7 @@ export function drawUnitAt(
   const dark = shade(color, 0.65);
   const light = shade(color, 1.25);
 
-  const sprite = getUnitSprite(unit.typeId, facing, factionId);
+  const sprite = getUnitSprite(unit.typeId, facing, factionId, unit.owner);
 
   // Sprite units plant their feet exactly on the diamond center so the figure is
   // perfectly centered in its tile; vector units keep their slight FOOT_Y forward
@@ -136,20 +136,16 @@ export function drawUnitAt(
   ctx.save();
   ctx.globalAlpha = baseAlpha;
   if (sprite) {
-    // ── Directional sprite (art isn't team-colored, so mark ownership with a rim) ──
-    if (!isSelected) {
-      ctx.beginPath();
-      ctx.ellipse(cx, groundY + 1, 16, 6, 0, 0, Math.PI * 2);
-      ctx.strokeStyle = color;
-      ctx.globalAlpha = 0.55 * baseAlpha;
-      ctx.lineWidth = 1.5;
-      ctx.stroke();
-      ctx.globalAlpha = baseAlpha;
-    }
-    const { img, def } = sprite;
+    const { img, def, flip } = sprite;
     const s = def.drawW / def.srcW;
     const dx = cx - def.drawW / 2;
     const dy = groundY - def.footY * s;
+    ctx.save();
+    if (flip) {
+      // Mirror about the unit's vertical axis (Polytopia-style missing side).
+      ctx.translate(2 * cx, 0);
+      ctx.scale(-1, 1);
+    }
     if (isSelected) {
       // Minimal light-green glow hugging the sprite's silhouette. Canvas shadows
       // follow the image alpha, so two blurred passes build a soft gradient rim
@@ -171,6 +167,7 @@ export function drawUnitAt(
       ctx.drawImage(img, dx, dy, def.drawW, def.srcH * s);
       ctx.restore();
     }
+    ctx.restore();
   } else {
     // ── Draw figure by type (scaled up around the feet so it stays planted) ──
     const drawFn = UNIT_DRAWERS[unit.typeId] ?? drawGenericUnit;
@@ -240,10 +237,6 @@ const UNIT_DRAWERS: Record<string, UnitDrawFn> = {
   seercaust: drawSeercaust,
   wyrm: drawWyrm,
   wyrm_burrowed: drawWyrmBurrowed,
-  // Emoji tokens (match the recruit-table icons) until bespoke art exists.
-  burstling: emojiUnit('💣'),
-  behemoth: emojiUnit('🦖'),
-  ravener: emojiUnit('🦇'),
 };
 
 // The Stalker — a six-legged walker with a ranged cannon. Placeholder art (Patrick to
@@ -1600,18 +1593,4 @@ function drawGenericUnit(
   outlined(ctx, color, () => {
     ctx.arc(cx, cy, 8, 0, Math.PI * 2);
   }, 1.5);
-}
-
-// EMOJI token — a player-colored disc (so friend/foe stays readable) with the same emoji
-// the recruit table uses on top. For units without bespoke vector art yet.
-function emojiUnit(emoji: string): UnitDrawFn {
-  return (ctx, cx, cy, color) => {
-    outlined(ctx, color, () => { ctx.arc(cx, cy, 8, 0, Math.PI * 2); }, 1.5);
-    ctx.save();
-    ctx.font = '12px system-ui, "Apple Color Emoji", sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(emoji, cx, cy);
-    ctx.restore();
-  };
 }

@@ -143,7 +143,7 @@ export interface GameConfig {
 // All fields optional so older configs/saves keep working. Generation currently
 // supports two biomes; water and lava generation is disabled (the classification
 // code remains in mapgen for when we re-enable them).
-export type Biome = 'grassland' | 'stone';
+export type Biome = 'grassland' | 'stone' | 'desert';
 
 export interface MapGenOptions {
   biome?: Biome;            // overall map theme

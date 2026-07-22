@@ -1,62 +1,54 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useGameStore } from '../store/gameStore.js';
+import { EvoSelect, EvoCheckbox, EvoButton } from './evo/EvoControls.js';
 
-// Preset map sizes (square). "custom" lets the width/height fields be edited freely.
-const MAP_PRESETS = { tiny: 11, small: 14, medium: 16, large: 18, huge: 20, massive: 30 } as const;
-type MapPreset = keyof typeof MAP_PRESETS | 'custom';
-const PRESET_LABELS: Record<MapPreset, string> = {
-  tiny: 'Tiny (11×11)', small: 'Small (14×14)', medium: 'Medium (16×16)',
-  large: 'Large (18×18)', huge: 'Huge (20×20)', massive: 'Massive (30×30)', custom: 'Custom',
-};
-
-// Win condition & resource choices are single-select (radio).
-type WinKey = 'captureAllCities' | 'captureCapital' | 'highestScoreAtLimit';
-const WIN_OPTIONS: { key: WinKey; label: string }[] = [
-  { key: 'captureAllCities', label: 'Capture all cities' },
-  { key: 'captureCapital', label: 'Capture capital' },
-  { key: 'highestScoreAtLimit', label: 'Highest score at turn limit' },
+const BOT_OPTIONS = [
+  { value: 'human', label: 'Human' },
+  { value: 'random', label: 'Random Bot' },
+  { value: 'greedy', label: 'Greedy Bot' },
 ];
-type ResKey = 'normal' | 'double' | 'unlimited';
-const RES_OPTIONS: { key: ResKey; label: string }[] = [
-  { key: 'normal', label: 'Normal' },
-  { key: 'double', label: 'Double resources' },
-  { key: 'unlimited', label: 'Unlimited resources' },
+
+const BIOME_OPTIONS = [
+  { value: 'grassland', label: 'Grassland' },
+  { value: 'stone', label: 'Stone' },
+  { value: 'desert', label: 'Desert' },
+];
+
+const THEME_OPTIONS = [
+  { value: 'default', label: 'Default' },
+  { value: 'gen2_volcanic', label: 'GEN 2 - Volcanic' },
+  { value: 'grass_iso', label: 'Grassland (fantasy)' },
+  { value: 'gen3_desert', label: 'GEN 3 - Desert' },
+  { value: 'gen5_desert', label: 'GEN 5 - Desert' },
+  { value: 'gen6_desert', label: 'GEN 6 - Desert (Scenario)' },
+  { value: 'itb_desert', label: 'ITB - Desert' },
+  { value: 'gen7_industrial', label: 'GEN 7 - Industrial' },
+];
+
+// Win condition & resource choices are single-select (David, 2026-07-22).
+const WIN_OPTIONS = [
+  { value: 'captureAllCities', label: 'Capture all cities' },
+  { value: 'captureCapital', label: 'Capture capital' },
+  { value: 'highestScoreAtLimit', label: 'Highest score at turn limit' },
+];
+const RES_OPTIONS = [
+  { value: 'normal', label: 'Normal' },
+  { value: 'double', label: 'Double resources' },
+  { value: 'unlimited', label: 'Unlimited resources' },
 ];
 
 export function SetupScreen() {
-  const { config, setConfig, factions, startGame, startTestCombat, initMapEditor, loadGame, setBotSetting, setCoachEnabled, tileTheme, setTileTheme } = useGameStore();
-  const [seed, setSeed] = useState(Math.floor(Math.random() * 100000));
-  const [mapPreset, setMapPreset] = useState<MapPreset>('tiny');
-
-  // Apply the chosen preset's dimensions (default Tiny on mount). "Custom" leaves the
-  // width/height as-is so they can be edited. Reads fresh config from the store to
-  // avoid clobbering other config fields.
-  useEffect(() => {
-    if (mapPreset === 'custom') return;
-    const size = MAP_PRESETS[mapPreset];
-    const cfg = useGameStore.getState().config;
-    useGameStore.getState().setConfig({ ...cfg, mapWidth: size, mapHeight: size });
-  }, [mapPreset]);
+  const { config, setConfig, factions, startGame, initMapEditor, loadGame, setBotSetting, tileTheme, setTileTheme, musicMuted, setMusicMuted } = useGameStore();
+  // Seed is random per visit — deliberately no UI for it (Patrick, 2026-07-22).
+  const [seed] = useState(Math.floor(Math.random() * 100000));
   const [faction0, setFaction0] = useState(factions[0]?.id || 'vanguard');
   const [faction1, setFaction1] = useState(factions[1]?.id || 'hive');
   const [bot0, setBot0] = useState<'human' | 'random' | 'greedy'>('human');
   const [bot1, setBot1] = useState<'human' | 'random' | 'greedy'>('human');
-  // Test Combat Mode team selection (independent of the normal-game factions above).
-  const [tcTeam0, setTcTeam0] = useState(factions[0]?.id || 'vanguard');
-  const [tcTeam1, setTcTeam1] = useState(factions[1]?.id || 'hive');
 
   const handleStart = () => {
     setBotSetting(0, bot0);
     setBotSetting(1, bot1);
-    setCoachEnabled(false);
-    startGame([faction0, faction1], seed);
-  };
-
-  // Train: you (P1) vs the greedy AI (P2), with the coaching sidebar on from the start.
-  const handleTrain = () => {
-    setBotSetting(0, 'human');
-    setBotSetting(1, 'greedy');
-    setCoachEnabled(true);
     startGame([faction0, faction1], seed);
   };
 
@@ -66,11 +58,10 @@ export function SetupScreen() {
     setConfig({ ...config, mapgen: { ...mapgen, ...patch } });
 
   // ── Win condition (single choice) ──
-  const winKey: WinKey =
-    config.winConditions.captureCapital ? 'captureCapital'
+  const winKey = config.winConditions.captureCapital ? 'captureCapital'
     : config.winConditions.highestScoreAtLimit ? 'highestScoreAtLimit'
     : 'captureAllCities';
-  const setWin = (k: WinKey) => setConfig({
+  const setWin = (k: string) => setConfig({
     ...config,
     winConditions: {
       ...config.winConditions,
@@ -81,8 +72,8 @@ export function SetupScreen() {
   });
 
   // ── Resources (single choice) ──
-  const resKey: ResKey = config.unlimitedResources ? 'unlimited' : (mapgen.doubleResources ? 'double' : 'normal');
-  const setRes = (k: ResKey) => setConfig({
+  const resKey = config.unlimitedResources ? 'unlimited' : (mapgen.doubleResources ? 'double' : 'normal');
+  const setRes = (k: string) => setConfig({
     ...config,
     unlimitedResources: k === 'unlimited',
     mapgen: { ...mapgen, doubleResources: k === 'double' },
@@ -102,180 +93,106 @@ export function SetupScreen() {
     input.click();
   };
 
-  return (
-    <div className="setup-screen">
-      <div className="setup-card">
-        <h1>RIGBOUND</h1>
-        <p className="subtitle">Turn-based tactical strategy prototype</p>
+  const factionOptions = factions.map(f => ({ value: f.id, label: f.name }));
 
+  return (
+    <div className="setup-screen evo">
+      <div className="setup-card">
+        <img className="setup-logo" src="/rigbound-logo.png" alt="RIGBOUND" />
+
+        <div className="evo-section">Battlefield</div>
         <div className="setup-row">
           <div className="setup-field">
-            <label>Map Size</label>
-            <select value={mapPreset} onChange={e => setMapPreset(e.target.value as MapPreset)}>
-              {(Object.keys(PRESET_LABELS) as MapPreset[]).map(p => (
-                <option key={p} value={p}>{PRESET_LABELS[p]}</option>
-              ))}
-            </select>
-          </div>
-          <div className="setup-field">
-            <label>Width</label>
-            <input type="number" min={8} max={40} value={config.mapWidth} disabled={mapPreset !== 'custom'}
+            <label>Map Width</label>
+            <input type="number" min={8} max={24} value={config.mapWidth}
               onChange={e => setConfig({ ...config, mapWidth: Number(e.target.value) })} />
           </div>
           <div className="setup-field">
-            <label>Height</label>
-            <input type="number" min={8} max={40} value={config.mapHeight} disabled={mapPreset !== 'custom'}
+            <label>Map Height</label>
+            <input type="number" min={8} max={24} value={config.mapHeight}
               onChange={e => setConfig({ ...config, mapHeight: Number(e.target.value) })} />
-          </div>
-          <div className="setup-field">
-            <label>Seed</label>
-            <input type="number" value={seed} onChange={e => setSeed(Number(e.target.value))} />
           </div>
         </div>
 
         <div className="setup-row">
           <div className="setup-field">
             <label>Map Type</label>
-            <select
+            <EvoSelect
               value={mapgen.biome ?? 'grassland'}
-              onChange={e => setMapgen({ biome: e.target.value as NonNullable<typeof mapgen.biome> })}
-            >
-              <option value="grassland">Grassland</option>
-              <option value="stone">Stone</option>
-            </select>
+              options={BIOME_OPTIONS}
+              onChange={v => setMapgen({ biome: v as NonNullable<typeof mapgen.biome> })}
+            />
           </div>
           <div className="setup-field">
             <label>Map Generation</label>
-            <select value={tileTheme} onChange={e => setTileTheme(e.target.value as typeof tileTheme)}>
-              <option value="default">Default</option>
-              <option value="gen2_volcanic">GEN 2 - Volcanic</option>
-              <option value="grass_iso">Grassland (fantasy)</option>
-              <option value="gen3_desert">GEN 3 - Desert</option>
-              <option value="gen5_desert">GEN 5 - Desert</option>
-            </select>
+            <EvoSelect
+              value={tileTheme}
+              options={THEME_OPTIONS}
+              onChange={v => setTileTheme(v as typeof tileTheme)}
+            />
           </div>
         </div>
 
+        <div className="evo-section">Combatants</div>
         <div className="setup-row">
           <div className="setup-field">
             <label>Player 1 Faction</label>
-            <select value={faction0} onChange={e => setFaction0(e.target.value)}>
-              {factions.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
-            </select>
+            <EvoSelect value={faction0} options={factionOptions} onChange={setFaction0} />
           </div>
           <div className="setup-field">
             <label>Player 2 Faction</label>
-            <select value={faction1} onChange={e => setFaction1(e.target.value)}>
-              {factions.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
-            </select>
+            <EvoSelect value={faction1} options={factionOptions} onChange={setFaction1} />
           </div>
         </div>
 
         <div className="setup-row">
           <div className="setup-field">
             <label>Player 1 Control</label>
-            <select value={bot0} onChange={e => setBot0(e.target.value as 'human' | 'random' | 'greedy')}>
-              <option value="human">Human</option>
-              <option value="random">Random Bot</option>
-              <option value="greedy">Greedy Bot</option>
-            </select>
+            <EvoSelect value={bot0} options={BOT_OPTIONS}
+              onChange={v => setBot0(v as 'human' | 'random' | 'greedy')} />
           </div>
           <div className="setup-field">
             <label>Player 2 Control</label>
-            <select value={bot1} onChange={e => setBot1(e.target.value as 'human' | 'random' | 'greedy')}>
-              <option value="human">Human</option>
-              <option value="random">Random Bot</option>
-              <option value="greedy">Greedy Bot</option>
-            </select>
+            <EvoSelect value={bot1} options={BOT_OPTIONS}
+              onChange={v => setBot1(v as 'human' | 'random' | 'greedy')} />
           </div>
         </div>
 
+        <div className="evo-section">Rules</div>
         <div className="setup-field">
           <label>Turn Limit</label>
           <input type="number" min={10} max={200} value={config.turnLimit}
             onChange={e => setConfig({ ...config, turnLimit: Number(e.target.value) })} />
         </div>
 
-        {/* ── Win condition (pick exactly one) ── */}
-        <div className="setup-section">
-          <div className="setup-section-title">Win Conditions</div>
-          {WIN_OPTIONS.map(o => (
-            <label key={o.key} className="radio-row">
-              <input type="radio" name="winCondition" checked={winKey === o.key}
-                onChange={() => setWin(o.key)} />
-              {o.label}
-            </label>
-          ))}
-        </div>
-
-        {/* ── Resources (pick exactly one) ── */}
-        <div className="setup-section">
-          <div className="setup-section-title">Resources</div>
-          {RES_OPTIONS.map(o => (
-            <label key={o.key} className="radio-row">
-              <input type="radio" name="resources" checked={resKey === o.key}
-                onChange={() => setRes(o.key)} />
-              {o.label}
-            </label>
-          ))}
-        </div>
-
-        {/* ── Mechanics (toggle any subset) ── */}
-        <div className="setup-section">
-          <div className="setup-section-title">Mechanics</div>
-          <label className="checkbox-row">
-            <input type="checkbox" checked={config.techTreeEnabled === true}
-              onChange={e => setConfig({ ...config, techTreeEnabled: e.target.checked })} />
-            Tech Tree
-          </label>
-          <label className="checkbox-row">
-            <input type="checkbox" checked={config.fogOfWar}
-              onChange={e => setConfig({ ...config, fogOfWar: e.target.checked })} />
-            Fog of War
-          </label>
-          <label className="checkbox-row">
-            <input type="checkbox" checked={config.nodesEnabled === true}
-              onChange={e => setConfig({ ...config, nodesEnabled: e.target.checked })} />
-            Nodes
-          </label>
-        </div>
-
-        <div className="setup-actions">
-          <button className="primary" onClick={handleStart}>Start Game</button>
-          <button className="ghost" onClick={handleTrain} title="Play vs the AI with the coaching sidebar on">Train vs AI</button>
-          <button className="ghost" onClick={handleLoad}>Load Game</button>
-          <button className="ghost" onClick={initMapEditor}>Map Editor</button>
-        </div>
-      </div>
-
-      {/* ── Test Combat Mode: a 14×14 sandbox with 3 cities & 2 of every unit per team ── */}
-      <div className="setup-card">
-        <h2 style={{ margin: '0 0 4px' }}>Test Combat Mode</h2>
-        <p className="subtitle">
-          14×14 arena — 3 cities each (rows 4 &amp; 11), a clean battlefield between them, and
-          <b> 2 of every unit</b> each team can build. Uses the settings above (fog, tech tree,
-          resources, map type…).
-        </p>
-
+        {/* Win Conditions & Resources — pick exactly one each (David's 3/3/3 options). */}
         <div className="setup-row">
           <div className="setup-field">
-            <label>Team 1</label>
-            <select value={tcTeam0} onChange={e => setTcTeam0(e.target.value)}>
-              {factions.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
-            </select>
+            <label>Win Condition</label>
+            <EvoSelect value={winKey} options={WIN_OPTIONS} onChange={setWin} />
           </div>
           <div className="setup-field">
-            <label>Team 2</label>
-            <select value={tcTeam1} onChange={e => setTcTeam1(e.target.value)}>
-              {factions.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
-            </select>
+            <label>Resources</label>
+            <EvoSelect value={resKey} options={RES_OPTIONS} onChange={setRes} />
           </div>
         </div>
 
+        {/* Mechanics — toggle any subset. */}
+        <div className="evo-checkbox-grid">
+          <EvoCheckbox id="tech-tree" label="Tech Tree" checked={config.techTreeEnabled === true}
+            onChange={v => setConfig({ ...config, techTreeEnabled: v })} />
+          <EvoCheckbox id="fog" label="Fog of War" checked={config.fogOfWar}
+            onChange={v => setConfig({ ...config, fogOfWar: v })} />
+          <EvoCheckbox id="nodes" label="Nodes" checked={config.nodesEnabled === true}
+            onChange={v => setConfig({ ...config, nodesEnabled: v })} />
+          <EvoCheckbox id="mute-audio" label="Mute soundtrack" checked={musicMuted}
+            onChange={setMusicMuted} />
+        </div>
+
         <div className="setup-actions">
-          <button className="primary" onClick={() => startTestCombat([tcTeam0, tcTeam1], seed)}>
-            Start Test Combat
-          </button>
+          <EvoButton primary onClick={handleStart}>Start Game</EvoButton>
+          <EvoButton onClick={handleLoad}>Load Game</EvoButton>
+          <EvoButton onClick={initMapEditor}>Map Editor</EvoButton>
         </div>
       </div>
     </div>

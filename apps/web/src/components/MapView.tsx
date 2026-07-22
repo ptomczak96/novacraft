@@ -3,15 +3,17 @@ import { cityPop, citySupplyProgress, getRecruitOptions, playerEconomy } from '@
 import { useGameStore } from '../store/gameStore.js';
 import { IsoCanvas } from '../iso/IsoCanvas.js';
 import { Starfield } from '../iso/Starfield.js';
+// Lazy so the three.js stack is only downloaded when the 3D renderer is chosen.
+const VoxelMapView = React.lazy(() =>
+  import('../render/voxel3d/VoxelMapView.js').then(m => ({ default: m.VoxelMapView })));
 import { TerritorySelectBar } from './TerritorySelectBar.js';
 import { VolleySelectBar } from './VolleySelectBar.js';
 import { StrikeSelectBar } from './StrikeSelectBar.js';
 import { TargetSelectBar } from './TargetSelectBar.js';
 import { NodeCancelDialog } from './NodeCancelDialog.js';
 import { MarkRemovalBar } from './MarkRemovalBar.js';
+import { EvoRecruitPanel } from './evo/EvoRecruitPanel.js';
 import { CityEconomyLines } from './EconomyBreakdown.js';
-import { abilityDef } from './UnitSheet.js';
-import { coordLabel } from '../data/notation.js';
 
 const UNIT_ICONS: Record<string, string> = {
   scout: '🏃',
@@ -19,8 +21,6 @@ const UNIT_ICONS: Record<string, string> = {
   lancer: '🪖',
   archer: '🏹',
   defender: '🛡️',
-  medic: '🧑‍⚕️',
-  engineer: '👷',
   wraith: '🥷',
   stalker: '🕷️',
   titan: '🗿',
@@ -30,12 +30,9 @@ const UNIT_ICONS: Record<string, string> = {
   scuttling: '🐛',
   hive_scout: '👁️',
   reaper: '🦅',
-  burstling: '💣',
   scab: '⚗️',
   vindrace: '🦏',
   seercaust: '🔮',
-  behemoth: '🦖',
-  ravener: '🦇',
   wyrm: '🪱',
   ironclad_berserker: '🪓',
   ironclad_siege_tower: '🏰',
@@ -45,6 +42,8 @@ const UNIT_ICONS: Record<string, string> = {
 
 const RESOURCE_LABEL: Record<string, string> = { ore: 'Ore ◈', plasma: 'Plasma ✦' };
 
+type RendererKind = 'iso' | 'voxel3d';
+
 export function MapView() {
   const {
     gameState, visibleState, registry,
@@ -52,7 +51,12 @@ export function MapView() {
     inspectedTile, setInspectedTile,
   } = useGameStore();
 
-  const [showRecruit, setShowRecruit] = React.useState(false);
+  // Renderer selection: `?renderer=voxel3d` or the on-screen toggle. The 2D iso
+  // canvas remains the default and is untouched by the voxel3d option.
+  const [renderer, setRenderer] = React.useState<RendererKind>(() =>
+    new URLSearchParams(window.location.search).get('renderer') === 'voxel3d'
+      ? 'voxel3d'
+      : 'iso');
 
   // Map pan offset (drag-to-pan). Drives both the board's CSS translate and the
   // starfield parallax. Reset to centre whenever a new game starts.
@@ -89,18 +93,25 @@ export function MapView() {
     };
   }, [inspectedTile, visibleState, registry]);
 
+  // The engine hides all options while a unit stands on the spawn tile — the
+  // panel shows a hint in that case instead of silently showing nothing.
+  const spawnBlocked = useMemo(() => {
+    if (!selectedCity || !gameState) return false;
+    const city = gameState.cities.find(
+      c => c.position.x === selectedCity.x && c.position.y === selectedCity.y,
+    );
+    if (!city || city.owner !== gameState.currentPlayer) return false;
+    return gameState.units.some(
+      u => u.position.x === selectedCity.x && u.position.y === selectedCity.y,
+    );
+  }, [selectedCity, gameState]);
+
   // Full recruit roster for the selected city (incl. unaffordable units, flagged),
   // so they can be shown red rather than hidden.
   const recruitOptions = useMemo(() => {
     if (!selectedCity || !gameState) return [];
     return getRecruitOptions(gameState, registry, gameState.currentPlayer, selectedCity);
   }, [gameState, registry, selectedCity]);
-
-  // Pop is "full" when the city can't fit even the smallest available unit.
-  const popFull = recruitOptions.length > 0 && recruitOptions.every(o => !o.fitsPop);
-
-  // Collapse the menu whenever the selected city changes.
-  useEffect(() => { setShowRecruit(false); }, [selectedCity]);
 
   // Pop / supply readout for the selected city (any owner).
   const cityInfo = useMemo(() => {
@@ -109,7 +120,7 @@ export function MapView() {
       c => c.position.x === selectedCity.x && c.position.y === selectedCity.y,
     );
     if (!city) return null;
-    const popMax = cityPop(city, registry, gameState ?? undefined);
+    const popMax = cityPop(city, registry);
     // Weighted, rounded up — scuttlings count 0.5 each (a pair = 1).
     const popUsed = Math.ceil(visibleState.units
       .filter(u => visibleState.unitHomeCity[u.id] === city.id)
@@ -132,28 +143,37 @@ export function MapView() {
 
   return (
     <div className="map-container" style={{ position: 'relative' }}>
-      <Starfield pan={pan} />
-      {/* Only the board scrolls/zooms; overlays below stay pinned to the visible box. */}
-      <div className="map-scroll">
-        <IsoCanvas mode="game" pan={pan} onPanChange={setPan} />
-      </div>
+      {renderer === 'iso' ? (
+        <>
+          <Starfield pan={pan} />
+          <IsoCanvas mode="game" pan={pan} onPanChange={setPan} />
+        </>
+      ) : (
+        <React.Suspense fallback={null}>
+          <VoxelMapView />
+        </React.Suspense>
+      )}
 
-      {/* Territory-expansion picker — pinned to the map's top-right corner */}
+      {/* Renderer toggle — 2D iso canvas ⟷ 3D voxel arena */}
+      <button
+        onClick={() => setRenderer(r => (r === 'iso' ? 'voxel3d' : 'iso'))}
+        title={renderer === 'iso' ? 'Switch to 3D voxel renderer' : 'Switch to 2D renderer'}
+        style={{
+          position: 'absolute', top: 8, left: 8, zIndex: 10,
+          padding: '4px 10px', fontSize: 12, fontFamily: 'monospace',
+          background: 'rgba(20, 24, 38, 0.85)', color: '#8ecbff',
+          border: '1px solid #2a3a55', borderRadius: 4, cursor: 'pointer',
+        }}
+      >
+        {renderer === 'iso' ? '3D' : '2D'}
+      </button>
+
+      {/* Ability / gameplay pickers & prompts (David's economy-branch UI) */}
       <TerritorySelectBar />
-
-      {/* Ballistic Volley 2×2 target picker (Titan) */}
       <VolleySelectBar />
-
-      {/* Wyrm Body Slam 2-cell picker */}
       <StrikeSelectBar />
-
-      {/* Cure / Repair multi-unit target picker (Medic / Engineer) */}
       <TargetSelectBar />
-
-      {/* Confirm dialog for cancelling in-progress Node construction */}
       <NodeCancelDialog />
-
-      {/* Remove tracer round / explosives prompt */}
       <MarkRemovalBar />
 
       {/* City info card — pop & supply for the selected city (any owner) */}
@@ -214,111 +234,24 @@ export function MapView() {
               <div className="tile-info-note">Enemy units: −20% DEF · movement penalty (TBD)</div>
             </div>
           )}
-          <div className="tile-info-note tile-info-coord">{coordLabel(tileInfo.coord.x, tileInfo.coord.y)}</div>
+          <div className="tile-info-note tile-info-coord">({tileInfo.coord.x}, {tileInfo.coord.y})</div>
         </div>
       )}
 
-      {/* Recruit button — shown when an owned city is selected and can build a unit */}
-      {selectedCity && recruitOptions.length > 0 && (
-        <div style={{ position: 'absolute', bottom: 16, left: '50%', transform: 'translateX(-50%)' }}>
-          <button className="primary" onClick={() => setShowRecruit(s => !s)}>
-            Recruit ({recruitOptions.length})
-          </button>
-        </div>
-      )}
-
-      {/* Recruit panel — the full roster as a table; locked / unaffordable / pop-blocked
-          rows are greyed rather than hidden. A "Population Full" banner tops the list when
-          the city has no room. The Abilities column shows a ? (hover/click for details)
-          or "None". */}
-      {showRecruit && selectedCity && recruitOptions.length > 0 && (
-        <div className="recruit-panel recruit-panel--table">
-          {popFull && (
-            <div className="recruit-popfull">
-              <span className="recruit-popfull-ico" aria-hidden>⚠️</span> Population Full
-            </div>
-          )}
-          <table className="recruit-table">
-            <thead>
-              <tr>
-                <th className="ru-unit">Unit</th>
-                <th>HP</th><th>ATT</th><th>DEF</th><th>MOV</th><th>RNG</th><th>VIS</th>
-                <th>Abilities</th>
-              </tr>
-            </thead>
-            <tbody>
-              {recruitOptions.map(opt => {
-                const ut = registry.unitTypes[opt.unitTypeId];
-                if (!ut) return null;
-                const recruitable = !opt.locked && opt.affordable && opt.fitsPop;
-                const rowCls = `recruit-row${opt.locked ? ' recruit-row--locked' : !opt.fitsPop ? ' recruit-row--nopop' : opt.affordable ? '' : ' recruit-row--unaffordable'}`;
-                const title = opt.locked
-                  ? `Locked — research ${opt.lockedBy && opt.lockedBy.length ? opt.lockedBy.join(' / ') : 'the required tech'} to unlock`
-                  : !opt.fitsPop ? 'Population full — no room for this unit'
-                  : opt.affordable ? undefined : 'Not enough resources';
-                // Inherent actives (ability casts) + passives (passive-category conditions).
-                const actives = ut.abilities.map(a => abilityDef(a.id));
-                const passives = (ut.conditions ?? []).map(id => abilityDef(id)).filter(d => d.category === 'passive');
-                const rows = [
-                  ...actives.map(d => ({ kind: 'Active', ...d })),
-                  ...passives.map(d => ({ kind: 'Passive', ...d })),
-                ];
-                return (
-                  <tr
-                    key={opt.unitTypeId}
-                    className={rowCls}
-                    title={title}
-                    onClick={() => {
-                      if (!recruitable) return;
-                      executeAction({ type: 'recruit', unitTypeId: opt.unitTypeId, cityPosition: selectedCity });
-                      setShowRecruit(false);
-                    }}
-                  >
-                    <td className="ru-unit">
-                      <span className="ru-ico" aria-hidden>{UNIT_ICONS[opt.unitTypeId] || '●'}</span>
-                      <span className="ru-name">{ut.name}</span>
-                      <span className="ru-cost">
-                        {opt.locked
-                          ? <>🔒 {opt.lockedBy && opt.lockedBy.length ? opt.lockedBy.join(' / ') : 'Locked'}</>
-                          : <>{opt.cost}◈{opt.plasmaCost > 0 ? ` ${opt.plasmaCost}✦` : ''}</>}
-                      </span>
-                    </td>
-                    <td>{ut.maxHP}</td>
-                    <td>{ut.attack}</td>
-                    <td>{ut.defence}</td>
-                    <td>{ut.movement}</td>
-                    <td>{ut.attackRange}</td>
-                    <td>{ut.visibility}</td>
-                    <td className="ru-abil-cell">
-                      {rows.length === 0
-                        ? <span className="ru-none">None</span>
-                        : (
-                          <span className="ru-abil" tabIndex={0} onClick={e => e.stopPropagation()}>
-                            <span className="ru-abil-q" aria-label="Abilities">❓</span>
-                            <span className="ru-abil-pop" role="tooltip">
-                              <span className="ru-abil-title">{ut.name} — Abilities</span>
-                              <table className="ru-abil-table">
-                                <thead><tr><th>Type</th><th>Name</th><th>Effect</th></tr></thead>
-                                <tbody>
-                                  {rows.map((r, i) => (
-                                    <tr key={i}>
-                                      <td className={`ru-abil-kind ${r.kind.toLowerCase()}`}>{r.kind}</td>
-                                      <td className="ru-abil-name">{r.name}</td>
-                                      <td className="ru-abil-desc">{r.desc || '—'}</td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
-                            </span>
-                          </span>
-                        )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+      {/* Recruit menu — pops up immediately when an owned base is selected.
+          If a unit is parked on the spawn tile, show why nothing is listed. */}
+      {selectedCity && (recruitOptions.length > 0 || spawnBlocked) && (
+        <EvoRecruitPanel
+          options={recruitOptions}
+          registry={registry}
+          hint={recruitOptions.length === 0 && spawnBlocked
+            ? 'Move the unit off the base tile to recruit.'
+            : undefined}
+          onRecruit={unitTypeId => {
+            executeAction({ type: 'recruit', unitTypeId, cityPosition: selectedCity });
+          }}
+          onClose={() => setSelectedCity(null)}
+        />
       )}
     </div>
   );
