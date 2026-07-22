@@ -2769,3 +2769,353 @@ art isn't team-colored, so without it you can't tell whose unit it is). The two
 changes are orthogonal — resolution keeps both: the rim draws first, then the
 sprite is destructured with `flip` and mirrored as before. Verified with the
 full test suite (159 passing), `validate-data`, and a web-app typecheck.
+
+## 2026-07-14 — Rigbound art for the full Vanguard roster; ownership-ring regression fix (Patrick Tomczak / patrick.tomczak.1@gmail.com, via Claude)
+
+**What changed**
+- Split the remaining "-A" sheets in `Rigbound - Art Prototyping/Units/Vanguard/`
+  (Sentinel, Stalker, Tank, Titan, Wraith) into per-facing PNGs. Labelled copies
+  (`<Name> SE.png` / `<Name> SW.png`) saved back into each source folder;
+  ground-contact-normalized copies live in `apps/web/public/units/vanguard/<typeId>/`.
+- Registered all of them in `unitSprites.ts` as faction-scoped duo (SE/SW-only,
+  Polytopia-style) sets. `tank_assault` reuses the tank art. Every Vanguard unit
+  class with art now renders sprites; Hive keeps vector drawers.
+- Titan's sheet has only a SW view — its SE facing renders through the
+  mirror-at-draw flip fallback. This is the first real user of that path;
+  verified live that SE/SW are exact mirrors and the registry resolves
+  se→sw.png+flip.
+- Facing reference (how each sheet was read): Sentinel top=SW/bottom=SE,
+  Stalker top=SW/bottom=SE, Tank top=SE/bottom=SW, Wraith left=SW/right=SE,
+  Titan single=SW.
+
+**Why / notes**
+- The blue ownership ring under sprite units, removed in 914124d at Patrick's
+  request, silently returned in merge a2842f0: David's branch predated the
+  removal and touched the same hunk (cloak ghosting), so the merge kept his
+  version of the block. Removed it again, preserving the cloak `baseAlpha`
+  ghosting (Wraith renders at 0.5 alpha to its owner — intentional REB rule).
+- Dev-server note: another local project (Lumin) now occupies Vite's default
+  port 5173; Tactica verification ran on `npx vite --port 5190 --strictPort`
+  from `apps/web`.
+
+## 2026-07-15 — GEN 6 desert tileset (MJ "Scenario" set) as a Map Generation option (Patrick Tomczak, via Claude)
+
+**What**
+- Added `gen6_desert` tile theme: 20 sprites normalised from
+  `Rigbound - Art Prototyping/Maps/GEN 2/DESERT - MJ_Scenario.png` by
+  `Tileset_Script/tile_normalizer.py`, copied to `apps/web/public/tiles/gen6_desert/`
+  (open/scatter/pebbles/cactus/rocks ground variants, boulders, two rock towers,
+  one arch). Registered in `tileSprites.ts` and exposed in SetupScreen's
+  "Map Generation" dropdown as "GEN 6 - Desert (Scenario)".
+
+**Why / notes**
+- Unlike gen5_desert (mixed 512×384 slab / 512×768 tall canvases needing per-file
+  nudges), every gen6 sprite shares ONE 512×768 canvas with the anchor at
+  (256,672), so a single `topOffsetY = -416·(108/512) = -87.75` places all 20
+  files and the `nudge` table is unnecessary. Uniform canvases are the contract
+  going forward for sets produced by tile_normalizer.
+- Terrain mapping: plains draws from a weighted pool (plain open ×2 vs decor ×1)
+  so boards read as ground with occasional cacti/rocks rather than clutter;
+  forest → boulders + dense cacti (cover read); mountain → towers + arch;
+  water/lava → towers (set has no liquid art, matching gen5's barrier approach,
+  `flushLiquids: true`).
+- This set's diamonds are ~1.43:1 in the source art; the normaliser warps them
+  to the exact 2:1 / 512-wide contract, so no anisotropic `spriteH` is needed.
+
+## 2026-07-15 — ITB desert tileset as a Map Generation option (Patrick Tomczak, via Claude)
+
+**What**
+- Added `itb_desert` tile theme: 20 sprites from
+  `Rigbound - Art Prototyping/Maps/ITB/DESERT/Desert - ITB.png`, keyed and
+  normalised by Tileset_Script, copied to `apps/web/public/tiles/itb_desert/`,
+  registered in `tileSprites.ts`, exposed in SetupScreen as "ITB - Desert".
+
+**Why / notes**
+- Source sheet was RGB with a baked white background (no alpha); keyed via
+  border flood-fill (tol 12) + alpha-unmix defringe before normalising.
+- One tower's summit touched the tile above it on the sheet, merging them into
+  a single alpha component; tile_normalizer now splits merged components via
+  erode-until-split + nearest-core pixel assignment, so the tower kept its
+  summit rather than being cut at the sheet's cell boundary.
+- Slabs are thicker than the gen6 set (two block rows), so the shared 512×768
+  canvas uses anchor (256,624) → single topOffsetY = −77.625, no nudges.
+
+## 2026-07-15 — ITB desert: white edge-fringe fix (Patrick Tomczak, via Claude)
+
+**What**
+- Re-keyed and re-normalised all 20 `itb_desert` sprites; replaced in place.
+
+**Why / notes**
+- The first keying pass flood-filled only pixels within tol 12 of pure white,
+  so the anti-aliased gradient between each tile's black outline and the white
+  background (grays ~180–250) stayed fully opaque — a 1–3px white rim around
+  every tile, most visible against fog. Fix (Tileset_Script/key_white_bg.py):
+  in a 4px band around the background, alpha is now derived from darkness
+  (edge art is always the dark outline) and the white contribution unmixed
+  from the color. Verified: 0 near-white opaque edge pixels (was 191 on
+  open_01) and clean borders in-game.
+
+## 2026-07-15 — MTP resource props for gen6_desert + itb_desert (Patrick Tomczak, via Claude)
+
+**What**
+- Sliced `Rigbound - Art Prototyping/Resources/Resources - MTP.png` (ore crystal
+  cluster + plasma orb, native alpha) into tight-cropped `ore.png`/`plasma.png`,
+  copied into both `public/tiles/gen6_desert/` and `public/tiles/itb_desert/`,
+  and wired `resources: { ore, plasma }` + `resourceMode: 'object'` into both
+  ThemeDefs so resource tiles plant the themed props instead of vector crystals.
+
+**Why / notes**
+- Both desert themes share the same prop files (duplicated per theme dir since
+  sprite lookup is `${theme}/${key}` off the theme's base path). Verified in
+  game with Double Resources: props scale via RESOURCE_OBJECT_SCALE and sit
+  centred on their tiles in both themes; console clean.
+
+## 2026-07-16 — PIX Titan sprites + muted team colors via magenta mask (Patrick Tomczak, via Claude)
+
+**What**
+- Replaced the Titan's single SW view with the `-PIX Titan SW.png` pair
+  (actually SW + SE despite the name), normalized by Tileset_Script's new
+  `unit_normalizer.py` (class heavy, shared pair scale, 256×268 canvas,
+  foot row 248). Both facings now render real art — no mirror fallback.
+  Unit sprites are theme-independent, so this applies to every mapgen option.
+- Added TEAM_COLORS (muted: #5f7a9a / #9a5f5f) in constants.ts. Unit art may
+  carry MAGENTA mask panels (hue 270–335, sat ≥ 0.35); on sprite load,
+  unitSprites.ts bakes one recolored canvas per team — team hue, saturation
+  scaled by the mask's, pixel value scaled by the team color's value so
+  shading survives and the result stays muted. getUnitSprite() takes the
+  owner index; drawUnit passes unit.owner. Sprites without a mask render
+  unchanged.
+
+**Why / notes**
+- Muted palette chosen deliberately (per Patrick) so two same-faction armies
+  read as teams without neon. First cut (#ad7d7d + value floor 0.35) rendered
+  washed-out pink; fixed by anchoring the brightest mask pixel exactly to the
+  team color's value.
+- Note for later: a generic death animation already exists (IsoCanvas
+  DEATH_FADE_MS = 600ms fade-out, white flash on combat kills) — do not
+  re-implement.
+
+## 2026-07-16 — Titan foot anchoring + resource prop placement (Patrick Tomczak, via Claude)
+
+**What**
+- Titan floated above its tile: unit_normalizer anchored the sprite's lowest
+  pixel (the drooping gun barrel tip, ~36px below the feet) to the ground row.
+  Added body-aware anchoring (rows/cols under 30% of the max width are treated
+  as protruding weapons and excluded from the foot row + horizontal centering,
+  echoing the old "-A sheet" pipeline convention). Titan re-exported at
+  260x252, footY 217; def updated with drawW 107.7 to preserve world scale.
+- Resource props (MTP ore/plasma) hugged the top half of tiles:
+  RESOURCE_OBJECT_BASEFRAC 0.86 -> 0.60 in drawTile.ts, so tight-cropped props
+  (no baked ground shadow) straddle the diamond centre with a slight downward
+  bias, matching how the tile art's own rocks sit. Only the two desert themes
+  use object mode, so nothing else shifts.
+
+## 2026-07-16 — Organic tile seams for gen5_desert (Patrick Tomczak, via Claude)
+
+**What**
+- Baked wobbly, hand-drawn-looking crack lines into the gen5_desert tile
+  sprites (Tileset_Script/apply_tile_seams.py; originals kept clean in
+  Tileset_Script/out_desert, seamed copies in out_desert_seamed).
+
+**Why / notes**
+- Reference: MJ render with organic dark separations between tiles. Trick for
+  clean tessellation: each sprite carries a seam on its TOP-LEFT and TOP-RIGHT
+  diamond edges only — painter's order means the front tile overdraws its back
+  neighbours, so every interior boundary shows exactly one line, and per-variant
+  random wobble (pinned at the shared corner vertices) makes boundaries vary
+  by which tiles happen to meet. 5px stroke at the 512 master scale survives
+  the ~5x downscale to ~1px in-game.
+- Reusable on any tile_normalizer output dir if we want the same look for
+  gen6_desert / itb_desert.
+
+## 2026-07-17 — GEN 7 Industrial theme with theme-scoped Vanguard unit skins (Patrick Tomczak, via Claude)
+
+**What**
+- New "GEN 7 - Industrial" Map Generation option from asset_rhtfi4… (tiles
+  sheet): 15 floor plates only (9 metal + 3 cracked + 3 rubble variants) —
+  walls/buildings/crates/FX on the same sheet deliberately unused. Normalised
+  by tile_normalizer (Tileset_Script/out_gen7), uniform 512×384, seamless.
+  The three touching plate columns were auto-split; MTP ore/plasma props
+  reused. This pack has no tall formation art: impassable terrain (mountain/
+  water/lava) reads as heavy rubble tiles.
+- NEW MECHANISM — theme-scoped unit skins in unitSprites.ts: registry keys may
+  be prefixed `${tileTheme}::`; getUnitSprite resolves theme-scoped set →
+  faction set → global set using getActiveTheme(). While GEN 7 is the active
+  theme, all 9 Vanguard classes (plus tank_assault) render the stone-plated
+  mech roster from asset_h3JH… (9 SW/SE pairs, split + body-anchored by
+  unit_normalizer into public/units/vanguard_gen7/). Other themes keep the
+  existing Rigbound art untouched.
+
+**Why / notes**
+- Sprite→class mapping by silhouette/role: sword→warrior, rifle→sentinel,
+  spear→lancer, shield→defender, clawed→stalker, tank→tank, winged→wraith,
+  bruiser→titan, small walker→scout.
+- unit_normalizer gained a --dilate flag: four pairs sat close enough that the
+  default 15px join-dilation merged the two facings into one figure.
+
+## 2026-07-21 — voxel3d: Three.js arena renderer as a selectable render option (Patrick Tomczak / Claude)
+
+**What changed**
+- New self-contained 3D renderer at `apps/web/src/render/voxel3d/` (r3f v8 +
+  drei + postprocessing on three 0.175.0), selectable via `?renderer=voxel3d`
+  or an on-map 2D/3D toggle. The 2D iso canvas remains the default and was not
+  modified. The three.js stack is lazy-loaded so the 2D path's bundle is
+  unchanged. `?quality=low` tier and `?debugCam=1` OrbitControls exist.
+- Scene: single MeshReflectorMaterial floor (procedural value-noise
+  grime/puddle roughnessMap, replaceable via a `floorTextures` config object),
+  shader-grid overlay quad, instanced neon edge rim (emissive-only strips, no
+  per-neon lights), exactly three lights, instanced tile highlights
+  (move/threat/select/path), box-built placeholder voxel units behind a
+  `buildUnit(def) → Group` seam for later glTF, drei Clouds fog-of-war,
+  instanced rain, procedural city-window billboards, bloom/vignette/noise.
+
+**Why / key decisions**
+- Kept the deterministic engine and mapgen output untouched: the renderer
+  adapts `VisibleState` in `VoxelMapView` (units → UnitView, legalActions →
+  highlights, clicks → the same store actions the iso canvas drives). "Threat"
+  tiles are the selected unit's attack/slash targets — the engine has no
+  standalone threat map.
+- Built voxel3d fresh with zero imports from `src/iso/` (per Patrick's
+  direction "don't adapt old mechanisms — assume the option is built off
+  voxels"): own palette, own facing derivation, terrain as voxel block props
+  (mountains/forests/cities/ruins/crystals). Supersedes nothing — the iso
+  renderer stays; this is an additive option.
+- Fog integrity: hidden tiles get NO terrain/prop placement at all; drei Cloud
+  puffs (sprite vendored at `apps/web/public/voxel3d/cloud.png`) are drawn on
+  top. Ecosystem libs preferred for reflections/weather/particles per
+  Patrick's direction; rain stays a custom InstancedMesh (no maintained
+  drop-in fits).
+- three pinned to 0.175.0 via a root `overrides` (regenerated
+  package-lock.json): the newest three (0.185) deprecation-warns on
+  THREE.Clock (used internally by r3f v8) and PCFSoftShadowMap, and npm's
+  workspace hoisting otherwise installed two three copies. 0.175 is the newest
+  release that keeps the console clean with the r3f v8 / postprocessing 6.39
+  lines (React 18 forces the r3f v8 line).
+- Light intensities (ambient 0.65, key 1.7, corner point 60/dist 30) sit above
+  the design spec's legacy-mode values (0.5 / 1.1 / 0.6) because three r155+
+  physically-based lighting + ACES rendered the spec values unreadably dark.
+- A `VoxelErrorBoundary` shows a fallback message when WebGL is unavailable
+  instead of unmounting the whole app (found via headless testing, where
+  context creation fails).
+
+## 2026-07-21 — voxel3d: reference-image look pass (Patrick Tomczak / Claude)
+
+**What changed** (after Patrick shared the cyberpunk arena reference image and
+asked to match it as closely as possible): floor re-textured as per-tile worn
+metal plates baked into the reflector's procedural albedo/roughness — chosen
+over real per-tile slab meshes because the planar reflector must remain one
+plane; seams/bevels in the albedo give the chunky-tile read, and interior tile
+thickness isn't visible from the game camera anyway. Platform edge rebuilt
+(flush lip, white-cyan perimeter dashes, railings, tiered hull + pillars +
+greebles), procedural neon glyph signage (blocky strokes instead of shipping a
+CJK font), background switched from flat billboards to 3D window-lit towers
+behind tightened fog, unit visors glow in team colour, rain density cut 80%
+(1500 → 300 streaks) on Patrick's request.
+
+## 2026-07-21 — voxel3d: CC0 internet assets + AO/IBL pass (Patrick Tomczak / Claude)
+
+**What changed** (Patrick asked what engines/packs could be pulled off the
+internet to improve the renderer): vendored CC0 assets into
+`apps/web/public/voxel3d/` — Kenney "Blocky Characters" GLBs now render the
+human-scale units via the buildUnit seam (heavies keep the box mech), Poly
+Haven night HDRI as subtle lighting-only IBL, ambientCG MetalPlates006 normal
+map for floor micro-relief. Enabled N8AO (already bundled in
+@react-three/postprocessing) for contact occlusion, high tier only.
+
+**Why / notes**
+- All CC0 (no attribution required; Kenney licence file vendored alongside).
+  Assets are committed to the repo so builds and runtime stay fully offline.
+- The pack's materials are KHR-unlit; converted on load to flat-shaded
+  MeshStandardMaterial so the key light, shadows and AO apply, tinted toward
+  the owner's team colour + a team visor glow added for bloom/allegiance.
+- environmentIntensity 0.18: at 0.35 the IBL washed out the dark neon-noir
+  mood the reference image calls for.
+- Debugging note: the "floating orange wedge" Patrick may see near the west
+  edge on some seeds is a LAVA tile partially occluded by a neon sign — real
+  terrain, not a glitch; its pane was toned down to read as ground.
+
+## 2026-07-21 — voxel3d: "Perfect Graphics.png" target pass (Patrick Tomczak / Claude)
+
+**What changed**: Patrick placed the target frame at repo root
+("Perfect Graphics.png") and asked for the renderer to match it. Closed the
+remaining gaps: brighter violet world (ambient 0.95, purple shadows — the
+reference has no true blacks), floor lifted to mid blue-grey plates with
+bright seam grid + teal/magenta/rust splatter, richer tower facades
+(per-building window scale, balcony bands, ad billboards, rooftop antennas
+with red beacons), bokeh light dots, longer rain, bloom 1.3, pedestal crates
+under glTF characters, decorative red scan cones under hostile heavies, and
+the earlier Pixelation pass (granularity 5, ?pixel=N override) that puts the
+whole frame on one fat-pixel grid.
+
+**Remaining, out of renderer scope**: the reference's AP pips / turn banner /
+portrait panel are game HUD (separate module), and per-unit outfit variety
+needs authored voxel models via the buildUnit seam.
+
+## 2026-07-21 — voxel3d: bespoke voxel models for all 24 units (Patrick Tomczak / Claude)
+
+**What changed**: every unit id in units.json now has a hand-authored
+box-voxel model in `apps/web/src/render/voxel3d/units/unitDefs.ts`, designed
+from its stats/conditions/abilities (e.g. blind Scuttling has no eyes, just a
+team marker; Tank's assault morph deploys outriggers + a spotting mast for its
+vis 3; Seercaust's Spray Bile shows as glowing bile sacs). Kenney glTF
+characters removed — the pack couldn't express per-unit roles. UnitPartDef
+gained per-part rotation. `?unitGallery=1` renders one of each kind for
+review. Scan-cone "heavy" list now matches unitClass: heavy in the data.
+Models are data (parts arrays), so a future .vox/glTF pipeline can still
+replace buildUnit behind the same interface.
+
+## 2026-07-21 — desert biome: mapgen option + voxel3d desert theme (Patrick Tomczak / Claude)
+
+**What changed**: 'desert' added to the engine's Biome union with its own
+classifier (sand seas, budgeted mesa band, rare lava vents, moisture-spike
+scrub oases). Discovery during this work: with ENABLE_WATER_LAVA=true the
+biome dropdown had NO effect — all maps used waterLavaTerrain regardless of
+the selected biome. Desert is routed explicitly around that flag so
+grassland/stone behaviour stays byte-identical; whoever owns the classifier
+flag may want to decide whether grassland/stone should regain meaning
+(left as-is deliberately). voxel3d detects an arena theme from dominant
+terrain (>30% sand → desert) and swaps its dressing (rust plates, mesas,
+saguaros, warm dusk lights, no rain) while keeping the neon-noir identity.
+SetupScreen gained a Desert option — NOT committed with this change because
+the file carries Patrick's uncommitted tile-theme edits; it ships whenever
+that file is next committed. Dev note: Vite pre-bundles workspace packages,
+so engine edits need a dev-server restart + .vite cache clear to appear.
+
+## 2026-07-21 — voxel3d review pass: desert coherence (Patrick Tomczak / Claude)
+
+**What changed** (Patrick flagged that the desert floated in a neon city and
+the tiles had a grate texture): desert now has a wasteland horizon (buttes +
+two radio masts) instead of window towers/signage/bokeh/rain, which are
+city-only; the metal diamond-plate normal map no longer applies to desert
+floors (it read as a grate) and is softened in the city; desert floor
+de-metallized (0.4 → 0.12) so only puddles mirror; desert edge dashes are
+amber. Plus small code cleanups (dead texture fn, duplicate odd-width dash,
+inline type import). Deliberately kept: the night-city HDRI as desert IBL
+(lighting-only, generic), the >30% sand theme heuristic, and the floating-
+platform framing itself — the arena-as-floating-stage is the game's visual
+identity across biomes.
+
+## 2026-07-21 — voxel3d: space backdrop replaces the neon city (Patrick Tomczak / Claude)
+
+**What changed** (Patrick's direction: "remove all the asian neon elements,
+just make it the tileset floating in space, parallax stars"): Signage,
+CityBlocks towers, haze, bokeh, dust motes and rain deleted along with their
+procedural texture generators; backdrop is now a deep indigo void with a
+three-layer parallax starfield (layers follow fractions of the camera pan —
+an orthographic camera has no natural translation parallax). Removing the
+scene fog revealed the arena's lighting had been leaning on fog for its dark
+grade, so the rig was rebalanced (ambient 0.3, key 1.0, mixStrength 3).
+This supersedes the earlier reference-image city direction — the platform,
+edge lighting, floor themes and fog-of-war are unchanged.
+
+## 2026-07-22 — voxel3d: heavy simplification to an SC1-style space platform (Patrick Tomczak / Claude)
+
+**What changed** (Patrick's direction, superseding both the cyberpunk
+reference-image look AND the course-correction that restored it): the arena is
+now a clean cube-grid platform floating in a parallax starfield — no signage,
+city backdrop, neon perimeter dashes, greebles, railings, or bounce lights.
+Impassable terrain (water/lava) renders as holes in the platform (alpha-cut
+through the single reflector plane + hole-mask-aware grid shader). Terrain
+props minimal: one block per mountain, one tree per forest, plain saguaros.
+The cyberpunk look remains recoverable from git history (tags around
+d1a249f–942459c) if the direction swings back.
