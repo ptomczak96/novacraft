@@ -77,7 +77,9 @@ export function Floor({ width, height, quality, floorTextures, onTileClick, inte
           map={albedoMap}
           normalMap={normalMap}
           // Impassable tiles are alpha-0 in the albedo — cut clean holes.
-          transparent
+          // alphaTest only (no `transparent`): binary alpha cuts fine in the
+          // opaque pass, and the transparent queue would let the floor draw
+          // over the additive highlight quads.
           alphaTest={0.5}
         />
       </mesh>

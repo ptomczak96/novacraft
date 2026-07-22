@@ -23,6 +23,8 @@ export interface UnitView {
   /** True for units not owned by the viewing player — drives decorative
    *  scan-cone telegraphs on heavy units. */
   hostile?: boolean;
+  /** Small world-space x/z shift so a garrisoned unit clears its city tower. */
+  visualOffset?: number;
 }
 
 /** One executed attack, for render-side lunge/flash effects (from the store's

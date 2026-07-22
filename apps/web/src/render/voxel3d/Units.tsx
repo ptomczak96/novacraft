@@ -83,7 +83,8 @@ function UnitMesh({ unit, onTileClick, interaction, combat }: {
   // Move animation: when the grid position changes, glide from the previous
   // world position to the new one with a slight hop. Units are otherwise
   // static (no idle bob).
-  const target = { x: unit.gridPos.x + 0.5, z: unit.gridPos.y + 0.5 };
+  const off = unit.visualOffset ?? 0;
+  const target = { x: unit.gridPos.x + 0.5 + off, z: unit.gridPos.y + 0.5 + off };
   const animRef = React.useRef({
     x: target.x, z: target.z,          // current rendered position
     fromX: target.x, fromZ: target.z,

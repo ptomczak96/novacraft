@@ -56,6 +56,14 @@ export function VoxelArena({
     return total > 0 && sand / total > 0.3 ? 'desert' : 'city';
   }, [map]);
 
+  // Garrisoned units shift slightly toward the camera so they stand clear of
+  // their (centred) city tower.
+  const adjustedUnits = React.useMemo(
+    () => units.map(u =>
+      map.tiles[u.gridPos.y]?.[u.gridPos.x]?.isCity ? { ...u, visualOffset: 0.18 } : u),
+    [units, map],
+  );
+
   // Impassable terrain renders as holes in the platform (SC1 space-platform
   // style): no floor tile, space visible through the gap.
   const holes = React.useMemo(() => {
@@ -95,7 +103,7 @@ export function VoxelArena({
       <EdgeRim width={map.width} height={map.height} theme={theme} />
       <TerrainBlocks map={map} visibility={visibility} theme={theme} />
       <Highlights highlights={highlights} />
-      <Units units={units} ghosts={ghosts} combat={combat} onTileClick={onTileClick} interaction={interaction} />
+      <Units units={adjustedUnits} ghosts={ghosts} combat={combat} onTileClick={onTileClick} interaction={interaction} />
       <FogClouds map={map} visibility={visibility} theme={theme} />
       <SpaceStars width={map.width} height={map.height} quality={quality} />
       {quality === 'high' && (

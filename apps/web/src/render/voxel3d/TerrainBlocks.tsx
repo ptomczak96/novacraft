@@ -109,12 +109,11 @@ function buildTerrain(map: MapData, visibility: TileVisibility[][] | undefined, 
         const teamColor = tile.owner != null
           ? TEAM_COLORS[tile.owner % TEAM_COLORS.length]
           : '#8fb4ff';
-        // Back corner of the tile so a garrisoned unit at the centre stays
-        // visible in front of its own base.
-        const bx = cx - 0.24, bz = cz - 0.24;
-        s.cityBase.push({ pos: [bx, 0.05, bz], scale: [0.52, 0.1, 0.52] });
-        s.cityTower.push({ pos: [bx, 0.4, bz], scale: [0.34, 0.6, 0.34] });
-        s.cityWindow.push({ pos: [bx, 0.46, bz], scale: [0.36, 0.07, 0.36], color: teamColor });
+        // Centred on the tile; a garrisoned unit gets a small visual offset
+        // toward the camera instead (see VoxelArena).
+        s.cityBase.push({ pos: [cx, 0.05, cz], scale: [0.6, 0.1, 0.6] });
+        s.cityTower.push({ pos: [cx, 0.4, cz], scale: [0.34, 0.6, 0.34] });
+        s.cityWindow.push({ pos: [cx, 0.46, cz], scale: [0.36, 0.07, 0.36], color: teamColor });
       } else if (tile.terrain === 'mountain') {
         // A low cluster of rocks, not a tile-filling monolith — units (0.7
         // tall) should still dominate the silhouette.
