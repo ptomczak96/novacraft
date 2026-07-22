@@ -1,9 +1,34 @@
 import React, { useState } from 'react';
 import { useGameStore } from '../store/gameStore.js';
+import { EvoSelect, EvoCheckbox, EvoButton } from './evo/EvoControls.js';
+
+const BOT_OPTIONS = [
+  { value: 'human', label: 'Human' },
+  { value: 'random', label: 'Random Bot' },
+  { value: 'greedy', label: 'Greedy Bot' },
+];
+
+const BIOME_OPTIONS = [
+  { value: 'grassland', label: 'Grassland' },
+  { value: 'stone', label: 'Stone' },
+  { value: 'desert', label: 'Desert' },
+];
+
+const THEME_OPTIONS = [
+  { value: 'default', label: 'Default' },
+  { value: 'gen2_volcanic', label: 'GEN 2 - Volcanic' },
+  { value: 'grass_iso', label: 'Grassland (fantasy)' },
+  { value: 'gen3_desert', label: 'GEN 3 - Desert' },
+  { value: 'gen5_desert', label: 'GEN 5 - Desert' },
+  { value: 'gen6_desert', label: 'GEN 6 - Desert (Scenario)' },
+  { value: 'itb_desert', label: 'ITB - Desert' },
+  { value: 'gen7_industrial', label: 'GEN 7 - Industrial' },
+];
 
 export function SetupScreen() {
-  const { config, setConfig, factions, startGame, initMapEditor, loadGame, setBotSetting, tileTheme, setTileTheme } = useGameStore();
-  const [seed, setSeed] = useState(Math.floor(Math.random() * 100000));
+  const { config, setConfig, factions, startGame, initMapEditor, loadGame, setBotSetting, tileTheme, setTileTheme, musicMuted, setMusicMuted } = useGameStore();
+  // Seed is random per visit — deliberately no UI for it (Patrick, 2026-07-22).
+  const [seed] = useState(Math.floor(Math.random() * 100000));
   const [faction0, setFaction0] = useState(factions[0]?.id || 'vanguard');
   const [faction1, setFaction1] = useState(factions[1]?.id || 'hive');
   const [bot0, setBot0] = useState<'human' | 'random' | 'greedy'>('human');
@@ -34,12 +59,14 @@ export function SetupScreen() {
     input.click();
   };
 
-  return (
-    <div className="setup-screen">
-      <div className="setup-card">
-        <h1>TACTICA</h1>
-        <p className="subtitle">Turn-based tactical strategy prototype</p>
+  const factionOptions = factions.map(f => ({ value: f.id, label: f.name }));
 
+  return (
+    <div className="setup-screen evo">
+      <div className="setup-card">
+        <img className="setup-logo" src="/rigbound-logo.png" alt="RIGBOUND" />
+
+        <div className="evo-section">Battlefield</div>
         <div className="setup-row">
           <div className="setup-field">
             <label>Map Width</label>
@@ -51,112 +78,84 @@ export function SetupScreen() {
             <input type="number" min={8} max={24} value={config.mapHeight}
               onChange={e => setConfig({ ...config, mapHeight: Number(e.target.value) })} />
           </div>
-          <div className="setup-field">
-            <label>Seed</label>
-            <input type="number" value={seed} onChange={e => setSeed(Number(e.target.value))} />
-          </div>
         </div>
 
         <div className="setup-row">
           <div className="setup-field">
             <label>Map Type</label>
-            <select
+            <EvoSelect
               value={mapgen.biome ?? 'grassland'}
-              onChange={e => setMapgen({ biome: e.target.value as NonNullable<typeof mapgen.biome> })}
-            >
-              <option value="grassland">Grassland</option>
-              <option value="stone">Stone</option>
-            </select>
+              options={BIOME_OPTIONS}
+              onChange={v => setMapgen({ biome: v as NonNullable<typeof mapgen.biome> })}
+            />
           </div>
           <div className="setup-field">
             <label>Map Generation</label>
-            <select value={tileTheme} onChange={e => setTileTheme(e.target.value as typeof tileTheme)}>
-              <option value="default">Default</option>
-              <option value="gen2_volcanic">GEN 2 - Volcanic</option>
-              <option value="grass_iso">Grassland (fantasy)</option>
-              <option value="gen3_desert">GEN 3 - Desert</option>
-              <option value="gen5_desert">GEN 5 - Desert</option>
-            </select>
+            <EvoSelect
+              value={tileTheme}
+              options={THEME_OPTIONS}
+              onChange={v => setTileTheme(v as typeof tileTheme)}
+            />
           </div>
         </div>
 
+        <div className="evo-section">Combatants</div>
         <div className="setup-row">
           <div className="setup-field">
             <label>Player 1 Faction</label>
-            <select value={faction0} onChange={e => setFaction0(e.target.value)}>
-              {factions.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
-            </select>
+            <EvoSelect value={faction0} options={factionOptions} onChange={setFaction0} />
           </div>
           <div className="setup-field">
             <label>Player 2 Faction</label>
-            <select value={faction1} onChange={e => setFaction1(e.target.value)}>
-              {factions.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
-            </select>
+            <EvoSelect value={faction1} options={factionOptions} onChange={setFaction1} />
           </div>
         </div>
 
         <div className="setup-row">
           <div className="setup-field">
             <label>Player 1 Control</label>
-            <select value={bot0} onChange={e => setBot0(e.target.value as 'human' | 'random' | 'greedy')}>
-              <option value="human">Human</option>
-              <option value="random">Random Bot</option>
-              <option value="greedy">Greedy Bot</option>
-            </select>
+            <EvoSelect value={bot0} options={BOT_OPTIONS}
+              onChange={v => setBot0(v as 'human' | 'random' | 'greedy')} />
           </div>
           <div className="setup-field">
             <label>Player 2 Control</label>
-            <select value={bot1} onChange={e => setBot1(e.target.value as 'human' | 'random' | 'greedy')}>
-              <option value="human">Human</option>
-              <option value="random">Random Bot</option>
-              <option value="greedy">Greedy Bot</option>
-            </select>
+            <EvoSelect value={bot1} options={BOT_OPTIONS}
+              onChange={v => setBot1(v as 'human' | 'random' | 'greedy')} />
           </div>
         </div>
 
+        <div className="evo-section">Rules</div>
         <div className="setup-field">
           <label>Turn Limit</label>
           <input type="number" min={10} max={200} value={config.turnLimit}
             onChange={e => setConfig({ ...config, turnLimit: Number(e.target.value) })} />
         </div>
 
-        <div className="checkbox-row">
-          <input type="checkbox" id="fog" checked={config.fogOfWar}
-            onChange={e => setConfig({ ...config, fogOfWar: e.target.checked })} />
-          <label htmlFor="fog">Fog of War</label>
-        </div>
-
-        <div className="checkbox-row">
-          <input type="checkbox" id="tech-tree" checked={config.techTreeEnabled === true}
-            onChange={e => setConfig({ ...config, techTreeEnabled: e.target.checked })} />
-          <label htmlFor="tech-tree">Tech Tree</label>
-        </div>
-
-        <div className="checkbox-row">
-          <input type="checkbox" id="wc-cities" checked={config.winConditions.captureAllCities}
-            onChange={e => setConfig({ ...config, winConditions: { ...config.winConditions, captureAllCities: e.target.checked } })} />
-          <label htmlFor="wc-cities">Win: Capture All Cities</label>
-        </div>
-        <div className="checkbox-row">
-          <input type="checkbox" id="wc-score" checked={config.winConditions.highestScoreAtLimit}
-            onChange={e => setConfig({ ...config, winConditions: { ...config.winConditions, highestScoreAtLimit: e.target.checked } })} />
-          <label htmlFor="wc-score">Win: Highest Score at Turn Limit</label>
-        </div>
-        <div className="checkbox-row">
-          <input type="checkbox" id="double-res" checked={mapgen.doubleResources ?? false}
-            onChange={e => setMapgen({ doubleResources: e.target.checked })} />
-          <label htmlFor="double-res">Double Resources (For testing)</label>
-        </div>
-        <div className="checkbox-row">
-          <input type="checkbox" id="rich-start" checked={config.richStart ?? false}
-            onChange={e => setConfig({ ...config, richStart: e.target.checked })} />
-          <label htmlFor="rich-start">Rich start - for testing</label>
+        <div className="evo-checkbox-grid">
+          <EvoCheckbox id="fog" label="Fog of War" checked={config.fogOfWar}
+            onChange={v => setConfig({ ...config, fogOfWar: v })} />
+          <EvoCheckbox id="tech-tree" label="Tech Tree" checked={config.techTreeEnabled === true}
+            onChange={v => setConfig({ ...config, techTreeEnabled: v })} />
+          <EvoCheckbox id="wc-cities" label="Win: Capture All Cities"
+            checked={config.winConditions.captureAllCities}
+            onChange={v => setConfig({ ...config, winConditions: { ...config.winConditions, captureAllCities: v } })} />
+          <EvoCheckbox id="wc-score" label="Win: Highest Score at Turn Limit"
+            checked={config.winConditions.highestScoreAtLimit}
+            onChange={v => setConfig({ ...config, winConditions: { ...config.winConditions, highestScoreAtLimit: v } })} />
+          <EvoCheckbox id="double-res" label="Double Resources (For testing)"
+            checked={mapgen.doubleResources ?? false}
+            onChange={v => setMapgen({ doubleResources: v })} />
+          <EvoCheckbox id="rich-start" label="Rich start - for testing"
+            checked={config.richStart ?? false}
+            onChange={v => setConfig({ ...config, richStart: v })} />
+          <EvoCheckbox id="mute-audio" label="Mute audio" checked={musicMuted}
+            onChange={setMusicMuted} />
         </div>
 
         <div className="setup-actions">
-          <button className="primary" onClick={handleStart}>Start Game</button>
-          <button className="ghost" onClick={handleLoad}>Load Game</button>
-          <button className="ghost" onClick={initMapEditor}>Map Editor</button>
+          <EvoButton primary onClick={handleStart}>Start Game</EvoButton>
+          <EvoButton onClick={handleLoad}>Load Game</EvoButton>
+          <EvoButton onClick={initMapEditor}>Map Editor</EvoButton>
         </div>
       </div>
     </div>
