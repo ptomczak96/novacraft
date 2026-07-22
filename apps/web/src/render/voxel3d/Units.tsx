@@ -67,6 +67,52 @@ function UnitBody({ unit }: { unit: UnitView }) {
   return <BoxUnit unit={unit} />;
 }
 
+/** Flat light-green back-face material shared by all selection shells. */
+const SHELL_MAT = new THREE.MeshBasicMaterial({
+  color: '#9dff8a',
+  side: THREE.BackSide,
+  toneMapped: false,
+});
+
+/**
+ * Polytopia-style selection rim: a slightly scaled-up back-face clone of the
+ * unit's meshes, drawn behind the body so it reads as a bright edge around
+ * the silhouette. Rebuilt shortly after mount to catch glTF bodies that
+ * stream in via Suspense.
+ */
+function SelectionShell({ body }: { body: React.RefObject<THREE.Group | null> }) {
+  const [shell, setShell] = React.useState<THREE.Group | null>(null);
+
+  React.useEffect(() => {
+    const build = () => {
+      const src = body.current;
+      if (!src) return;
+      src.updateWorldMatrix(true, true);
+      const srcInv = new THREE.Matrix4().copy(src.matrixWorld).invert();
+      const group = new THREE.Group();
+      src.traverse(o => {
+        const m = o as THREE.Mesh;
+        if (!m.isMesh || !m.visible) return;
+        const clone = new THREE.Mesh(m.geometry, SHELL_MAT);
+        clone.matrixAutoUpdate = false;
+        clone.matrix.copy(srcInv).multiply(m.matrixWorld);
+        group.add(clone);
+      });
+      group.scale.setScalar(1.06);
+      setShell(group);
+    };
+    build();
+    const t = setTimeout(build, 400);
+    return () => {
+      clearTimeout(t);
+      setShell(null);
+    };
+  }, [body]);
+
+  if (!shell) return null;
+  return <primitive object={shell} />;
+}
+
 /** Seconds to slide one move (covers multi-tile moves in one glide). */
 const MOVE_DURATION = 0.3;
 const LUNGE_DURATION = 0.22;
@@ -79,6 +125,7 @@ function UnitMesh({ unit, onTileClick, interaction, combat }: {
   combat?: CombatFx | null;
 }) {
   const rootRef = React.useRef<THREE.Group>(null);
+  const bodyRef = React.useRef<THREE.Group>(null);
 
   // Move animation: when the grid position changes, glide from the previous
   // world position to the new one with a slight hop. Units are otherwise
@@ -176,7 +223,8 @@ function UnitMesh({ unit, onTileClick, interaction, combat }: {
           depthWrite={false}
         />
       </mesh>
-      <group position-y={0.015}>
+      <group position-y={0.015} ref={bodyRef}>
+        {unit.selected && <SelectionShell body={bodyRef} />}
         <UnitBody unit={unit} />
         {/* Invisible collider: clicking a unit's body must resolve to ITS tile,
             not the tile the ray would hit on the floor behind it. */}

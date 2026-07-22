@@ -7,6 +7,7 @@ import { Starfield } from '../iso/Starfield.js';
 const VoxelMapView = React.lazy(() =>
   import('../render/voxel3d/VoxelMapView.js').then(m => ({ default: m.VoxelMapView })));
 import { TerritorySelectBar } from './TerritorySelectBar.js';
+import { EvoRecruitPanel } from './evo/EvoRecruitPanel.js';
 import { CityEconomyLines } from './EconomyBreakdown.js';
 
 const UNIT_ICONS: Record<string, string> = {
@@ -44,8 +45,6 @@ export function MapView() {
     selectedCity, executeAction, setSelectedCity,
     inspectedTile, setInspectedTile,
   } = useGameStore();
-
-  const [showRecruit, setShowRecruit] = React.useState(false);
 
   // Renderer selection: `?renderer=voxel3d` or the on-screen toggle. The 2D iso
   // canvas remains the default and is untouched by the voxel3d option.
@@ -89,15 +88,25 @@ export function MapView() {
     };
   }, [inspectedTile, visibleState, registry]);
 
+  // The engine hides all options while a unit stands on the spawn tile — the
+  // panel shows a hint in that case instead of silently showing nothing.
+  const spawnBlocked = useMemo(() => {
+    if (!selectedCity || !gameState) return false;
+    const city = gameState.cities.find(
+      c => c.position.x === selectedCity.x && c.position.y === selectedCity.y,
+    );
+    if (!city || city.owner !== gameState.currentPlayer) return false;
+    return gameState.units.some(
+      u => u.position.x === selectedCity.x && u.position.y === selectedCity.y,
+    );
+  }, [selectedCity, gameState]);
+
   // Full recruit roster for the selected city (incl. unaffordable units, flagged),
   // so they can be shown red rather than hidden.
   const recruitOptions = useMemo(() => {
     if (!selectedCity || !gameState) return [];
     return getRecruitOptions(gameState, registry, gameState.currentPlayer, selectedCity);
   }, [gameState, registry, selectedCity]);
-
-  // Collapse the menu whenever the selected city changes.
-  useEffect(() => { setShowRecruit(false); }, [selectedCity]);
 
   // Pop / supply readout for the selected city (any owner).
   const cityInfo = useMemo(() => {
@@ -219,47 +228,20 @@ export function MapView() {
         </div>
       )}
 
-      {/* Recruit button — shown when an owned city is selected and can build a unit */}
-      {selectedCity && recruitOptions.length > 0 && (
-        <div style={{ position: 'absolute', bottom: 16, left: '50%', transform: 'translateX(-50%)' }}>
-          <button className="primary" onClick={() => setShowRecruit(s => !s)}>
-            Recruit ({recruitOptions.length})
-          </button>
-        </div>
-      )}
-
-      {/* Recruit panel — all buildable units; unaffordable ones are tinted red */}
-      {showRecruit && selectedCity && recruitOptions.length > 0 && (
-        <div className="recruit-panel">
-          {recruitOptions.map(opt => {
-            const ut = registry.unitTypes[opt.unitTypeId];
-            if (!ut) return null;
-            const cls = `recruit-card${opt.locked ? ' recruit-card--locked' : opt.affordable ? '' : ' recruit-card--unaffordable'}`;
-            const title = opt.locked
-              ? `Locked — research ${opt.lockedBy && opt.lockedBy.length ? opt.lockedBy.join(' / ') : 'the required tech'} to unlock`
-              : opt.affordable ? undefined : 'Not enough resources';
-            return (
-              <div
-                key={opt.unitTypeId}
-                className={cls}
-                title={title}
-                onClick={() => {
-                  if (opt.locked || !opt.affordable) return;
-                  executeAction({ type: 'recruit', unitTypeId: opt.unitTypeId, cityPosition: selectedCity });
-                  setShowRecruit(false);
-                }}
-              >
-                <div className="name">{UNIT_ICONS[opt.unitTypeId] || '●'} {ut.name}</div>
-                {opt.locked
-                  ? <div className="cost">🔒 {opt.lockedBy && opt.lockedBy.length ? opt.lockedBy.join(' / ') : 'Locked'}</div>
-                  : <div className="cost">{opt.cost}◈{opt.plasmaCost > 0 ? ` ${opt.plasmaCost}✦` : ''}</div>}
-                <div className="stats">
-                  HP:{ut.maxHP} ATK:{ut.attack} DEF:{ut.defence} MOV:{ut.movement} RNG:{ut.attackRange}
-                </div>
-              </div>
-            );
-          })}
-        </div>
+      {/* Recruit menu — pops up immediately when an owned base is selected.
+          If a unit is parked on the spawn tile, show why nothing is listed. */}
+      {selectedCity && (recruitOptions.length > 0 || spawnBlocked) && (
+        <EvoRecruitPanel
+          options={recruitOptions}
+          registry={registry}
+          hint={recruitOptions.length === 0 && spawnBlocked
+            ? 'Move the unit off the base tile to recruit.'
+            : undefined}
+          onRecruit={unitTypeId => {
+            executeAction({ type: 'recruit', unitTypeId, cityPosition: selectedCity });
+          }}
+          onClose={() => setSelectedCity(null)}
+        />
       )}
     </div>
   );

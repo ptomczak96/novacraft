@@ -74,9 +74,10 @@ export function VoxelMapView() {
         teamColor: TEAM_COLORS[u.owner % TEAM_COLORS.length],
         kind: u.typeId,
         hostile: u.owner !== visibleState.currentPlayer,
+        selected: u.id === selectedUnitId,
       };
     });
-  }, [visibleState]);
+  }, [visibleState, selectedUnitId]);
 
   // Target tiles for the selected unit / armed ability, straight from the
   // engine's legal-action list (the engine has no separate "threat map").

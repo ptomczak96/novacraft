@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import type { GameState, GameConfig, Action, DataRegistry, VisibleState, Coord, CombatBreakdown } from '@tactica/engine';
 import {
   createGame, getLegalActions, applyAction, getVisibleState,
-  getResult, replayGame, previewCombat,
+  getResult, replayGame, previewCombat, getRecruitOptions,
 } from '@tactica/engine';
 import { buildRegistry, defaultConfig, defaultTerrain, defaultUnits, defaultFactions, defaultTechs } from '@tactica/data';
 import type { TerrainType, UnitType, FactionDef, TechDef } from '@tactica/engine';
@@ -380,7 +380,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
   },
 }));
 
-// Dev-only: expose the store for debugging/QA tooling (never in production builds).
+// Dev-only: expose the store + selected engine fns for debugging/QA tooling.
 if (import.meta.env.DEV) {
   (window as unknown as Record<string, unknown>).__gameStore = useGameStore;
+  (window as unknown as Record<string, unknown>).__engine = { getRecruitOptions };
 }

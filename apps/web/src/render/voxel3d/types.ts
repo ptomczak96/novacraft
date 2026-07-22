@@ -25,6 +25,8 @@ export interface UnitView {
   hostile?: boolean;
   /** Small world-space x/z shift so a garrisoned unit clears its city tower. */
   visualOffset?: number;
+  /** True for the currently selected unit (drives the outline effect). */
+  selected?: boolean;
 }
 
 /** One executed attack, for render-side lunge/flash effects (from the store's

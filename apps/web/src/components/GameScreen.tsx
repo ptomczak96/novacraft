@@ -118,6 +118,7 @@ export function GameScreen() {
       <div className="game-main">
         {/* Top Bar */}
         <div className="top-bar">
+          <img className="top-bar-logo" src="/rigbound-logo.png" alt="" aria-hidden />
           <div className="turn-info">
             <span>Turn {gameState.turn}/{config.turnLimit}</span>
             <span className={`player-indicator p${currentPlayer}`}>

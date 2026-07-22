@@ -33,6 +33,7 @@ export function VoxelArena({
   // Shared with CameraRig: a grab-pan drag must not fire a tile click on release.
   const interaction = React.useRef<CameraInteraction>({ suppressClick: false });
 
+
   // Opening camera focus: the player's starting units (captured once per map).
   const focus = React.useMemo<[number, number] | null>(() => {
     const friendly = units.filter(u => !u.hostile);

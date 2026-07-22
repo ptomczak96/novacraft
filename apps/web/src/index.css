@@ -5,19 +5,20 @@
 }
 
 :root {
-  --bg: #1a1a2e;
-  --bg-surface: #16213e;
-  --bg-card: #1e2a4a;
-  --text: #e0e0e0;
-  --text-muted: #8892a4;
-  --accent: #4fc3f7;
-  --accent-dim: #2a6a8a;
+  /* EvoUI skin tokens — dark slate, amber accent (see setup screen) */
+  --bg: #0a0b0d;
+  --bg-surface: #131417;
+  --bg-card: #101114;
+  --text: #d7d9dd;
+  --text-muted: #8a8d93;
+  --accent: #ff9f2e;
+  --accent-dim: #8a5a1e;
   --danger: #ef5350;
-  --success: #66bb6a;
+  --success: #9dff8a;
   --warning: #ffa726;
-  --p0-color: #4fc3f7;
-  --p1-color: #ef5350;
-  --border: #2a3a5a;
+  --p0-color: #33f0ff;
+  --p1-color: #ff2d95;
+  --border: #26272b;
 }
 
 html, body, #root {
@@ -48,8 +49,11 @@ button:hover {
 }
 
 button.primary {
-  background: var(--accent);
-  color: #0a0a1a;
+  background: linear-gradient(180deg, #ff9f2e, #e07d14);
+  border: 1px solid #ffb35c;
+  color: #16110a;
+  clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px);
+  border-radius: 2px;
 }
 
 button.danger {
@@ -58,9 +62,10 @@ button.danger {
 }
 
 button.ghost {
-  background: transparent;
-  color: var(--text-muted);
-  border: 1px solid var(--border);
+  background: #101114;
+  color: #c6c9ce;
+  border: 1px solid #34363b;
+  border-radius: 2px;
 }
 
 button.ghost:hover {
@@ -95,6 +100,20 @@ label {
   display: flex;
   height: 100vh;
   width: 100vw;
+}
+
+/* In-game chrome: Evo skin */
+.top-bar {
+  position: relative;
+}
+.top-bar-logo {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  height: 40px;
+  pointer-events: none;
+  filter: drop-shadow(0 3px 12px rgba(255, 143, 42, 0.25));
 }
 
 /* Setup Screen */
@@ -1568,3 +1587,149 @@ label {
 .tech-node.locked { opacity: 0.5; }
 .tech-node.locked .tech-node-icon img { filter: grayscale(1); }
 .tech-node.locked .tech-node-status { color: var(--text-muted); }
+
+/* ── Evo recruit panel (instant on base selection) ── */
+.evo-recruit-panel {
+  position: absolute;
+  bottom: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 30;
+  width: min(860px, 94%);
+  background: linear-gradient(178deg, #131417 0%, #0e0f11 100%);
+  border: 8px solid transparent;
+  border-image: url('/ui/frame-lines.png') 24 / 10px stretch;
+  padding: 10px 14px 12px;
+  font-family: 'Inter', system-ui, sans-serif;
+  animation: evo-card-in 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.65);
+}
+.evo-recruit-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  border-bottom: 1px solid #232427;
+  padding-bottom: 5px;
+  position: relative;
+}
+.evo-recruit-head::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: -1px;
+  width: 42px;
+  height: 1px;
+  background: #ff9f2e;
+}
+.evo-recruit-title {
+  color: #ff9f2e;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+}
+.evo-recruit-close {
+  background: none;
+  border: none;
+  color: #6d7076;
+  font-size: 17px;
+  line-height: 1;
+  padding: 0 4px;
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+.evo-recruit-close:hover {
+  color: #f0f1f3;
+}
+.evo-recruit-cards {
+  /* wrapping grid — a horizontal scrollbar must never appear here */
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(124px, 1fr));
+  gap: 8px;
+}
+.evo-recruit-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  padding: 8px 10px;
+  background: #0a0b0d;
+  border: 1px solid #26272b;
+  border-radius: 2px;
+  color: #d7d9dd;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px);
+  transition: border-color 0.14s ease, background 0.14s ease, transform 0.08s ease;
+}
+.evo-recruit-card:hover:not(.locked):not(.unaffordable) {
+  border-color: #ff9f2e;
+  background: #121316;
+  transform: translateY(-1px);
+}
+.evo-recruit-card:active:not(.locked):not(.unaffordable) {
+  transform: translateY(0);
+}
+.evo-recruit-card.locked,
+.evo-recruit-card.unaffordable {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.evo-recruit-card.unaffordable {
+  border-color: #5a2a28;
+}
+.evo-recruit-icon {
+  font-size: 17px;
+}
+.evo-recruit-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: #f0f1f3;
+}
+.evo-recruit-cost {
+  font-size: 12px;
+}
+.evo-recruit-cost em {
+  font-style: normal;
+  color: #ff9f2e;
+  font-weight: 700;
+}
+.evo-recruit-cost em.plasma {
+  color: #33f0ff;
+}
+.evo-recruit-stats {
+  font-size: 10px;
+  color: #6d7076;
+  letter-spacing: 0.02em;
+}
+.evo-recruit-hint {
+  color: #8a8d93;
+  font-size: 12px;
+  padding: 6px 2px 4px;
+}
+
+/* Evo bracket chrome for in-game panels */
+.side-panel,
+.city-info,
+.levelup-modal,
+.game-over-banner {
+  background: linear-gradient(178deg, #131417 0%, #0e0f11 100%);
+  border: 8px solid transparent;
+  border-image: url('/ui/frame-lines.png') 24 / 10px stretch;
+  border-radius: 0;
+  font-family: 'Inter', system-ui, sans-serif;
+}
+.side-panel h3,
+.levelup-title {
+  color: #ff9f2e;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  font-size: 12px;
+}
+.top-bar {
+  background: linear-gradient(180deg, #101114, #0c0d10);
+  border-bottom: 1px solid #26272b;
+  font-family: 'Inter', system-ui, sans-serif;
+}
