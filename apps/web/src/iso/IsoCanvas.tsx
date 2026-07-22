@@ -188,9 +188,9 @@ export function IsoCanvas({ mode, onPaint, pan, onPanChange }: IsoCanvasProps) {
   const rafRef = useRef<number | undefined>(undefined);
   const [animTick, setAnimTick] = useState(0);
 
-  // ~1s blink toggle for Tracer / Explosives marker dots.
+  // ~1s blink toggle for Tracer / Explosives marker dots. Only runs while marks are actually
+  // on the board — otherwise it would force a full-canvas redraw every second for nothing.
   const [blinkOn, setBlinkOn] = useState(true);
-  useEffect(() => { const t = setInterval(() => setBlinkOn(b => !b), 1000); return () => clearInterval(t); }, []);
 
   // Scroll-to-zoom factor. Magnifies via CSS transform for display, and also feeds
   // the backing-store resolution (render-at-display) so tiles stay crisp when
@@ -239,6 +239,14 @@ export function IsoCanvas({ mode, onPaint, pan, onPanChange }: IsoCanvasProps) {
   const cities = mode === 'game' ? (visibleState?.cities ?? []) : (mapEditorState?.cities ?? []);
   const nodes = mode === 'game' ? (visibleState?.nodes ?? []) : [];
   const currentPlayer = state?.currentPlayer ?? 0;
+
+  // Blink the mark dots only while some unit actually carries a mark — no idle redraws.
+  const hasMarks = units.some(u => u.marks?.length);
+  useEffect(() => {
+    if (!hasMarks) return;
+    const t = setInterval(() => setBlinkOn(b => !b), 1000);
+    return () => clearInterval(t);
+  }, [hasMarks]);
 
   // First structure the current player could build on a tile, ignoring whether they
   // can currently afford it (so a valid site still shows its prompt when short on ore).

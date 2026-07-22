@@ -4027,3 +4027,44 @@ options, Patrick wins on visual/graphics clashes":
 **No data clashes:** Patrick changed ZERO data files (units/tech/factions), and this branch
 added no units and renamed no unit *ids* (only ability display names, e.g. Body Slam), so unit
 names/effects are consistent with his renderers. 259 tests + both typechecks green post-merge.
+
+---
+
+### 2026-07-22 — David
+
+**Tidy-up batch.**
+- **Recruit once per city per turn (bug fix).** Multi-unit recruits (scuttling pair) spawned
+  on random *territory* tiles, leaving the city tile empty, so the "city tile occupied" gate
+  never fired and you could recruit repeatedly. Now a recruit always places its FIRST unit on
+  the city tile (rest on territory) → the tile is occupied → no second recruit until it moves
+  off. Test updated in `hive.test.ts`.
+- **Ruins & resources only on flat ground.** mapgen: added `forest` to the resource/ruin
+  forbidden-terrain set and made ruin placement require `resourceEligible` — so neither ruins
+  nor resources spawn on forest, mountain, water, lava or river. (Starting-city 3×3 was already
+  forced to plains.)
+- **Start-menu restorations (post-merge).** Resources single-select is now Normal / **Rich**
+  (rich start) / Unlimited (dropped "Double"). Restored the **Map Size preset dropdown**
+  (Tiny/Small/Normal/Large/Huge, alongside width/height inputs), and the **Train vs AI** button
+  (P1 human vs greedy P2 + coach on) — re-rendered the self-gating `CoachPanel` in GameScreen.
+  Win (capture all / capture capital / highest-score) and Mechanics (tech tree / fog / nodes)
+  unchanged.
+
+### 2026-07-22 — David — Start-menu default settings
+Default config now: Turn Limit **Off** (`turnLimit: 0` — engine's score-at-limit win now
+requires `turnLimit > 0`, so 0 = no limit; input shows blank/"Off"), Win = **Capture all
+cities**, Resources = **Normal**, Tech Tree / Nodes / Fog of War / Mute soundtrack all **on**,
+Map Size = **Small (14×14)**. Set in the gameStore initial `config`.
+
+### 2026-07-22 — David — Online 1v1 (PartyKit lockstep relay)
+Real-time online 1v1 built on the deterministic engine: only ACTIONS are synced, never state.
+- **Relay** (`party/server.ts`, `partykit.json`): a dumb room server — assigns seats (0 host /
+  1 guest), latches the host's `{seed, factions, config}` handshake, and forwards every action
+  to the peer. No game logic server-side. Boots via `npx partykit dev`, deploys via `partykit deploy`.
+- **Client** (`net/multiplayer.ts`): PartySocket wrapper (host `VITE_PARTYKIT_HOST`, default
+  localhost:1999). `MultiplayerLobby` = host-creates-code / guest-joins-code.
+- **Store**: `mySeat`/`netSend`/`mpStatus`; `startNetworkGame` adopts the agreed config+seat and
+  runs `createGame` identically on both clients; `executeAction` now broadcasts local actions and
+  computes visible/legal state from **mySeat** (so you always view/act as your own seat — during
+  the opponent's turn your legal-action set is empty). `receiveRemoteAction` applies inbound
+  actions without echoing. Undo disabled in MP (would desync); fog is honour-system (agreed).
+Caveats/deferred: no reconnection re-sync; no authoritative anti-cheat (trusted testers only).

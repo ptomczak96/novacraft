@@ -299,10 +299,10 @@ export function generateMap(
       const terr = registry.terrainTypes[tiles[y][x].terrain];
       return !!terr && terr.passable && !tiles[y][x].isCity;
     };
-    // Resources only go on flat ground — never on mountain, water, lava or river
-    // (even where those are passable). Rocky is a render variant of plains and is
-    // suppressed under features separately (getTileSprite hasFeature).
-    const RESOURCE_FORBIDDEN = new Set(['mountain', 'water', 'lava', 'river']);
+    // Resources AND ruins only go on flat ground (plains) — never on forest, mountain,
+    // water, lava or river (even where those are passable). Rocky is a render variant of
+    // plains and is suppressed under features separately (getTileSprite hasFeature).
+    const RESOURCE_FORBIDDEN = new Set(['forest', 'mountain', 'water', 'lava', 'river']);
     const resourceEligible = (x: number, y: number): boolean =>
       passable(x, y) && !RESOURCE_FORBIDDEN.has(tiles[y][x].terrain);
     const weighted = (values: number[], weights: number[]): number => {
@@ -324,7 +324,7 @@ export function generateMap(
       for (let y = 1; y <= height - 2; y++) {
         for (let x = 1; x <= width - 2; x++) {
           const t = tiles[y][x];
-          if (t.isResourceTile || t.isRuin || !passable(x, y)) continue;
+          if (t.isResourceTile || t.isRuin || !resourceEligible(x, y)) continue; // ruins on flat ground only
           if (minDistTo({ x, y }) < 3) continue; // would overlap a territory
           valid.push({ x, y });
         }

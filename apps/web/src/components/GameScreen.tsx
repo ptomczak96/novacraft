@@ -4,6 +4,7 @@ import { MapView } from './MapView.js';
 import { EditorPanel } from './EditorPanel.js';
 import { Inspector } from './Inspector.js';
 import { UnitSheet } from './UnitSheet.js';
+import { CoachPanel } from './CoachPanel.js';
 import { CombatLog } from './CombatLog.js';
 import { TechTreeView } from './TechTreeView.js';
 import { LevelUpModal } from './LevelUpModal.js';
@@ -18,6 +19,7 @@ export function GameScreen() {
     executeAction, undo, saveGame, setScreen,
     editorOpen, setEditorOpen, inspectorOpen, setInspectorOpen,
     botSettings, autoPlay, setAutoPlay,
+    mySeat, mpStatus,
   } = useGameStore();
 
   const autoPlayRef = useRef(autoPlay);
@@ -120,11 +122,17 @@ export function GameScreen() {
         <div className="top-bar">
           <img className="top-bar-logo" src="/rigbound-logo.png" alt="" aria-hidden />
           <div className="turn-info">
-            <span>Turn {gameState.turn}/{config.turnLimit}</span>
+            <span>Turn {gameState.turn}{config.turnLimit > 0 ? `/${config.turnLimit}` : ''}</span>
             <span className={`player-indicator p${currentPlayer}`}>
               {faction?.name || `Player ${currentPlayer + 1}`}
               {botSettings[currentPlayer] !== 'human' && ` (${botSettings[currentPlayer]})`}
             </span>
+            {mySeat != null && (
+              <span className="player-indicator" style={{ background: currentPlayer === mySeat ? 'var(--accent)' : '#555' }}>
+                {currentPlayer === mySeat ? 'Your turn' : 'Opponent’s turn — waiting'}
+                {mpStatus?.room ? ` · ${mpStatus.room}` : ''}
+              </span>
+            )}
             <span
               style={{ color: 'var(--warning)', position: 'relative', cursor: 'help' }}
               onMouseEnter={() => setShowIncome(true)}
@@ -219,6 +227,7 @@ export function GameScreen() {
 
       {/* Side panels */}
       {inspectorOpen && <Inspector />}
+      <CoachPanel />{/* self-gates on coachEnabled (Train vs AI) */}
       {editorOpen && <EditorPanel />}
 
       {/* Tech tree overlay — shows the current player's research (from game state) */}

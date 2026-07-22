@@ -61,7 +61,7 @@ describe('Hive: starting units', () => {
 });
 
 describe('Hive: Scuttlings (paired, 0.5 pop)', () => {
-  it('recruiting spawns a PAIR on territory (not the centre), counting 1 pop total', () => {
+  it('recruiting spawns a PAIR (one on the centre, one on territory), counting 1 pop total', () => {
     let state = createGame(cfg(), registry, ['vanguard', 'hive'], 7);
     const cap = hiveCap(state);
     clearPlayer1(state); // free the capital tile + pop
@@ -78,10 +78,12 @@ describe('Hive: Scuttlings (paired, 0.5 pop)', () => {
 
     const scuttlings = state.units.filter(u => u.typeId === 'scuttling' && u.owner === 1);
     expect(scuttlings.length).toBe(2); // a pair
-    for (const s of scuttlings) {
-      expect(s.position.x === cap.position.x && s.position.y === cap.position.y).toBe(false); // not the centre
-      expect(state.unitHomeCity[s.id]).toBe(cap.id);
-    }
+    // One occupies the city tile (so the city can't recruit again this turn), one on territory.
+    const onCentre = scuttlings.filter(s => s.position.x === cap.position.x && s.position.y === cap.position.y);
+    expect(onCentre.length).toBe(1);
+    for (const s of scuttlings) expect(state.unitHomeCity[s.id]).toBe(cap.id);
+    // The city tile is now occupied → no second recruit this turn.
+    expect(getLegalActions(state, registry, 1).some(a => a.type === 'recruit')).toBe(false);
     expect(cityPopUsed(state, cap.id, registry)).toBe(1); // pair = 1 pop
 
     state.units = state.units.filter(u => u.id !== scuttlings[0].id); // one dies

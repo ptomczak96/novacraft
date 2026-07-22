@@ -1445,14 +1445,13 @@ function applyRecruit(state: GameState, action: RecruitAction, registry: DataReg
   const addedPop = (unitType.popCost ?? 1) * count;
   if (!cityHasCapacityFor(state, city, registry, addedPop)) return state;
 
-  // Spawn positions: a single unit appears on the city tile; multi-unit recruits
-  // (e.g. a scuttling pair) appear on random empty passable tiles in the territory.
-  const spawnTiles: Coord[] = [];
-  if (count <= 1) {
-    // Single-spawn units appear on the city tile — it must be empty.
-    if (state.units.some(u => u.position.x === action.cityPosition.x && u.position.y === action.cityPosition.y)) return state;
-    spawnTiles.push({ ...action.cityPosition });
-  } else {
+  // The city tile must be FREE — recruiting always places a unit on it, so a city can only
+  // recruit ONCE per turn (the tile stays blocked until that unit moves off). Multi-unit
+  // recruits (e.g. a scuttling pair) put their first unit on the tile and the rest on random
+  // empty passable territory tiles.
+  if (state.units.some(u => u.position.x === action.cityPosition.x && u.position.y === action.cityPosition.y)) return state;
+  const spawnTiles: Coord[] = [{ ...action.cityPosition }];
+  if (count > 1) {
     const candidates: Coord[] = [];
     for (let y = 0; y < state.map.height; y++) {
       for (let x = 0; x < state.map.width; x++) {
@@ -1465,15 +1464,14 @@ function applyRecruit(state: GameState, action: RecruitAction, registry: DataReg
         candidates.push(pos);
       }
     }
-    // Deterministic random pick from the territory candidates.
+    // Deterministic random pick from the territory candidates (for the 2nd+ unit).
     let p = state.prng;
-    for (let i = 0; i < count && candidates.length > 0; i++) {
+    for (let i = 1; i < count && candidates.length > 0; i++) {
       const [idx, np] = nextInt(p, 0, candidates.length - 1);
       p = np;
       spawnTiles.push(candidates.splice(idx, 1)[0]);
     }
     state.prng = p;
-    if (spawnTiles.length === 0) return state; // nowhere to place them
   }
 
   player.ore -= recruitOreCost(unitType.cost, city); // "Conscription" city → 20% cheaper
@@ -1980,8 +1978,8 @@ function checkWinConditions(state: GameState, registry: DataRegistry): GameState
     }
   }
 
-  // Check turn limit
-  if (config.winConditions.highestScoreAtLimit && state.turn > config.turnLimit) {
+  // Check turn limit (turnLimit <= 0 means "Off" — the score-at-limit win never fires).
+  if (config.winConditions.highestScoreAtLimit && config.turnLimit > 0 && state.turn > config.turnLimit) {
     const scores = computeScores(state, registry);
     let bestPlayer = 0;
     let bestScore = -1;

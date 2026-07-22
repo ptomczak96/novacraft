@@ -143,8 +143,16 @@ export function Starfield({ pan }: StarfieldProps) {
     const ro = new ResizeObserver(resize);
     ro.observe(canvas);
 
+    // Cap to ~30fps: a slow parallax drift looks identical to 60fps but halves the
+    // continuous background cost (this loop runs the whole time the game is on screen).
+    const FRAME_MS = 1000 / 30;
+    let lastDraw = -Infinity;
     const loop = () => {
-      const t = (performance.now() - start) / 1000;
+      raf = requestAnimationFrame(loop);
+      const now = performance.now();
+      if (now - lastDraw < FRAME_MS) return;
+      lastDraw = now;
+      const t = (now - start) / 1000;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.fillStyle = '#000';
       ctx.fillRect(0, 0, w, h);
@@ -153,7 +161,6 @@ export function Starfield({ pan }: StarfieldProps) {
         drawLayer(ctx, layer, w, h, panRef.current.x, panRef.current.y, t);
       }
       ctx.globalAlpha = 1;
-      raf = requestAnimationFrame(loop);
     };
     raf = requestAnimationFrame(loop);
 

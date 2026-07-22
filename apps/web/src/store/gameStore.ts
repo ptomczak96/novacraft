@@ -107,6 +107,22 @@ interface GameStore {
   markRemoval: { removerId: number; target: Coord; kind: 'tracer' | 'explosive' } | null;
   setMarkRemoval: (v: { removerId: number; target: Coord; kind: 'tracer' | 'explosive' } | null) => void;
 
+  // ── Online 1v1 (PartyKit lockstep relay) ──
+  // The local player's fixed seat (0 host / 1 guest) — null when playing locally. In a
+  // network game, the local client always VIEWS and ACTS as this seat.
+  mySeat: number | null;
+  // Broadcast callback bound to the socket (set when a network game starts); null locally.
+  netSend: ((action: Action) => void) | null;
+  // Lobby status for the multiplayer UI.
+  mpStatus: { room: string; seat: number | null; peers: number; error: string | null } | null;
+  setMpStatus: (v: GameStore['mpStatus']) => void;
+  // Start a network game with an agreed handshake (both clients replay identically).
+  startNetworkGame: (opts: { seat: number; factions: [string, string]; seed: number; config: GameConfig; send: (a: Action) => void }) => void;
+  // Apply an action received from the peer (no re-broadcast).
+  receiveRemoteAction: (action: Action) => void;
+  // Tear down network state (back to local play).
+  leaveMultiplayer: () => void;
+
   // Bot settings
   botSettings: [BotSetting, BotSetting];
   setBotSetting: (player: 0 | 1, setting: BotSetting) => void;
@@ -155,7 +171,7 @@ interface GameStore {
   selectUnit: (unitId: number | null) => void;
   setSelectedCity: (c: Coord | null) => void;
   setHoveredTile: (c: Coord | null) => void;
-  executeAction: (action: Action, coachMeta?: CoachMeta) => void;
+  executeAction: (action: Action, coachMeta?: CoachMeta, opts?: { remote?: boolean }) => void;
   undo: () => void;
   saveGame: () => string;
   loadGame: (json: string) => void;
@@ -179,7 +195,20 @@ export const useGameStore = create<GameStore>((set, get) => ({
   units: [...defaultUnits] as UnitType[],
   factions: [...defaultFactions] as FactionDef[],
   techs: [...defaultTechs] as TechDef[],
-  config: { ...defaultConfig, techTreeEnabled: false }, // tech tree OFF by default (all unlocked) until we engage it
+  // Start-menu defaults: Tech Tree + Nodes + Fog on, Turn Limit OFF (0), Small (14×14) map,
+  // Normal resources, Capture-all-cities win (from config.json).
+  config: {
+    ...defaultConfig,
+    techTreeEnabled: true,
+    nodesEnabled: true,
+    fogOfWar: true,
+    turnLimit: 0,
+    mapWidth: 14,
+    mapHeight: 14,
+    richStart: false,
+    unlimitedResources: false,
+    winConditions: { captureAllCities: true, captureCapital: false, eliminateAllUnits: false, highestScoreAtLimit: false },
+  },
   registry: buildRegistry(),
   tileTheme: 'default',
   setTileTheme: (t) => set({ tileTheme: t }),
@@ -208,6 +237,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
   targetSelect: null,
   pendingNodeCancel: null,
   markRemoval: null,
+  mySeat: null,
+  netSend: null,
+  mpStatus: null,
   hoveredTile: null,
   legalActions: [],
 
@@ -276,8 +308,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
   startGame: (factions, seed) => {
     const { config, registry } = get();
     const state = createGame(config, registry, factions, seed);
-    const visible = getVisibleState(state, state.currentPlayer, registry);
-    const legal = getLegalActions(state, registry, state.currentPlayer);
+    // In a network game the local client always views/acts as its own seat.
+    const seat = get().mySeat ?? state.currentPlayer;
+    const visible = getVisibleState(state, seat, registry);
+    const legal = getLegalActions(state, registry, seat);
     set({
       gameState: state,
       visibleState: visible,
@@ -333,7 +367,17 @@ export const useGameStore = create<GameStore>((set, get) => ({
   setPendingNodeCancel: (a) => set({ pendingNodeCancel: a }),
   setMarkRemoval: (v) => set({ markRemoval: v }),
 
-  executeAction: (action, coachMeta) => {
+  setMpStatus: (v) => set({ mpStatus: v }),
+  startNetworkGame: ({ seat, factions, seed, config, send }) => {
+    // Adopt the agreed config + our seat, then start deterministically. Both clients run the
+    // same createGame(config, factions, seed) and stay in sync by relaying actions.
+    set({ config, mySeat: seat, netSend: send, botSettings: ['human', 'human'], coachEnabled: false });
+    get().startGame(factions, seed);
+  },
+  receiveRemoteAction: (action) => get().executeAction(action, undefined, { remote: true }),
+  leaveMultiplayer: () => set({ mySeat: null, netSend: null, mpStatus: null }),
+
+  executeAction: (action, coachMeta, opts) => {
     const { gameState, registry, config } = get();
     if (!gameState) return;
 
@@ -427,11 +471,13 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
     const prevPlayer = gameState.currentPlayer;
     const newState = applyAction(gameState, action, registry);
-    const visible = getVisibleState(newState, newState.currentPlayer, registry);
-    const legal = getLegalActions(newState, registry, newState.currentPlayer);
+    // Network game → always view/act as our own seat; local → the current player.
+    const seat = get().mySeat ?? newState.currentPlayer;
+    const visible = getVisibleState(newState, seat, registry);
+    const legal = getLegalActions(newState, registry, seat);
 
-    // Show interstitial on turn change with fog
-    const showInterstitial = config.fogOfWar && action.type === 'endTurn' && newState.currentPlayer !== prevPlayer && newState.phase === 'playing';
+    // Fog "pass the device" interstitial — only in local hot-seat, never online.
+    const showInterstitial = get().mySeat === null && config.fogOfWar && action.type === 'endTurn' && newState.currentPlayer !== prevPlayer && newState.phase === 'playing';
 
     set({
       gameState: newState,
@@ -451,10 +497,13 @@ export const useGameStore = create<GameStore>((set, get) => ({
       coachLog,
     });
     get().ensureUnitLabels(); // label any newly-spawned units (stable, never renumbered)
+    // Broadcast LOCAL actions to the peer (remote-applied actions don't echo back).
+    if (!opts?.remote) get().netSend?.(action);
   },
 
   undo: () => {
     const { stateHistory, registry } = get();
+    if (get().mySeat !== null) return; // undo would desync an online game — disabled in MP
     if (stateHistory.length === 0) return;
     const prev = stateHistory[stateHistory.length - 1];
     const visible = getVisibleState(prev, prev.currentPlayer, registry);

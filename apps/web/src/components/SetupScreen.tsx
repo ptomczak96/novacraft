@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useGameStore } from '../store/gameStore.js';
 import { EvoSelect, EvoCheckbox, EvoButton } from './evo/EvoControls.js';
+import { MultiplayerLobby } from './MultiplayerLobby.js';
 
 const BOT_OPTIONS = [
   { value: 'human', label: 'Human' },
@@ -33,22 +34,40 @@ const WIN_OPTIONS = [
 ];
 const RES_OPTIONS = [
   { value: 'normal', label: 'Normal' },
-  { value: 'double', label: 'Double resources' },
+  { value: 'rich', label: 'Rich (2000 ore + plasma)' },
   { value: 'unlimited', label: 'Unlimited resources' },
+];
+// Preset map sizes (square). Selecting one sets both width & height.
+const MAP_SIZE_OPTIONS = [
+  { value: '11', label: 'Tiny (11×11)' },
+  { value: '14', label: 'Small (14×14)' },
+  { value: '16', label: 'Normal (16×16)' },
+  { value: '18', label: 'Large (18×18)' },
+  { value: '20', label: 'Huge (20×20)' },
 ];
 
 export function SetupScreen() {
-  const { config, setConfig, factions, startGame, initMapEditor, loadGame, setBotSetting, tileTheme, setTileTheme, musicMuted, setMusicMuted } = useGameStore();
+  const { config, setConfig, factions, startGame, initMapEditor, loadGame, setBotSetting, setCoachEnabled, tileTheme, setTileTheme, musicMuted, setMusicMuted } = useGameStore();
   // Seed is random per visit — deliberately no UI for it (Patrick, 2026-07-22).
   const [seed] = useState(Math.floor(Math.random() * 100000));
   const [faction0, setFaction0] = useState(factions[0]?.id || 'vanguard');
   const [faction1, setFaction1] = useState(factions[1]?.id || 'hive');
   const [bot0, setBot0] = useState<'human' | 'random' | 'greedy'>('human');
   const [bot1, setBot1] = useState<'human' | 'random' | 'greedy'>('human');
+  const [showLobby, setShowLobby] = useState(false);
 
   const handleStart = () => {
     setBotSetting(0, bot0);
     setBotSetting(1, bot1);
+    setCoachEnabled(false);
+    startGame([faction0, faction1], seed);
+  };
+
+  // Train: you (P1) vs the greedy AI (P2), with the coaching loop on from the start.
+  const handleTrain = () => {
+    setBotSetting(0, 'human');
+    setBotSetting(1, 'greedy');
+    setCoachEnabled(true);
     startGame([faction0, faction1], seed);
   };
 
@@ -71,12 +90,13 @@ export function SetupScreen() {
     },
   });
 
-  // ── Resources (single choice) ──
-  const resKey = config.unlimitedResources ? 'unlimited' : (mapgen.doubleResources ? 'double' : 'normal');
+  // ── Resources (single choice): Normal / Rich (rich start) / Unlimited ──
+  const resKey = config.unlimitedResources ? 'unlimited' : (config.richStart ? 'rich' : 'normal');
   const setRes = (k: string) => setConfig({
     ...config,
     unlimitedResources: k === 'unlimited',
-    mapgen: { ...mapgen, doubleResources: k === 'double' },
+    richStart: k === 'rich',
+    mapgen: { ...mapgen, doubleResources: false }, // "Double" retired in favour of Rich
   });
 
   const handleLoad = () => {
@@ -103,12 +123,20 @@ export function SetupScreen() {
         <div className="evo-section">Battlefield</div>
         <div className="setup-row">
           <div className="setup-field">
-            <label>Map Width</label>
+            <label>Map Size</label>
+            <EvoSelect
+              value={String(config.mapWidth)}
+              options={MAP_SIZE_OPTIONS}
+              onChange={v => setConfig({ ...config, mapWidth: Number(v), mapHeight: Number(v) })}
+            />
+          </div>
+          <div className="setup-field">
+            <label>Width</label>
             <input type="number" min={8} max={24} value={config.mapWidth}
               onChange={e => setConfig({ ...config, mapWidth: Number(e.target.value) })} />
           </div>
           <div className="setup-field">
-            <label>Map Height</label>
+            <label>Height</label>
             <input type="number" min={8} max={24} value={config.mapHeight}
               onChange={e => setConfig({ ...config, mapHeight: Number(e.target.value) })} />
           </div>
@@ -160,9 +188,10 @@ export function SetupScreen() {
 
         <div className="evo-section">Rules</div>
         <div className="setup-field">
-          <label>Turn Limit</label>
-          <input type="number" min={10} max={200} value={config.turnLimit}
-            onChange={e => setConfig({ ...config, turnLimit: Number(e.target.value) })} />
+          <label>Turn Limit (blank = Off)</label>
+          <input type="number" min={0} max={200} placeholder="Off"
+            value={config.turnLimit > 0 ? config.turnLimit : ''}
+            onChange={e => setConfig({ ...config, turnLimit: Number(e.target.value) || 0 })} />
         </div>
 
         {/* Win Conditions & Resources — pick exactly one each (David's 3/3/3 options). */}
@@ -191,10 +220,16 @@ export function SetupScreen() {
 
         <div className="setup-actions">
           <EvoButton primary onClick={handleStart}>Start Game</EvoButton>
+          <EvoButton onClick={() => setShowLobby(true)}>Online 1v1</EvoButton>
+          <EvoButton onClick={handleTrain}>Train vs AI</EvoButton>
           <EvoButton onClick={handleLoad}>Load Game</EvoButton>
           <EvoButton onClick={initMapEditor}>Map Editor</EvoButton>
         </div>
       </div>
+
+      {showLobby && (
+        <MultiplayerLobby factions={[faction0, faction1]} seed={seed} onClose={() => setShowLobby(false)} />
+      )}
     </div>
   );
 }
