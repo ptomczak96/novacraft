@@ -1,73 +1,89 @@
-import PartySocket from 'partysocket';
+import { Peer, type DataConnection } from 'peerjs';
 import type { Action, GameConfig } from '@tactica/engine';
 import { useGameStore } from '../store/gameStore.js';
 
-// PartyKit host: the deployed relay in prod, the local `partykit dev` server otherwise.
-const HOST = (import.meta.env.VITE_PARTYKIT_HOST as string | undefined) || 'localhost:1999';
+// Peer-to-peer 1v1 over WebRTC (PeerJS free public broker) — no server, no deploy, no keys.
+// The room code IS the host's peer id (namespaced to avoid global collisions); the guest
+// connects to it. Host = seat 0, guest = seat 1. The engine is deterministic, so we only
+// relay actions + the initial {seed, factions, config} handshake.
+const PREFIX = 'rigbound-';
 
-let socket: PartySocket | null = null;
+let peer: Peer | null = null;
+let conn: DataConnection | null = null;
 let mySeat: number | null = null;
 
 const store = () => useGameStore.getState();
-const send = (obj: unknown) => socket?.send(JSON.stringify(obj));
-const sendAction = (a: Action) => send({ type: 'action', action: a });
+const sendAction = (a: Action) => conn?.send({ type: 'action', action: a });
 
-function patchStatus(patch: Partial<NonNullable<ReturnType<typeof store>['mpStatus']>>, room: string) {
+function patch(p: Partial<NonNullable<ReturnType<typeof store>['mpStatus']>>, room: string) {
   const cur = store().mpStatus ?? { room, seat: null, peers: 0, error: null };
-  store().setMpStatus({ ...cur, ...patch });
+  store().setMpStatus({ ...cur, ...p });
 }
 
-/** Open a socket to `room` and wire messages to the store. `isHost` only affects which seat
- *  we expect; the server assigns seats by arrival order (0 then 1). */
-function connect(room: string, onStart: (p: { seed: number; factions: [string, string]; config: GameConfig }) => void) {
-  leaveRoom();
-  mySeat = null;
-  socket = new PartySocket({ host: HOST, room });
-  store().setMpStatus({ room, seat: null, peers: 0, error: null });
+function friendly(err: { type?: string; message?: string }): string {
+  switch (err.type) {
+    case 'unavailable-id': return 'That room code is already in use — go back and Host again for a fresh code.';
+    case 'peer-unavailable': return 'No host found for that code. Check the code, and make sure the host clicked "Host game" first.';
+    case 'browser-incompatible': return 'This browser can’t do peer-to-peer — try Chrome.';
+    case 'network': case 'server-error': case 'socket-error': return 'Network problem reaching the matchmaking broker — retry in a moment.';
+    default: return err.message || 'Connection error.';
+  }
+}
 
-  socket.addEventListener('message', (e) => {
-    let msg: any;
-    try { msg = JSON.parse(e.data as string); } catch { return; }
-    if (msg.type === 'seat') { mySeat = msg.seat; patchStatus({ seat: msg.seat }, room); }
-    else if (msg.type === 'presence') patchStatus({ peers: msg.count }, room);
-    else if (msg.type === 'full') patchStatus({ error: 'That room is full.' }, room);
-    else if (msg.type === 'action') store().receiveRemoteAction(msg.action as Action);
-    else if (msg.type === 'start') {
-      onStart({ seed: msg.seed, factions: msg.factions, config: msg.config });
-    }
+// Wire a data connection: relay inbound actions, and (guest side) start on the handshake.
+function wire(c: DataConnection, room: string, onStart: (p: { seed: number; factions: [string, string]; config: GameConfig }) => void) {
+  conn = c;
+  c.on('open', () => patch({ peers: 2 }, room));
+  c.on('data', (raw: unknown) => {
+    const msg = raw as { type?: string; action?: Action; seed?: number; factions?: [string, string]; config?: GameConfig };
+    if (msg.type === 'action' && msg.action) store().receiveRemoteAction(msg.action);
+    else if (msg.type === 'start' && msg.config) onStart({ seed: msg.seed!, factions: msg.factions!, config: msg.config });
   });
-  socket.addEventListener('error', () => patchStatus({ error: 'Connection error.' }, room));
+  c.on('close', () => patch({ error: 'Opponent disconnected.' }, room));
+  c.on('error', (e) => patch({ error: friendly(e as { type?: string; message?: string }) }, room));
 }
 
-/** Host a room: connect and wait for a guest (seat 0). */
+/** Host a room (seat 0): become the peer whose id == the room code, and wait for the guest. */
 export function hostRoom(room: string) {
-  // The host ignores inbound `start` (it initiates it via startMatch instead).
-  connect(room, () => { /* host initiates */ });
+  leaveRoom();
+  mySeat = 0;
+  store().setMpStatus({ room, seat: 0, peers: 1, error: null });
+  peer = new Peer(PREFIX + room);
+  peer.on('open', () => patch({ seat: 0, peers: 1 }, room));
+  peer.on('connection', (c) => wire(c, room, () => { /* host initiates the start */ }));
+  peer.on('error', (e) => patch({ error: friendly(e) }, room));
 }
 
-/** Join a room by code (seat 1). Starts the game when the host sends the handshake. */
+/** Join a room by code (seat 1): connect to the host's peer and start on their handshake. */
 export function joinRoom(room: string) {
-  connect(room, ({ seed, factions, config }) => {
-    store().startNetworkGame({ seat: mySeat ?? 1, factions, seed, config, send: sendAction });
+  leaveRoom();
+  mySeat = 1;
+  store().setMpStatus({ room, seat: 1, peers: 1, error: null });
+  peer = new Peer();
+  peer.on('open', () => {
+    const c = peer!.connect(PREFIX + room, { reliable: true }); // reliable+ordered = lockstep-safe
+    wire(c, room, ({ seed, factions, config }) =>
+      store().startNetworkGame({ seat: 1, factions, seed, config, send: sendAction }));
   });
+  peer.on('error', (e) => patch({ error: friendly(e) }, room));
 }
 
 /** Host only: broadcast the agreed {seed, factions, config} and start locally. */
 export function startMatch(factions: [string, string], seed: number, config: GameConfig) {
-  send({ type: 'start', seed, factions, config });
+  conn?.send({ type: 'start', seed, factions, config });
   store().startNetworkGame({ seat: mySeat ?? 0, factions, seed, config, send: sendAction });
 }
 
 export function leaveRoom() {
-  socket?.close();
-  socket = null;
+  conn?.close(); conn = null;
+  peer?.destroy(); peer = null;
   mySeat = null;
   store().leaveMultiplayer();
 }
 
-/** A short human-friendly room code. */
+/** A short, unambiguous room code. */
 export function makeRoomCode(): string {
-  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no ambiguous chars
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let s = '';
   for (let i = 0; i < 5; i++) s += alphabet[Math.floor(Math.random() * alphabet.length)];
   return s;
