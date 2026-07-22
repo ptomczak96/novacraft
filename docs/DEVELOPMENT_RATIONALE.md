@@ -4001,3 +4001,29 @@ through the single reflector plane + hole-mask-aware grid shader). Terrain
 props minimal: one block per mountain, one tree per forest, plain saguaros.
 The cyberpunk look remains recoverable from git history (tags around
 d1a249f–942459c) if the direction swings back.
+
+---
+
+### 2026-07-22 — David
+
+**Integrated Patrick's main (voxel3d renderer, Evo UI menu, audio, desert biome) into the
+economy branch and merged to main.** Conflict resolution honoured "keep David's 3/3/3 start
+options, Patrick wins on visual/graphics clashes":
+- **SetupScreen** — took Patrick's EvoUI shell (logo, `EvoSelect/EvoCheckbox/EvoButton`,
+  desert biome, extra themes, mute toggle, no-seed, width/height inputs) and re-injected the
+  3/3/3 options: Win Condition + Resources as single-select `EvoSelect` (my 3 options each,
+  incl. `captureCapital` / `unlimited`), Mechanics as `EvoCheckbox` (Tech Tree / Fog / Nodes).
+  Rich-start dropped (superseded by Unlimited Resources).
+- **index.css, drawUnit.ts** — took Patrick's (my only CSS adds were now-unused 3/3/3 styles;
+  graphics = Patrick's).
+- **gameStore.ts** — took mine (superset: all pickers, coach, notation, testcombat, nodes,
+  marks, combat events) and injected Patrick's `musicMuted`.
+- **MapView / GameScreen** — took Patrick's (voxel toggle, Evo recruit, music/sfx, logo) and
+  re-injected my gameplay UI (5 picker/dialog bars; `captureCapital` win label; TechTreeView
+  `factionId` prop). **Coach/Train-vs-AI is shelved** — Patrick's menu has no launcher for it,
+  so the store slices are inert (revisit if wanted).
+- **types.ts, docs** — clean auto-merge / append-union.
+
+**No data clashes:** Patrick changed ZERO data files (units/tech/factions), and this branch
+added no units and renamed no unit *ids* (only ability display names, e.g. Body Slam), so unit
+names/effects are consistent with his renderers. 259 tests + both typechecks green post-merge.
