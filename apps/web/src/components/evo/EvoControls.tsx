@@ -21,6 +21,16 @@ export function EvoSelect({ value, options, onChange, id }: {
   const [open, setOpen] = React.useState(false);
   const rootRef = React.useRef<HTMLDivElement>(null);
 
+  // When the panel closes, pull focus off any option inside it — an element
+  // keeping focus under aria-hidden trips accessibility warnings.
+  React.useEffect(() => {
+    if (open) return;
+    const active = document.activeElement;
+    if (active instanceof HTMLElement && rootRef.current?.querySelector('.evo-select-panel')?.contains(active)) {
+      active.blur();
+    }
+  }, [open]);
+
   React.useEffect(() => {
     if (!open) return;
     const close = (e: PointerEvent) => {

@@ -310,10 +310,21 @@ label {
   font-size: 13px;
   user-select: none;
 }
+.evo-checkbox {
+  position: relative;
+}
 .evo-checkbox input {
+  /* invisible but real & clickable, covering the box — keeps native
+     behaviour working for keyboard, automation and assistive tech */
   position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 16px;
+  height: 16px;
+  margin: 0;
   opacity: 0;
-  pointer-events: none;
+  cursor: pointer;
 }
 .evo-checkbox-box {
   flex: none;
