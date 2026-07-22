@@ -16,6 +16,27 @@ const base = () => {
 };
 const assault = (): UseAbilityAction => ({ type: 'useAbility', unitId: 1, abilityId: 'assault_mode', target: { x: 0, y: 0 } });
 
+describe('Tank: Repositioning (no attack after moving)', () => {
+  it('a tank that has moved cannot attack; a stationary tank can', () => {
+    // Stationary tank with an adjacent enemy → attack offered.
+    const still = base();
+    still.units.push(mk(1, 'tank', 0, 3, 3), mk(2, 'warrior', 1, 4, 3));
+    expect(getLegalActions(still, registry, 0).some(a => a.type === 'attack' && a.unitId === 1)).toBe(true);
+
+    // Same tank after moving → no attack offered.
+    const moved = base();
+    moved.units.push({ ...mk(1, 'tank', 0, 3, 3), hasMoved: true }, mk(2, 'warrior', 1, 4, 3));
+    expect(getLegalActions(moved, registry, 0).some(a => a.type === 'attack' && a.unitId === 1)).toBe(false);
+  });
+
+  it('a tank that attacks cannot then move', () => {
+    let s = base();
+    s.units.push(mk(1, 'tank', 0, 3, 3), mk(2, 'warrior', 1, 4, 3));
+    s = applyAction(s, { type: 'attack', unitId: 1, targetId: 2 }, registry);
+    expect(u(s, 1).hasMoved).toBe(true); // locked in place after firing
+  });
+});
+
 describe('Tank: Assault Mode toggle', () => {
   it('offers a self-cast Assault Mode ability and morphs the tank, keeping id/hp/position', () => {
     let s = base();

@@ -64,7 +64,7 @@ function buildingAt(state: GameState, pos: Coord): BuildingState | undefined {
 // Highest level reachable via the level-up choice system today. Bonuses are only
 // designed for reaching L2/L3/L4; L5/L6 are deferred (see backlog), so cities cap
 // here for now even though economy.json still allows maxLevel 6.
-export const LEVEL_CHOICE_MAX = 4;
+export const LEVEL_CHOICE_MAX = 8;
 
 // ── City production / pop (capacity) / level ──
 export function cityProduction(city: CityState, registry: DataRegistry): number {
@@ -74,8 +74,14 @@ export function cityProduction(city: CityState, registry: DataRegistry): number 
 }
 
 /** Unit capacity of a city (how many units it can support). */
-export function cityPop(city: CityState, registry: DataRegistry): number {
-  return registry.economy.city.popBase + (city.level - 1) + (city.popBonus ?? 0);
+export function cityPop(city: CityState, registry: DataRegistry, state?: GameState): number {
+  // Habitation Domes (Refinement tech): +cityPopBonus to every owned city's cap. Only
+  // applied when `state` is provided (so the owner's researched techs can be read).
+  let bonus = 0;
+  if (state && city.owner !== null && city.owner !== undefined) {
+    bonus = getModifier(state.players[city.owner], registry, 'cityPopBonus');
+  }
+  return registry.economy.city.popBase + (city.level - 1) + (city.popBonus ?? 0) + bonus;
 }
 
 /** Highest level whose cumulative supply threshold is satisfied. */
@@ -119,6 +125,19 @@ function adjacentSameCity(state: GameState, pos: Coord, kind: BuildingKind, city
   return count;
 }
 
+/** Count REB1s of `kind` adjacent to `pos` that belong to ANY city owned by `ownerId`.
+ *  Used with the "Cross Border Economy" tech so a REB2 benefits from adjacent REB1s in a
+ *  different friendly city's territory (still within the REB2's 3×3). */
+function adjacentFriendly(state: GameState, pos: Coord, kind: BuildingKind, ownerId: PlayerId): number {
+  let count = 0;
+  for (const b of state.buildings) {
+    if (b.kind !== kind) continue;
+    if (chebyshev(b.position, pos) > 1) continue;
+    if (cityById(state, b.cityId)?.owner === ownerId) count++;
+  }
+  return count;
+}
+
 function atLevel(arr: number[] | undefined, level: number): number {
   if (!arr) return 0;
   return arr[Math.min(level, arr.length) - 1] ?? 0;
@@ -142,7 +161,13 @@ export function buildingOutput(state: GameState, building: BuildingState, regist
   }
   if (def.outputPerAdjacentByLevel && def.adjacentTo) {
     const per = atLevel(def.outputPerAdjacentByLevel, building.level);
-    return { resource: def.output, amount: per * adjacentSameCity(state, building.position, def.adjacentTo, building.cityId) };
+    const owner = cityById(state, building.cityId)?.owner;
+    // Cross Border Economy: count adjacent REB1s across ALL of the owner's cities.
+    const crossBorder = owner != null && state.players[owner]?.researchedTechs.includes('cross_border');
+    const adj = crossBorder
+      ? adjacentFriendly(state, building.position, def.adjacentTo, owner)
+      : adjacentSameCity(state, building.position, def.adjacentTo, building.cityId);
+    return { resource: def.output, amount: per * adj };
   }
   return { resource: def.output, amount: 0 };
 }
@@ -155,6 +180,8 @@ export function buildingOutput(state: GameState, building: BuildingState, regist
 export function buildingBlocked(state: GameState, building: BuildingState): boolean {
   const owner = cityById(state, building.cityId)?.owner;
   if (owner === undefined || owner === null) return false;
+  // Automated Extraction (Refinement tech): enemies on a REB no longer block its output.
+  if (state.players[owner]?.researchedTechs.includes('automated_extraction')) return false;
   const occupant = state.units.find(
     u => u.position.x === building.position.x && u.position.y === building.position.y,
   );
@@ -276,10 +303,25 @@ export function validateExpansion(
 export function levelUpChoices(targetLevel: number): { a: LevelUpChoice; b: LevelUpChoice } | null {
   switch (targetLevel) {
     case 2: return { a: 'income', b: 'pop' };
-    case 3: return { a: 'fortify', b: 'reveal' };
-    case 4: return { a: 'supply', b: 'territory' };
+    case 3: return { a: 'fortify', b: 'beacon' };
+    case 4: return { a: 'territory', b: 'supply' };
+    case 5: return { a: 'muster', b: 'detect' };
+    case 6: return { a: 'hero', b: 'conscription' };
+    case 7: return { a: 'hero', b: 'plasma' };
+    case 8: return { a: 'hero', b: 'pop' };
     default: return null;
   }
+}
+
+/** Level-up choices that are actually applicable right now (Hero is greyed out — no heroes
+ *  exist yet, and you may only have one living hero — so it is never a legal pick). */
+export function isChoiceAvailable(choice: LevelUpChoice): boolean {
+  return choice !== 'hero';
+}
+
+/** Ore cost to recruit a unit at `city` — 20% cheaper if the city has "Conscription". */
+export function recruitOreCost(baseCost: number, city: CityState): number {
+  return city.conscription ? Math.round(baseCost * 0.8) : baseCost;
 }
 
 // ── Unit pop (capacity) accounting ──
@@ -309,7 +351,7 @@ export function cityPopUsed(state: GameState, cityId: CityId, registry: DataRegi
 
 /** Can the city absorb `addedPop` more pop weight without exceeding its cap? */
 export function cityHasCapacityFor(state: GameState, city: CityState, registry: DataRegistry, addedPop = 1): boolean {
-  return Math.ceil(cityPopRaw(state, city.id, registry) + addedPop) <= cityPop(city, registry);
+  return Math.ceil(cityPopRaw(state, city.id, registry) + addedPop) <= cityPop(city, registry, state);
 }
 
 export function cityHasCapacity(state: GameState, city: CityState, registry: DataRegistry): boolean {
@@ -327,7 +369,11 @@ export function calculateOreIncome(state: GameState, playerId: PlayerId, registr
 }
 
 export function calculatePlasmaIncome(state: GameState, playerId: PlayerId, registry: DataRegistry): number {
-  return buildingIncome(state, playerId, 'plasma', registry);
+  // Building output + any city "+10 plasma/turn" level-up bonuses.
+  const cityBonus = state.cities
+    .filter(c => c.owner === playerId)
+    .reduce((sum, c) => sum + (c.plasmaBonus ?? 0), 0);
+  return buildingIncome(state, playerId, 'plasma', registry) + cityBonus;
 }
 
 function buildingIncome(state: GameState, playerId: PlayerId, resource: ResourceKind, registry: DataRegistry): number {
@@ -480,8 +526,10 @@ export function canFoundCity(state: GameState, registry: DataRegistry, playerId:
     // (like capturing) is only available the turn AFTER moving onto the ruin.
     const unit = state.units.find(u => u.owner === playerId && u.position.x === pos.x && u.position.y === pos.y);
     if (!unit || unit.hasMoved) return false;
-    // Condition "Impotent founder": this unit type can't found cities (see docs/conditions.md).
-    if (registry.unitTypes[unit.typeId]?.conditions?.includes('impotent_founder')) return false;
+    // Conditions that can't found: "Impotent founder", or a burrowed Wyrm (it can't even
+    // stop on a ruin, but guard anyway). See docs/conditions.md.
+    const founderConds = registry.unitTypes[unit.typeId]?.conditions ?? [];
+    if (founderConds.includes('impotent_founder') || founderConds.includes('burrowed')) return false;
   }
   return state.players[playerId].ore >= cost;
 }

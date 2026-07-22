@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useCallback, useState } from 'react';
 import { useGameStore } from '../store/gameStore.js';
-import { previewCombat, isExpansionTileEligible, buildingBlocked, canBuildLocation, getSlashArc, slashHitDamage } from '@tactica/engine';
+import { previewCombat, isExpansionTileEligible, buildingBlocked, canBuildLocation, getSlashArc, slashHitDamage, enumerateVolleyGrids, wyrmStrikePairs, getAbilityUnitTargets, grantedConditions } from '@tactica/engine';
 import type { Coord, Unit, Action, BuildingKind } from '@tactica/engine';
 
 import type { GameState, DataRegistry, CityState } from '@tactica/engine';
@@ -25,6 +25,54 @@ function coherentSubset(state: GameState, registry: DataRegistry, city: CityStat
   }
   return accepted;
 }
+
+// Ballistic Volley picker helper. Returns the tiles still tickable given the current
+// picks (any tile that, together with the picks, fits inside one legal 2×2 grid) and
+// whether the 4-tile square is complete. Shape (strict 2×2) + range band come straight
+// from the engine's enumerateVolleyGrids, so UI and engine agree exactly.
+function volleyPicker(
+  state: GameState, registry: DataRegistry,
+  sel: { unitId: number; abilityId: string; picks: Coord[] },
+): { eligible: Coord[]; done: boolean } {
+  const unit = state.units.find(u => u.id === sel.unitId);
+  const ability = unit && registry.unitTypes[unit.typeId]?.abilities.find(a => a.id === sel.abilityId);
+  if (!unit || !ability) return { eligible: [], done: false };
+  const grids = enumerateVolleyGrids(unit.position, state.map.width, state.map.height, ability.minRange ?? 0, ability.range ?? 0);
+  const has = (g: Coord[], c: Coord) => g.some(t => t.x === c.x && t.y === c.y);
+  const candidates = grids.filter(g => sel.picks.every(p => has(g, p)));
+  const done = sel.picks.length === 4 && candidates.length > 0;
+  if (done || sel.picks.length >= 4) return { eligible: [], done };
+  const seen = new Set(sel.picks.map(p => `${p.x},${p.y}`));
+  const eligible: Coord[] = [];
+  for (const g of candidates) for (const c of g) {
+    const k = `${c.x},${c.y}`;
+    if (!seen.has(k)) { seen.add(k); eligible.push(c); }
+  }
+  return { eligible, done };
+}
+// Wyrm strike picker helper. Pick 1 = primary (within the Wyrm's 3×3); pick 2 = a cell
+// touching the primary. Eligibility is derived from the engine's wyrmStrikePairs so the
+// UI and engine agree exactly on legal shapes.
+function strikePicker(
+  state: GameState, registry: DataRegistry,
+  sel: { unitId: number; picks: Coord[] },
+): { eligible: Coord[]; done: boolean } {
+  const unit = state.units.find(u => u.id === sel.unitId);
+  if (!unit) return { eligible: [], done: false };
+  if (sel.picks.length >= 2) return { eligible: [], done: true };
+  const pairs = wyrmStrikePairs(unit.position, state.map.width, state.map.height);
+  const same = (a: Coord, b: Coord) => a.x === b.x && a.y === b.y;
+  const seen = new Set<string>();
+  const eligible: Coord[] = [];
+  const push = (c: Coord) => { const k = `${c.x},${c.y}`; if (!seen.has(k)) { seen.add(k); eligible.push(c); } };
+  if (sel.picks.length === 0) {
+    for (const [p] of pairs) push(p);           // all valid primaries
+  } else {
+    const primary = sel.picks[0];
+    for (const [p, q] of pairs) if (same(p, primary)) push(q); // cells touching the primary
+  }
+  return { eligible, done: false };
+}
 import { canvasSize, screenToTile, tileToScreenShifted } from './projection.js';
 import { drawTile } from './drawTile.js';
 import { drawUnitAt } from './drawUnit.js';
@@ -33,15 +81,21 @@ import { loadUnitSprites, facingFromDelta, DEFAULT_FACING, type Facing } from '.
 import {
   drawMoveHighlight,
   drawAttackHighlight,
+  drawAttackRangeHighlight,
+  drawAOIHighlight,
+  drawCrossedSwords,
   drawBileOverlay,
   drawAbilityHighlight,
   drawFogExplored,
   drawCloud,
   drawDamagePreview,
   drawGridLabel,
+  drawAxisLabels,
   drawTerritoryBorders,
   drawTerritoryPicker,
   drawTileOutline,
+  drawNode,
+  drawMarkDots,
 } from './drawOverlays.js';
 import {
   drawBuildingLabel, drawResourceLabel, drawActionBox, drawNameBadge, pointInRect,
@@ -134,6 +188,10 @@ export function IsoCanvas({ mode, onPaint, pan, onPanChange }: IsoCanvasProps) {
   const rafRef = useRef<number | undefined>(undefined);
   const [animTick, setAnimTick] = useState(0);
 
+  // ~1s blink toggle for Tracer / Explosives marker dots.
+  const [blinkOn, setBlinkOn] = useState(true);
+  useEffect(() => { const t = setInterval(() => setBlinkOn(b => !b), 1000); return () => clearInterval(t); }, []);
+
   // Scroll-to-zoom factor. Magnifies via CSS transform for display, and also feeds
   // the backing-store resolution (render-at-display) so tiles stay crisp when
   // zoomed. Clicking stays accurate because hit-testing uses the on-screen bbox.
@@ -164,6 +222,10 @@ export function IsoCanvas({ mode, onPaint, pan, onPanChange }: IsoCanvasProps) {
     selectedUnitId, hoveredTile, legalActions, inspectedTile,
     selectUnit, setSelectedCity, setHoveredTile, executeAction, setInspectedTile,
     territorySelect, setTerritorySelect,
+    volleySelect, setVolleySelect,
+    strikeSelect, setStrikeSelect,
+    targetSelect, setTargetSelect,
+    setPendingNodeCancel, setMarkRemoval,
     abilityMode, setAbilityMode,
     mapEditorState,
   } = useGameStore();
@@ -175,6 +237,7 @@ export function IsoCanvas({ mode, onPaint, pan, onPanChange }: IsoCanvasProps) {
   const visibility = mode === 'game' ? visibleState?.visibility : null;
   const buildings = mode === 'game' ? (visibleState?.buildings ?? []) : (mapEditorState?.buildings ?? []);
   const cities = mode === 'game' ? (visibleState?.cities ?? []) : (mapEditorState?.cities ?? []);
+  const nodes = mode === 'game' ? (visibleState?.nodes ?? []) : [];
   const currentPlayer = state?.currentPlayer ?? 0;
 
   // First structure the current player could build on a tile, ignoring whether they
@@ -188,13 +251,31 @@ export function IsoCanvas({ mode, onPaint, pan, onPanChange }: IsoCanvasProps) {
   }, [mode, gameState, registry, currentPlayer]);
 
   // ── Build unit position map ──
+  const isBurrowed = React.useCallback(
+    (u: Unit) => !!registry.unitTypes[u.typeId]?.conditions?.includes('burrowed'),
+    [registry],
+  );
+
+  // All units per tile (a burrowed Wyrm co-occupies an enemy's tile). Ordered so the
+  // burrowed unit is FIRST (drawn underneath / selected first on click) and any surface
+  // unit is LAST (drawn on top).
+  const unitsByPos = React.useMemo(() => {
+    const m = new Map<string, Unit[]>();
+    for (const u of units) {
+      const key = `${u.position.x},${u.position.y}`;
+      (m.get(key) ?? m.set(key, []).get(key)!).push(u);
+    }
+    for (const arr of m.values()) arr.sort((a, b) => (isBurrowed(a) ? 0 : 1) - (isBurrowed(b) ? 0 : 1));
+    return m;
+  }, [units, isBurrowed]);
+
+  // Topmost unit per tile (surface unit if a burrowed one shares the tile) — used for
+  // hover tooltips and as the default single-unit lookup.
   const unitByPos = React.useMemo(() => {
     const m = new Map<string, Unit>();
-    for (const u of units) {
-      m.set(`${u.position.x},${u.position.y}`, u);
-    }
+    for (const [key, arr] of unitsByPos) m.set(key, arr[arr.length - 1]);
     return m;
-  }, [units]);
+  }, [unitsByPos]);
 
   const buildingByPos = React.useMemo(() => {
     const m = new Map<string, (typeof buildings)[number]>();
@@ -261,6 +342,19 @@ export function IsoCanvas({ mode, onPaint, pan, onPanChange }: IsoCanvasProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lastCombatEvent]);
 
+  // ── AoE damage bursts (Wyrm strike) → floating "-N" popups on each struck cell ──
+  const { lastAoeDamage } = useGameStore();
+  useEffect(() => {
+    const ev = lastAoeDamage;
+    if (!ev || mode !== 'game') return;
+    const now = performance.now();
+    for (const h of ev.hits) {
+      popupsRef.current.push({ x: h.x, y: h.y, text: `-${h.amount}`, start: now + 60 });
+    }
+    kickAnimLoop();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lastAoeDamage]);
+
   // ── Detect unit moves → start glide animations ──
   useEffect(() => {
     const now = performance.now();
@@ -313,11 +407,17 @@ export function IsoCanvas({ mode, onPaint, pan, onPanChange }: IsoCanvasProps) {
   // ── Compute move/attack targets ──
   // `slashTargets` is keyed by the CENTRAL tile of each Slash arc (that's the
   // clickable tile); the two side tiles are derived at draw time via getSlashArc.
-  const { moveTargets, attackTargets, slashTargets } = React.useMemo(() => {
+  const { moveTargets, attackTargets, slashTargets, attackRangeTiles, attackableEnemyTiles } = React.useMemo(() => {
     const moveTargets = new Set<string>();
     const attackTargets = new Map<string, Action>();
     const slashTargets = new Map<string, Action>();
-    if (mode !== 'game' || selectedUnitId == null) return { moveTargets, attackTargets, slashTargets };
+    // Red "hypothetical attack/influence range" footprint, and enemy tiles that can
+    // actually be attacked (get a crossed-swords marker).
+    const attackRangeTiles = new Set<string>();
+    const attackableEnemyTiles = new Set<string>();
+    if (mode !== 'game' || selectedUnitId == null || !map) {
+      return { moveTargets, attackTargets, slashTargets, attackRangeTiles, attackableEnemyTiles };
+    }
     for (const action of legalActions) {
       if (action.type === 'move' && action.unitId === selectedUnitId) {
         // A bump move highlights the IMPASSABLE tile (bumpReveal) it targets, not the
@@ -330,14 +430,91 @@ export function IsoCanvas({ mode, onPaint, pan, onPanChange }: IsoCanvasProps) {
         const target = units.find(u => u.id === action.targetId);
         if (target) {
           attackTargets.set(`${target.position.x},${target.position.y}`, action);
+          attackableEnemyTiles.add(`${target.position.x},${target.position.y}`);
         }
       }
       if (action.type === 'slash' && action.unitId === selectedUnitId) {
         slashTargets.set(`${action.target.x},${action.target.y}`, action);
       }
     }
-    return { moveTargets, attackTargets, slashTargets };
-  }, [mode, selectedUnitId, legalActions, units]);
+
+    // Compute the range footprint (empty tiles included) for the selected unit — only
+    // while it can still act (an already-attacked unit shows no range).
+    const unit = units.find(u => u.id === selectedUnitId);
+    const ut = unit ? registry.unitTypes[unit.typeId] : undefined;
+    const inB = (x: number, y: number) => x >= 0 && y >= 0 && x < map.width && y < map.height;
+    const add = (x: number, y: number) => { if (inB(x, y)) attackRangeTiles.add(`${x},${y}`); };
+    if (unit && ut && !unit.hasAttacked) {
+      const conds = ut.conditions ?? [];
+      if (conds.includes('slash')) {
+        // Every tile any Slash arc could hit; mark enemies within them.
+        for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+          if (dx === 0 && dy === 0) continue;
+          for (const { coord } of getSlashArc(unit.position, { x: unit.position.x + dx, y: unit.position.y + dy })) {
+            add(coord.x, coord.y);
+            const e = units.find(u => u.owner !== unit.owner && u.position.x === coord.x && u.position.y === coord.y);
+            if (e) attackableEnemyTiles.add(`${coord.x},${coord.y}`);
+          }
+        }
+      } else if (ut.attack > 0 && !conds.includes('burrowed')) {
+        const onMtn = map.tiles[unit.position.y]?.[unit.position.x]?.terrain === 'mountain';
+        const maxR = ut.attackRange + (onMtn && conds.includes('mountain_shooter_2') ? 1 : 0);
+        const minR = ut.minAttackRange ?? 1;
+        for (let dy = -maxR; dy <= maxR; dy++) for (let dx = -maxR; dx <= maxR; dx++) {
+          const d = Math.max(Math.abs(dx), Math.abs(dy));
+          if (d >= minR && d <= maxR && !(dx === 0 && dy === 0)) add(unit.position.x + dx, unit.position.y + dy);
+        }
+      }
+      // Active abilities also count as "influence" range.
+      for (const ab of ut.abilities ?? []) {
+        if (ab.disabled || !ab.targetKind) continue;
+        const R = ab.range ?? 0;
+        for (let dy = -R; dy <= R; dy++) for (let dx = -R; dx <= R; dx++) {
+          if (dx === 0 && dy === 0) continue;
+          add(unit.position.x + dx, unit.position.y + dy);
+        }
+      }
+    }
+    return { moveTargets, attackTargets, slashTargets, attackRangeTiles, attackableEnemyTiles };
+  }, [mode, selectedUnitId, legalActions, units, map, registry]);
+
+  // Enemy Area-of-Influence (zone of control) tiles for the selected friendly unit —
+  // entering one stops its movement, so we tint them. Built from VISIBLE units only, so
+  // a hidden enemy (burrowed/cloaked) never reveals itself via its AOI. Mirrors the
+  // engine's enemyAOITiles. (aoi_large → 5×5, aoi_immune → none: scaffolding.)
+  const aoiTiles = React.useMemo(() => {
+    const s = new Set<string>();
+    if (mode !== 'game' || selectedUnitId == null || !map) return s;
+    const sel = units.find(u => u.id === selectedUnitId);
+    if (!sel) return s;
+    // Include tech-granted aoi_immune (e.g. Reaper's Adrenal Glands → Creep).
+    const selConds = [
+      ...(registry.unitTypes[sel.typeId]?.conditions ?? []),
+      ...(gameState ? grantedConditions(gameState.players[sel.owner], sel.typeId, registry) : []),
+    ];
+    if (selConds.includes('aoi_immune')) return s;
+    for (const e of units) {
+      if (e.owner === sel.owner) continue;
+      const conds = registry.unitTypes[e.typeId]?.conditions;
+      if (conds?.includes('aoi_none')) continue; // projects no AOI (No AOI)
+      const r = conds?.includes('aoi_large') ? 2 : 1;
+      for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
+        if (dx === 0 && dy === 0) continue;
+        const x = e.position.x + dx, y = e.position.y + dy;
+        if (x >= 0 && y >= 0 && x < map.width && y < map.height) s.add(`${x},${y}`);
+      }
+    }
+    // Enemy CITIES also project a 3×3 AOI (visible/remembered ones only).
+    for (const c of cities) {
+      if (c.owner === null || c.owner === sel.owner) continue;
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+        if (dx === 0 && dy === 0) continue;
+        const x = c.position.x + dx, y = c.position.y + dy;
+        if (x >= 0 && y >= 0 && x < map.width && y < map.height) s.add(`${x},${y}`);
+      }
+    }
+    return s;
+  }, [mode, selectedUnitId, units, map, registry, gameState]);
 
   // Ability-cast targets: valid target tiles for the armed ability (abilityMode).
   const abilityTargets = React.useMemo(() => {
@@ -440,6 +617,24 @@ export function IsoCanvas({ mode, onPaint, pan, onPanChange }: IsoCanvasProps) {
       }
     }
 
+    // ── Hovered attack preview ──
+    // When hovering an attackable enemy, resolve combat once so we can draw the
+    // defender's damage (+ skull if lethal) AND the attacker's retaliation (+ skull
+    // if the retaliation kills the attacker).
+    let hoverAttack: { atk: Unit; def: Unit; result: ReturnType<typeof previewCombat> } | null = null;
+    if (mode === 'game' && hoveredTile && selectedUnitId != null) {
+      const action = attackTargets.get(`${hoveredTile.x},${hoveredTile.y}`);
+      if (action && action.type === 'attack') {
+        const atk = units.find(u => u.id === selectedUnitId);
+        const def = units.find(u => u.id === action.targetId);
+        const at = atk && registry.unitTypes[atk.typeId];
+        const dt = def && registry.unitTypes[def.typeId];
+        if (atk && def && at && dt) {
+          hoverAttack = { atk, def, result: previewCombat(atk, at, def, dt, map, registry, config.combatConfig) };
+        }
+      }
+    }
+
     // Terrain lookup for shore autotiling (null off-map).
     const terrainAt = (x: number, y: number): string | null =>
       (x >= 0 && y >= 0 && x < map.width && y < map.height) ? map.tiles[y][x].terrain : null;
@@ -473,7 +668,16 @@ export function IsoCanvas({ mode, onPaint, pan, onPanChange }: IsoCanvasProps) {
           drawBileOverlay(ctx, x, y, map.height, tile.terrain);
         }
 
+        // ── 2d. Enemy AOI (zone of control): amber "entering here stops your move" tint ──
+        if (aoiTiles.has(key)) {
+          drawAOIHighlight(ctx, x, y, map.height, tile.terrain);
+        }
+
         // ── 3. Move/attack highlights ──
+        // Faint red footprint of the selected unit's hypothetical attack/influence range.
+        if (attackRangeTiles.has(key)) {
+          drawAttackRangeHighlight(ctx, x, y, map.height, tile.terrain);
+        }
         if (moveTargets.has(key)) {
           drawMoveHighlight(ctx, x, y, map.height, tile.terrain);
         }
@@ -489,68 +693,76 @@ export function IsoCanvas({ mode, onPaint, pan, onPanChange }: IsoCanvasProps) {
           drawAbilityHighlight(ctx, x, y, map.height, tile.terrain);
         }
 
-        // ── 4. Unit ──
-        const unit = unitByPos.get(key);
-        if (unit) {
+        // ── 4. Unit(s) ── (a burrowed Wyrm may share the tile with a surface enemy)
+        const stack = unitsByPos.get(key);
+        if (stack && stack.length) {
           const elev = ELEVATION[tile.terrain] ?? 0;
-          // Glide animation: interpolate fractional tile pos if mid-move.
-          const anim = animsRef.current.get(unit.id);
-          let posOverride: { x: number; y: number } | undefined;
-          if (anim) {
-            const t = Math.min(1, (performance.now() - anim.start) / MOVE_ANIM_MS);
-            const e = t * t * (3 - 2 * t); // smoothstep ease
-            posOverride = { x: anim.fx + (anim.tx - anim.fx) * e, y: anim.fy + (anim.ty - anim.fy) * e };
+          const shared = stack.length > 1;
+          for (const unit of stack) {
+            // Glide animation: interpolate fractional tile pos if mid-move.
+            const anim = animsRef.current.get(unit.id);
+            let posOverride: { x: number; y: number } | undefined;
+            if (anim) {
+              const t = Math.min(1, (performance.now() - anim.start) / MOVE_ANIM_MS);
+              const e = t * t * (3 - 2 * t); // smoothstep ease
+              posOverride = { x: anim.fx + (anim.tx - anim.fx) * e, y: anim.fy + (anim.ty - anim.fy) * e };
+            }
+            // Attack lunge: dart ~35% toward the target and back (sin bump).
+            const lunge = lungesRef.current.get(unit.id);
+            if (!posOverride && lunge) {
+              const lt = Math.min(1, (performance.now() - lunge.start) / LUNGE_MS);
+              const k = Math.sin(Math.PI * lt) * 0.35;
+              posOverride = {
+                x: unit.position.x + (lunge.tx - unit.position.x) * k,
+                y: unit.position.y + (lunge.ty - unit.position.y) * k,
+              };
+            }
+            // Co-tile: nudge the burrowed unit up-left so it "peeks" out behind the
+            // surface unit (both stay visible) when neither is animating.
+            if (!posOverride && shared && isBurrowed(unit)) {
+              posOverride = { x: unit.position.x - 0.32, y: unit.position.y - 0.32 };
+            }
+            // Hit flash: white pop decaying over FLASH_MS (start may be scheduled ahead).
+            let flash = 0;
+            const fl = flashesRef.current.get(unit.id);
+            if (fl) {
+              const ft = (performance.now() - fl.start) / FLASH_MS;
+              if (ft >= 0 && ft <= 1) flash = 1 - ft;
+            }
+            drawUnitAt(ctx, unit, map.height, elev, registry, unit.id === selectedUnitId, posOverride,
+              facingRef.current.get(unit.id) ?? DEFAULT_FACING, factionByOwner.get(unit.owner), flash);
           }
-          // Attack lunge: dart ~35% toward the target and back (sin bump).
-          const lunge = lungesRef.current.get(unit.id);
-          if (!posOverride && lunge) {
-            const lt = Math.min(1, (performance.now() - lunge.start) / LUNGE_MS);
-            const k = Math.sin(Math.PI * lt) * 0.35;
-            posOverride = {
-              x: unit.position.x + (lunge.tx - unit.position.x) * k,
-              y: unit.position.y + (lunge.ty - unit.position.y) * k,
-            };
+
+          // Crossed-swords marker above an enemy the selected unit can attack.
+          if (attackableEnemyTiles.has(key)) {
+            drawCrossedSwords(ctx, x, y, map.height, tile.terrain);
           }
-          // Hit flash: white pop decaying over FLASH_MS (start may be scheduled ahead).
-          let flash = 0;
-          const fl = flashesRef.current.get(unit.id);
-          if (fl) {
-            const ft = (performance.now() - fl.start) / FLASH_MS;
-            if (ft >= 0 && ft <= 1) flash = 1 - ft;
-          }
-          drawUnitAt(ctx, unit, map.height, elev, registry, unit.id === selectedUnitId, posOverride,
-            facingRef.current.get(unit.id) ?? DEFAULT_FACING, factionByOwner.get(unit.owner), flash);
         }
 
-        // ── 5. Damage preview ──
-        if (
-          mode === 'game' &&
-          attackTargets.has(key) &&
-          selectedUnitId != null &&
-          hoveredTile?.x === x &&
-          hoveredTile?.y === y
-        ) {
-          const attacker = units.find(u => u.id === selectedUnitId);
-          if (attacker && unit) {
-            const at = registry.unitTypes[attacker.typeId];
-            const dt = registry.unitTypes[unit.typeId];
-            if (at && dt) {
-              const result = previewCombat(attacker, at, unit, dt, map, registry, config.combatConfig);
-              drawDamagePreview(ctx, x, y, map.height, tile.terrain, result.attackerDamage);
-            }
-          }
+        // ── 5. Damage preview (hovering an attackable enemy) ──
+        // On the DEFENDER tile: the damage it takes (+ skull if it dies).
+        if (hoverAttack && hoverAttack.def.position.x === x && hoverAttack.def.position.y === y) {
+          drawDamagePreview(ctx, x, y, map.height, tile.terrain, hoverAttack.result.attackerDamage, hoverAttack.result.defenderKilled);
+        }
+        // On the ATTACKER tile: the retaliation it takes (+ skull if it dies).
+        if (hoverAttack && hoverAttack.result.defenderRetaliation > 0
+            && hoverAttack.atk.position.x === x && hoverAttack.atk.position.y === y) {
+          drawDamagePreview(ctx, x, y, map.height, tile.terrain, hoverAttack.result.defenderRetaliation, hoverAttack.result.attackerKilled);
         }
 
         // ── 5b. Slash damage preview (per arc tile, 100% centre / 50% sides) ──
+        // Slash hits friendly units too, so preview damage on any unit in the arc
+        // except the slasher itself.
         if (mode === 'game' && slashArcTiles.has(key) && selectedUnitId != null) {
           const slasher = units.find(u => u.id === selectedUnitId);
-          if (slasher && unit && unit.owner !== slasher.owner) {
+          const victim = unitByPos.get(key);
+          if (slasher && victim && victim.id !== slasher.id) {
             const at = registry.unitTypes[slasher.typeId];
-            const dt = registry.unitTypes[unit.typeId];
+            const dt = registry.unitTypes[victim.typeId];
             if (at && dt) {
-              const full = previewCombat(slasher, at, unit, dt, map, registry, config.combatConfig).attackerDamage;
+              const full = previewCombat(slasher, at, victim, dt, map, registry, config.combatConfig).attackerDamage;
               const dmg = slashHitDamage(full, slashArcTiles.get(key)!, config.combatConfig.minimumDamage);
-              drawDamagePreview(ctx, x, y, map.height, tile.terrain, dmg);
+              drawDamagePreview(ctx, x, y, map.height, tile.terrain, dmg, dmg >= victim.hp); // Slash: no retaliation
             }
           }
         }
@@ -561,6 +773,9 @@ export function IsoCanvas({ mode, onPaint, pan, onPanChange }: IsoCanvasProps) {
         }
       }
     }
+
+    // ── Chess-style axis rulers (A/B/C top & bottom, 1/2/3 both sides) ──
+    if (mode === 'game') drawAxisLabels(ctx, map);
 
     // ── Dying units: (flash if killed in combat, then) fade out in place ──
     for (const { unit, facing, start, flash } of deathsRef.current.values()) {
@@ -591,7 +806,10 @@ export function IsoCanvas({ mode, onPaint, pan, onPanChange }: IsoCanvasProps) {
       ctx.globalAlpha = pt < 0.6 ? 1 : 1 - (pt - 0.6) / 0.4;
       ctx.font = 'bold 15px system-ui, sans-serif';
       ctx.textAlign = 'center';
-      const py = sy - 40 - 24 * pt;
+      // Keep the number close to the STRUCK unit's head — floating too high made it
+      // drift over any unit standing on the tile behind (it looked like that unit was
+      // hit). Anchored lower + a smaller rise keeps it on the actual target.
+      const py = sy - 20 - 14 * pt;
       ctx.lineWidth = 3;
       ctx.strokeStyle = 'rgba(20, 20, 30, 0.85)';
       ctx.strokeText(p.text, sx, py);
@@ -603,6 +821,19 @@ export function IsoCanvas({ mode, onPaint, pan, onPanChange }: IsoCanvasProps) {
     // ── Territory borders: one outline per CITY territory (so touching cities
     // don't fuse), drawn last ──
     drawTerritoryBorders(ctx, map, map.height, cities, visibility);
+
+    // ── Nodes: a diamond marker at each node's centre tile (dashed while building) ──
+    for (const n of nodes) {
+      if ((visibility?.[n.position.y]?.[n.position.x] ?? 'visible') === 'hidden') continue;
+      const color = n.owner === currentPlayer ? '#48d19b' : '#e0603c';
+      drawNode(ctx, n.position.x, n.position.y, map.height, color, n.building);
+    }
+
+    // ── Tracer / Explosives blinking marker dots (only marks the viewer may see) ──
+    for (const un of units) {
+      if (!un.marks?.length) continue;
+      drawMarkDots(ctx, un.position.x, un.position.y, map.height, un.marks.map(m => m.kind), blinkOn);
+    }
 
     // ── Buildings + plasma-vent labels (drawn on top of tiles) ──
     for (let y = 0; y < map.height; y++) {
@@ -634,21 +865,43 @@ export function IsoCanvas({ mode, onPaint, pan, onPanChange }: IsoCanvasProps) {
       }
       if (buildPromptTile && gameState) {
         const { x, y } = buildPromptTile;
-        const kind = buildKindAt({ x, y });
-        if (kind && !buildingByPos.has(`${x},${y}`)) {
-          const def = registry.economy.buildings[kind];
-          const ore = def?.costByLevel?.[0] ?? 0;
-          const plasma = def?.plasmaCostByLevel?.[0] ?? 0;
-          const player = gameState.players[currentPlayer];
-          const affordable = player.ore >= ore && player.plasma >= plasma;
-          const label = BUILD_LABELS[kind] ?? 'Build?';
-          const cost = `${ore}◈${plasma > 0 ? ` ${plasma}✦` : ''}`;
-          const action: Action = { type: 'build', kind, position: { x, y } };
-          boxes.push({
-            rect: drawActionBox(ctx, x, y, map.height, label, cost, !affordable),
-            action,
-            disabled: !affordable,
-          });
+        const existing = buildingByPos.get(`${x},${y}`);
+        if (existing) {
+          // ── Upgrade an existing owned REB ──
+          const def = registry.economy.buildings[existing.kind];
+          const nextLevel = existing.level + 1;
+          if (def && nextLevel <= def.maxLevel) {
+            const hasAction = legalActions.some(a => a.type === 'upgradeBuilding' && a.position.x === x && a.position.y === y);
+            const techReq = def.upgradeTechRequired?.[existing.level - 1] ?? null;
+            const techMet = !techReq || gameState.players[currentPlayer].researchedTechs.includes(techReq);
+            const ore = def.costByLevel?.[nextLevel - 1] ?? 0;
+            const plasma = def.plasmaCostByLevel?.[nextLevel - 1] ?? 0;
+            const label = techMet ? `Upgrade → L${nextLevel}` : `Locked: ${registry.techs[techReq!]?.name ?? techReq}`;
+            const cost = techMet ? `${ore}◈${plasma > 0 ? ` ${plasma}✦` : ''}` : '';
+            const action: Action = { type: 'upgradeBuilding', position: { x, y } };
+            boxes.push({
+              rect: drawActionBox(ctx, x, y, map.height, label, cost, !hasAction),
+              action,
+              disabled: !hasAction,
+            });
+          }
+        } else {
+          const kind = buildKindAt({ x, y });
+          if (kind) {
+            const def = registry.economy.buildings[kind];
+            const ore = def?.costByLevel?.[0] ?? 0;
+            const plasma = def?.plasmaCostByLevel?.[0] ?? 0;
+            const player = gameState.players[currentPlayer];
+            const affordable = player.ore >= ore && player.plasma >= plasma;
+            const label = BUILD_LABELS[kind] ?? 'Build?';
+            const cost = `${ore}◈${plasma > 0 ? ` ${plasma}✦` : ''}`;
+            const action: Action = { type: 'build', kind, position: { x, y } };
+            boxes.push({
+              rect: drawActionBox(ctx, x, y, map.height, label, cost, !affordable),
+              action,
+              disabled: !affordable,
+            });
+          }
         }
       }
     }
@@ -674,6 +927,24 @@ export function IsoCanvas({ mode, onPaint, pan, onPanChange }: IsoCanvasProps) {
       }
     }
 
+    // ── Ballistic Volley picker overlay (2×2 target square, range 2–3) ──
+    if (mode === 'game' && volleySelect && gameState) {
+      const { eligible } = volleyPicker(gameState, registry, volleySelect);
+      drawTerritoryPicker(ctx, map, map.height, eligible, volleySelect.picks, 'attack');
+    }
+
+    // ── Wyrm strike picker overlay (2 touching cells) ──
+    if (mode === 'game' && strikeSelect && gameState) {
+      const { eligible } = strikePicker(gameState, registry, strikeSelect);
+      drawTerritoryPicker(ctx, map, map.height, eligible, strikeSelect.picks, 'attack');
+    }
+
+    // ── Cure / Repair target picker overlay (up to N eligible allies) ──
+    if (mode === 'game' && targetSelect && gameState) {
+      const eligible = getAbilityUnitTargets(gameState, targetSelect.unitId, targetSelect.abilityId, registry);
+      drawTerritoryPicker(ctx, map, map.height, eligible, targetSelect.picks, 'territory');
+    }
+
     // ── Inspected-tile outline (the tile whose info box is open) ──
     if (mode === 'game' && inspectedTile) {
       const t = map.tiles[inspectedTile.y]?.[inspectedTile.x];
@@ -694,9 +965,11 @@ export function IsoCanvas({ mode, onPaint, pan, onPanChange }: IsoCanvasProps) {
       if (name) drawNameBadge(ctx, x, y, map.height, name);
     }
   }, [
-    map, visibility, registry, config, units, unitByPos, buildings, buildingByPos, cities, cityLevelByPos,
-    selectedUnitId, hoveredTile, legalActions, moveTargets, attackTargets, slashTargets, abilityTargets, mode,
-    buildPromptTile, spriteTick, animTick, territorySelect, gameState, selectedUnitBlind, inspectedTile,
+    map, visibility, registry, config, units, unitByPos, buildings, buildingByPos, cities, cityLevelByPos, nodes,
+    selectedUnitId, hoveredTile, legalActions, moveTargets, attackTargets, slashTargets, abilityTargets,
+    attackRangeTiles, attackableEnemyTiles, aoiTiles, mode,
+    buildPromptTile, spriteTick, animTick, blinkOn, territorySelect, volleySelect, strikeSelect, targetSelect, gameState, selectedUnitBlind, inspectedTile,
+    unitsByPos, isBurrowed,
     buildKindAt, currentPlayer, renderZoom, viewTick,
   ]);
 
@@ -771,6 +1044,58 @@ export function IsoCanvas({ mode, onPaint, pan, onPanChange }: IsoCanvasProps) {
       return;
     }
 
+    // Ballistic Volley picker: clicks tick / untick tiles of the 2×2 target square.
+    if (volleySelect && gameState) {
+      const t = getTileFromEvent(e);
+      if (!t) return;
+      const picks = volleySelect.picks;
+      const idx = picks.findIndex(p => p.x === t.x && p.y === t.y);
+      if (idx >= 0) {
+        setVolleySelect({ ...volleySelect, picks: picks.filter((_, i) => i !== idx) });
+      } else if (picks.length < 4) {
+        const { eligible } = volleyPicker(gameState, registry, volleySelect);
+        if (eligible.some(c => c.x === t.x && c.y === t.y)) {
+          setVolleySelect({ ...volleySelect, picks: [...picks, { x: t.x, y: t.y }] });
+        }
+      }
+      return;
+    }
+
+    // Wyrm strike picker: tick the primary cell, then a touching secondary cell.
+    if (strikeSelect && gameState) {
+      const t = getTileFromEvent(e);
+      if (!t) return;
+      const picks = strikeSelect.picks;
+      const idx = picks.findIndex(p => p.x === t.x && p.y === t.y);
+      if (idx >= 0) {
+        // Un-tick: removing the primary also drops the secondary (it depended on it).
+        setStrikeSelect({ ...strikeSelect, picks: idx === 0 ? [] : picks.slice(0, 1) });
+      } else if (picks.length < 2) {
+        const { eligible } = strikePicker(gameState, registry, strikeSelect);
+        if (eligible.some(c => c.x === t.x && c.y === t.y)) {
+          setStrikeSelect({ ...strikeSelect, picks: [...picks, { x: t.x, y: t.y }] });
+        }
+      }
+      return;
+    }
+
+    // Cure / Repair target picker: tick up to maxTargets eligible allies.
+    if (targetSelect && gameState) {
+      const t = getTileFromEvent(e);
+      if (!t) return;
+      const picks = targetSelect.picks;
+      const idx = picks.findIndex(p => p.x === t.x && p.y === t.y);
+      if (idx >= 0) {
+        setTargetSelect({ ...targetSelect, picks: picks.filter((_, i) => i !== idx) });
+      } else if (picks.length < targetSelect.maxTargets) {
+        const eligible = getAbilityUnitTargets(gameState, targetSelect.unitId, targetSelect.abilityId, registry);
+        if (eligible.some(c => c.x === t.x && c.y === t.y)) {
+          setTargetSelect({ ...targetSelect, picks: [...picks, { x: t.x, y: t.y }] });
+        }
+      }
+      return;
+    }
+
     // 1. Did the click land on an on-canvas action box (Found City / Build …)?
     const canvas = canvasRef.current;
     if (canvas && map) {
@@ -791,13 +1116,21 @@ export function IsoCanvas({ mode, onPaint, pan, onPanChange }: IsoCanvasProps) {
     const tile = getTileFromEvent(e);
     if (!tile) { setBuildPromptTile(null); return; }
     const key = `${tile.x},${tile.y}`;
-    const unit = unitByPos.get(key);
+
+    // If the selected unit is an Engineer mid node-build, any move/act is deferred behind a
+    // "Cancel Node construction?" confirmation (the engine cancels the node when it acts).
+    const selUnit = units.find(u => u.id === selectedUnitId);
+    const isBuilding = selUnit?.buildingNodeId !== undefined;
+    const dispatch = (a: Action) => {
+      if (isBuilding && a.type !== 'cancelNodeBuild') setPendingNodeCancel(a);
+      else executeAction(a);
+    };
 
     // Ability targeting takes priority: a valid target tile casts; any other click
     // cancels the armed ability and falls through to normal handling.
     if (abilityMode) {
       if (abilityTargets.has(key)) {
-        executeAction(abilityTargets.get(key)!);
+        dispatch(abilityTargets.get(key)!);
         setBuildPromptTile(null);
         return;
       }
@@ -810,16 +1143,21 @@ export function IsoCanvas({ mode, onPaint, pan, onPanChange }: IsoCanvasProps) {
         a.bumpReveal ? (a.bumpReveal.x === tile.x && a.bumpReveal.y === tile.y)
                      : (a.to.x === tile.x && a.to.y === tile.y)
       ));
-      if (moveAction) { executeAction(moveAction); setBuildPromptTile(null); return; }
+      if (moveAction) { dispatch(moveAction); setBuildPromptTile(null); return; }
     }
     if (selectedUnitId != null && attackTargets.has(key)) {
-      executeAction(attackTargets.get(key)!);
+      dispatch(attackTargets.get(key)!);
       setBuildPromptTile(null);
       return;
     }
+    // Remove a mark: a detecting ally is selected and the player clicked a marked friendly.
+    if (selectedUnitId != null) {
+      const rm = legalActions.find(a => a.type === 'removeMark' && a.unitId === selectedUnitId && a.target.x === tile.x && a.target.y === tile.y) as any;
+      if (rm) { setMarkRemoval({ removerId: selectedUnitId, target: { x: tile.x, y: tile.y }, kind: rm.kind }); setBuildPromptTile(null); return; }
+    }
     // Slash: clicking a central tile executes that 3-tile swing.
     if (selectedUnitId != null && slashTargets.has(key)) {
-      executeAction(slashTargets.get(key)!);
+      dispatch(slashTargets.get(key)!);
       setBuildPromptTile(null);
       return;
     }
@@ -827,21 +1165,31 @@ export function IsoCanvas({ mode, onPaint, pan, onPanChange }: IsoCanvasProps) {
     // refinery/purifier on a land tile). Shown even if currently unaffordable, and
     // even when a unit stands on the tile.
     const buildable = buildKindAt(tile) !== null;
+    // An owned REB below its max level shows an Upgrade prompt (same click-to-prompt flow).
+    const bHere = buildingByPos.get(key);
+    const upgradeable = !!(bHere && gameState && (() => {
+      const city = gameState.cities.find(c => c.id === bHere.cityId);
+      const def = registry.economy.buildings[bHere.kind];
+      return !!city && city.owner === currentPlayer && !!def && bHere.level < def.maxLevel;
+    })());
+    const promptable = buildable || upgradeable;
 
-    if (unit) {
-      // Click-cycling: the FIRST click on a tile with a unit selects the unit
-      // (own units also get move/attack highlights; enemy selection is
-      // inspection-only). Clicking the SAME unit's tile AGAIN falls through to
-      // the tile itself — its terrain info box, and any resource build prompt —
-      // so a resource under a unit is still reachable. See docs/DEVELOPMENT_RATIONALE.md.
-      if (unit.id !== selectedUnitId) {
-        selectUnit(unit.id);
-        setBuildPromptTile(null);
-        return;
-      }
-      // second click on the already-selected unit → inspect its tile
+    const stack = unitsByPos.get(key) ?? [];
+    if (stack.length) {
+      // Click-cycling through everything on the tile, looping: unit[0] → unit[1] → … →
+      // TILE (terrain/build box, units deselected) → back to unit[0]. The stack is ordered
+      // [burrowed, surface], so a burrowed Wyrm co-occupying an enemy selects the WYRM
+      // first, then the co-tile unit, then the tile. See docs/DEVELOPMENT_RATIONALE.md.
+      const selIdx = stack.findIndex(su => su.id === selectedUnitId);
+      const onTileStep = selIdx === -1 && !!inspectedTile && inspectedTile.x === tile.x && inspectedTile.y === tile.y;
+      if (onTileStep) { selectUnit(stack[0].id); setBuildPromptTile(null); return; } // loop back to first unit
+      if (selIdx === -1) { selectUnit(stack[0].id); setBuildPromptTile(null); return; }
+      if (selIdx < stack.length - 1) { selectUnit(stack[selIdx + 1].id); setBuildPromptTile(null); return; }
+      // Last unit was selected → advance to the TILE step: deselect and inspect the tile
+      // (so the next click loops back to unit[0]).
+      selectUnit(null);
       setInspectedTile({ x: tile.x, y: tile.y });
-      setBuildPromptTile(buildable ? tile : null);
+      setBuildPromptTile(promptable ? tile : null);
       return;
     }
 
@@ -855,14 +1203,14 @@ export function IsoCanvas({ mode, onPaint, pan, onPanChange }: IsoCanvasProps) {
     }
 
     // Empty tile (no unit, no city): inspect it — show the terrain info box, and
-    // a build prompt if it's a buildable resource tile.
+    // a build/upgrade prompt if it's a buildable resource tile or an owned REB.
     selectUnit(null);
     setInspectedTile({ x: tile.x, y: tile.y });
-    setBuildPromptTile(buildable ? tile : null);
+    setBuildPromptTile(promptable ? tile : null);
   }, [
-    mode, getTileFromEvent, map, unitByPos, selectedUnitId, currentPlayer,
+    mode, getTileFromEvent, map, unitByPos, unitsByPos, units, selectedUnitId, currentPlayer,
     moveTargets, attackTargets, slashTargets, abilityTargets, abilityMode, setAbilityMode, legalActions, executeAction, selectUnit, setSelectedCity, onPaint,
-    territorySelect, setTerritorySelect, gameState, registry, setInspectedTile, buildKindAt,
+    territorySelect, setTerritorySelect, volleySelect, setVolleySelect, strikeSelect, setStrikeSelect, targetSelect, setTargetSelect, setPendingNodeCancel, setMarkRemoval, gameState, registry, setInspectedTile, inspectedTile, buildKindAt, buildingByPos,
   ]);
 
   // ── Hover / drag-pan handler ──

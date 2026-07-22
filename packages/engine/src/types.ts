@@ -46,12 +46,18 @@ export interface AbilityDef {
   cooldown?: number;
   morphTo?: string; // if set, casting morphs the unit into this unit type (e.g. assault mode)
   range?: number; // Chebyshev cast range (tiles); omitted = self/no-target
-  targetKind?: 'unit' | 'tile'; // what the cast targets
+  minRange?: number; // minimum Chebyshev cast range — tiles closer than this are illegal (e.g. Ballistic Volley = 2)
+  targetKind?: 'unit' | 'units' | 'tile' | 'grid2x2'; // 'units' = multi-unit pick (up to maxTargets)
   targetClass?: string; // if targetKind 'unit', restrict to this unitClass (e.g. "light")
+  targetClasses?: string[]; // if targetKind 'units', restrict to these unitClasses (e.g. ["heavy","giant"])
+  maxTargets?: number; // for targetKind 'units': how many distinct targets may be picked (default 1)
   targetEnemy?: boolean; // if targetKind 'unit', restrict to enemy units only
-  targetAlly?: boolean; // if targetKind 'unit', restrict to friendly units only
+  targetAlly?: boolean; // restrict to friendly units only
+  targetAfflicted?: boolean; // if set, only units carrying a removable affliction are eligible (Cure)
   disabled?: boolean; // greyed-out placeholder ability — never offered/castable yet
   duration?: number; // effect duration in rounds (Spray Bile = 5)
+  requiresTech?: string; // ability only castable once the owner has researched this tech
+  supersededByTech?: string; // ability is HIDDEN once the owner researches this tech (replaced by an upgrade)
 }
 
 export interface EffectDef {
@@ -77,11 +83,14 @@ export interface TechDef {
   effects: TechEffect[];
   prerequisites?: string[]; // optional explicit prereqs (ALL required), in addition to the branch-unlock rule
   prerequisitesAny?: string[]; // optional OR-prereqs (at least ONE required), e.g. Crucible OR Mech Bay
+  excludes?: string[]; // mutually-exclusive techs: if any is researched, this one can't be (e.g. Wyrm's Tunneling Network ⊕ Aftershock)
   locked?: boolean; // preview only — shown in UI (greyed) but not yet researchable
 }
 
 export interface TechEffect {
-  type: 'unlockUnit' | 'globalModifier';
+  // 'grantCondition' → adds a passive condition to a unit type for the researching player
+  //   (params: { unit, condition }). The condition's behaviour is implemented like any other.
+  type: 'unlockUnit' | 'globalModifier' | 'grantCondition';
   params: Record<string, number | string>;
 }
 
@@ -101,10 +110,14 @@ export interface GameConfig {
   turnLimit: number;
   winConditions: {
     captureAllCities: boolean;
+    captureCapital: boolean;   // win when you hold every enemy CAPITAL (their capital captured)
     eliminateAllUnits: boolean;
     highestScoreAtLimit: boolean;
   };
   combatConfig: CombatConfig;
+  // Passive HP regen for a unit that neither moved nor attacked this turn, by the territory
+  // it stands in. Optional; the engine falls back to 4 / 2 / 0.
+  heal?: { friendlyTerritory: number; neutralTerritory: number; enemyTerritory: number };
   scoreWeights: {
     cityValue: number;
     unitCostValue: number;
@@ -118,6 +131,12 @@ export interface GameConfig {
   // abilities available). Undefined/true = research-gated (normal play). The keeps
   // tech→unit links intact either way; OFF just pre-satisfies them.
   techTreeEnabled?: boolean;
+  // Resource mode: when true, players start with an effectively unlimited wallet (sandbox).
+  // Mutually exclusive with mapgen.doubleResources at the UI level; both may be off (Normal).
+  unlimitedResources?: boolean;
+  // "Nodes" mechanic toggle (buildable buff/debuff structures). Scaffolding — the flag is
+  // carried through config but Nodes behaviour is not implemented yet.
+  nodesEnabled?: boolean;
 }
 
 // ── Map generation tuning ──
@@ -179,7 +198,18 @@ export interface Unit {
   abilityCooldowns: Record<string, number>;
   dashRemaining?: number; // post-attack move budget from the "Dash N" condition (this turn)
   statuses?: string[]; // conditions applied during play (e.g. "corrosive_1"); shown under Conditions
+  statusExpiry?: Record<string, number>; // status → the round (state.turn) at which it clears (e.g. "slowed")
   infectedBy?: PlayerId; // if "infected" (Seercaust): the player who gets the 2 scuttlings on its death
+  buildingNodeId?: number; // if this engineer is constructing a Node, that node's id (any action cancels it)
+  marks?: UnitMark[]; // tracer / plant-explosive markers placed on this unit by an enemy
+}
+
+// A marker planted on an enemy unit: a Tracer Round (reveals it) or Plant Explosives (detonates).
+// Ticks down at the end of the MARKED unit's owner's turn. See docs/conditions.md.
+export interface UnitMark {
+  kind: 'tracer' | 'explosive';
+  owner: PlayerId;    // the player who placed it (always sees it; the marked team needs Detect)
+  turnsLeft: number;  // 3 (tracer) / 2 (explosive) at cast; removed at 0 (explosive detonates first)
 }
 
 // ── Actions ──
@@ -187,6 +217,7 @@ export type Action =
   | MoveAction
   | AttackAction
   | SlashAction
+  | WyrmStrikeAction
   | RecruitAction
   | ResearchAction
   | UseAbilityAction
@@ -196,7 +227,21 @@ export type Action =
   | CaptureCityAction
   | LevelUpCityAction
   | ExpandTerritoryAction
+  | CancelNodeBuildAction
+  | RemoveMarkAction
   | EndTurnAction;
+
+export interface CancelNodeBuildAction {
+  type: 'cancelNodeBuild';
+  unitId: UnitId; // the engineer whose in-progress node is being cancelled
+}
+
+export interface RemoveMarkAction {
+  type: 'removeMark';
+  unitId: UnitId;       // the friendly remover (ally of the marked unit; not the marked unit itself)
+  target: Coord;        // the marked ally's tile
+  kind: 'tracer' | 'explosive';
+}
 
 export interface MoveAction {
   type: 'move';
@@ -223,6 +268,16 @@ export interface SlashAction {
   target: Coord;
 }
 
+// A Wyrm strike (surfaced Wyrm) — hits TWO touching cells. `tiles[0]` is the primary
+// (100% damage) and must be within the Wyrm's 3×3; `tiles[1]` is the secondary (50%)
+// and must be adjacent (Chebyshev 1) to the primary. Neither may be the Wyrm's own
+// tile. Tiles are targeted (not units), so it can strike into fog/cloud; no retaliation.
+export interface WyrmStrikeAction {
+  type: 'wyrmStrike';
+  unitId: UnitId;
+  tiles: Coord[];
+}
+
 export interface RecruitAction {
   type: 'recruit';
   unitTypeId: string;
@@ -239,6 +294,8 @@ export interface UseAbilityAction {
   unitId: UnitId;
   abilityId: string;
   target: Coord;
+  tiles?: Coord[]; // multi-tile casts (e.g. Ballistic Volley's 2×2 square); `target` is the anchor tile
+  targets?: Coord[]; // multi-unit casts (Cure/Repair): the picked unit tiles; `target` is the first
 }
 
 export interface BuildAction {
@@ -263,7 +320,9 @@ export interface CaptureCityAction {
 }
 
 /** Player-chosen reward when a city levels up (see LevelUpChoice). */
-export type LevelUpChoice = 'income' | 'pop' | 'fortify' | 'reveal' | 'supply' | 'territory';
+export type LevelUpChoice =
+  | 'income' | 'pop' | 'fortify' | 'beacon' | 'supply' | 'territory'
+  | 'muster' | 'detect' | 'conscription' | 'plasma' | 'hero';
 
 export interface LevelUpCityAction {
   type: 'levelUpCity';
@@ -309,6 +368,12 @@ export interface CityState {
   bonusSupply: number; // permanent supply from "+3 supply" choices (counts toward leveling)
   fortified: boolean; // "Fortify" chosen → units inside get a defensive bonus (combat module reads this)
   extraTerritory: Coord[]; // tiles claimed beyond the base 3×3 via "Expand territory" (L4 reward)
+  // Higher-level level-up rewards (all capture-invariant flags on the city):
+  beacon?: boolean;        // "Beacon" → city sight radius +1
+  muster?: boolean;        // "Muster" → units recruited here may MOVE (not attack) the turn built
+  detect?: boolean;        // "Detect" → exposes cloaked/burrowed enemies within the city's 3×3
+  conscription?: boolean;  // "Conscription" → units recruited here cost 20% less ore
+  plasmaBonus?: number;    // "+10 plasma/turn" choices
 }
 
 export interface BuildingState {
@@ -351,6 +416,7 @@ export interface RecruitOption {
   affordable: boolean;
   locked?: boolean; // gated behind un-researched tech (tech tree ON) — shown greyed, not recruitable
   lockedBy?: string[]; // names of the tech(s) that unlock it (for the tooltip)
+  fitsPop?: boolean; // false when the city lacks the population capacity for this unit
 }
 
 /**
@@ -363,6 +429,16 @@ export interface PlayerMemory {
   cities: CityState[]; // last-seen city snapshots, by centre position
 }
 
+// ── Nodes (Engineer-built 3×3 territory structures) ──
+export interface NodeState {
+  id: number;
+  owner: PlayerId;
+  position: Coord;         // centre tile (its territory is the 3×3 around it)
+  building: boolean;       // true while under construction
+  buildTurnsLeft: number;  // rounds of construction remaining (0 once complete)
+  builderUnitId: number;   // the engineer constructing it — if it dies, the node is cancelled
+}
+
 export interface GameState {
   config: GameConfig;
   map: GameMap;
@@ -370,14 +446,17 @@ export interface GameState {
   players: PlayerState[];
   cities: CityState[];
   buildings: BuildingState[];
+  nodes: NodeState[];
   unitHomeCity: Record<UnitId, CityId>; // unit id -> home city (slot accounting)
   // Fog memory, one per player. A tile becomes "remembered" the moment it's seen and
   // is never cleared, so out-of-sight tiles show their LAST-SEEN snapshot (fog), and
   // never-seen tiles show as cloud. Drives both the cloud/fog distinction and what
   // structures/terrain are drawn under fog.
   memory: PlayerMemory[];
-  // Temporary "bump" reveals: tiles where a blind unit bumped a hidden enemy this
-  // turn, so that enemy shows to revealedTiles[player] until the player's turn ends.
+  // Temporary reveals for THIS turn (cleared in applyEndTurn): tiles a player exposed via a
+  // bump (onto a cloaked enemy / hidden impassable terrain), a Wyrm strike, or a lethal-tile
+  // death. A unit on such a tile shows to revealedTiles[player] — overriding cloak — until
+  // the player's turn ends. See docs/conditions.md "Bump, Push & Collide".
   revealedTiles: Coord[][];
   // "Combined Arms": count of the current player's LIGHT-unit attacks per target this
   // turn (targetId → count). The 2nd+ hit on a target gets ×1.2. Cleared each end-turn.
@@ -387,6 +466,7 @@ export interface GameState {
   nextUnitId: UnitId;
   nextCityId: CityId;
   nextBuildingId: number;
+  nextNodeId: number;
   prng: PRNGState;
   actionLog: Action[];
   phase: 'playing' | 'finished';
@@ -404,6 +484,7 @@ export interface VisibleState {
   players: PlayerState[]; // own player full, others limited
   cities: CityState[];
   buildings: BuildingState[];
+  nodes: NodeState[];
   unitHomeCity: Record<UnitId, CityId>;
   currentPlayer: PlayerId;
   turn: number;

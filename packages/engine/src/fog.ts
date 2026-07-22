@@ -45,10 +45,12 @@ export function computeVisibility(
   };
 
   // Owned cities reveal a square around them (capitals see further) + extra territory.
+  // "Beacon" (L3 level-up) adds +1 to the city's sight radius.
   const { territoryRadius, capitalSightRadius } = registry.economy.city;
   for (const c of cities) {
     if (c.owner !== playerId) continue;
-    square(c.position.x, c.position.y, c.isCapital ? capitalSightRadius : territoryRadius);
+    const radius = (c.isCapital ? capitalSightRadius : territoryRadius) + (c.beacon ? 1 : 0);
+    square(c.position.x, c.position.y, radius);
     for (const t of c.extraTerritory ?? []) {
       if (inBounds(t.x, t.y)) visibility[t.y][t.x] = 'visible';
     }
@@ -77,6 +79,13 @@ export function computeVisibility(
       if (conds.includes('mountain_sight') && map.tiles[oy]?.[ox]?.terrain === 'mountain') radius = 2;
       revealSquareLevel(map, visibility, ox, oy, radius, registry, 'visible', mountainsBlock);
     }
+  }
+
+  // A Tracer Round the player planted on an ENEMY reveals that unit's 3×3 (see it anywhere).
+  for (const unit of units) {
+    if (unit.owner === playerId) continue;
+    if (!unit.marks?.some(m => m.kind === 'tracer' && m.owner === playerId)) continue;
+    square(unit.position.x, unit.position.y, 1);
   }
 
   return visibility;

@@ -100,10 +100,14 @@ label {
 /* Setup Screen */
 .setup-screen {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
+  gap: 20px;
   width: 100%;
   height: 100%;
+  overflow-y: auto;
+  padding: 28px 0;
 }
 
 .setup-card {
@@ -140,6 +144,10 @@ label {
 .setup-field input,
 .setup-field select {
   width: 100%;
+}
+.setup-field input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .setup-row {
@@ -181,6 +189,47 @@ label {
   font-size: 13px;
   font-weight: 400;
   color: var(--text);
+}
+
+/* Grouped option sections (Win Conditions / Resources / Mechanics) */
+.setup-section {
+  margin: 10px 0 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--border, #2a3550);
+  border-radius: 8px;
+}
+
+.setup-section-title {
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted, #8a97b5);
+  margin-bottom: 8px;
+}
+
+.radio-row,
+.setup-section .checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.radio-row:last-child,
+.setup-section .checkbox-row:last-child {
+  margin-bottom: 0;
+}
+
+.radio-row input[type="radio"],
+.setup-section .checkbox-row input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+  cursor: pointer;
 }
 
 /* Game Screen */
@@ -240,6 +289,17 @@ label {
 /* Map container */
 .map-container {
   flex: 1;
+  position: relative;
+  /* Non-scrolling positioning context: pan/zoom overflow is confined to .map-scroll
+     inside, so absolutely-positioned overlays (recruit button, city info, territory
+     bar) stay pinned to the VISIBLE box instead of drifting with the scrolled canvas. */
+  overflow: hidden;
+}
+
+/* Inner scroll layer that actually holds (and scrolls/zooms) the board canvas. */
+.map-scroll {
+  position: absolute;
+  inset: 0;
   overflow: auto;
   display: flex;
   align-items: center;
@@ -461,6 +521,124 @@ label {
 }
 .recruit-card--locked:hover { border-color: var(--border); }
 .recruit-card--locked .cost { color: var(--text-muted); font-weight: 600; }
+
+/* Pop-blocked units: the city has no population room — shown, dimmed, not clickable. */
+.recruit-card--nopop {
+  opacity: 0.5;
+  cursor: not-allowed;
+  filter: grayscale(0.5);
+}
+.recruit-card--nopop:hover { border-color: var(--border); }
+
+/* "Population Full" banner across the top of the recruit panel. */
+.recruit-popfull {
+  flex-basis: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--warning);
+  padding: 2px 0 4px;
+}
+.recruit-popfull-ico { font-size: 14px; line-height: 1; }
+
+/* ── Recruit panel: table layout ── */
+.recruit-panel--table {
+  display: block;
+  overflow: visible;      /* let ability popups escape the panel instead of clipping */
+  max-height: none;
+  padding: 10px;
+}
+.recruit-table {
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.recruit-table th,
+.recruit-table td {
+  padding: 5px 10px;
+  text-align: center;
+  white-space: nowrap;
+}
+.recruit-table thead th {
+  color: var(--text-muted);
+  font-weight: 700;
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  border-bottom: 1px solid var(--border);
+}
+.recruit-table th.ru-unit,
+.recruit-table td.ru-unit { text-align: left; }
+.recruit-table tbody td {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  font-variant-numeric: tabular-nums;
+}
+
+.recruit-row { cursor: pointer; transition: background 0.12s; }
+.recruit-row:hover { background: rgba(90, 169, 230, 0.14); }
+
+/* Unit (first) cell: icon + name + cost subtext. */
+.ru-ico { margin-right: 6px; }
+.ru-name { font-weight: 600; }
+.ru-cost { display: block; font-size: 10.5px; color: var(--warning); margin-top: 1px; }
+
+/* Non-recruitable rows: greyed, not clickable, no hover highlight. */
+.recruit-row--locked,
+.recruit-row--nopop,
+.recruit-row--unaffordable { cursor: not-allowed; }
+.recruit-row--locked:hover,
+.recruit-row--nopop:hover,
+.recruit-row--unaffordable:hover { background: transparent; }
+.recruit-row--locked { opacity: 0.5; filter: grayscale(0.7); }
+.recruit-row--nopop { opacity: 0.5; filter: grayscale(0.5); }
+.recruit-row--unaffordable { opacity: 0.85; }
+.recruit-row--unaffordable .ru-cost { color: #ff6b6b; }
+
+/* Abilities cell: "None", or a ? that reveals a table on hover / click (focus). */
+.ru-none { color: var(--text-muted); }
+.ru-abil { position: relative; cursor: help; outline: none; }
+.ru-abil-q { font-size: 13px; }
+.ru-abil-pop {
+  display: none;
+  position: absolute;
+  right: 0;
+  bottom: 100%;
+  margin-bottom: 6px;
+  z-index: 40;
+  min-width: 280px;
+  max-width: 380px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 9px 11px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55);
+  text-align: left;
+  white-space: normal;
+}
+.ru-abil:hover .ru-abil-pop,
+.ru-abil:focus .ru-abil-pop,
+.ru-abil:focus-within .ru-abil-pop { display: block; }
+.ru-abil-title { display: block; font-weight: 700; font-size: 12px; margin-bottom: 6px; }
+.ru-abil-table { border-collapse: collapse; width: 100%; font-size: 11px; }
+.ru-abil-table th {
+  text-align: left;
+  color: var(--text-muted);
+  font-weight: 700;
+  padding: 2px 6px;
+  border-bottom: 1px solid var(--border);
+}
+.ru-abil-table td {
+  padding: 3px 6px;
+  vertical-align: top;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+.ru-abil-kind { font-weight: 700; white-space: nowrap; }
+.ru-abil-kind.active { color: #6fd08a; }
+.ru-abil-kind.passive { color: #5aa9e6; }
+.ru-abil-name { font-weight: 600; white-space: nowrap; }
+.ru-abil-desc { color: var(--text-muted); }
 
 .recruit-card .name {
   font-size: 12px;
@@ -744,6 +922,44 @@ label {
    Combat Log Panel (left side)
    ============================================ */
 
+/* ── Coaching sidebar (right edge) ── */
+.coach-panel {
+  position: absolute; top: 0; right: 0; bottom: 0;
+  width: 340px; z-index: 30;
+  background: var(--bg-surface);
+  border-left: 1px solid var(--border);
+  display: flex; flex-direction: column;
+  font-size: 12px;
+}
+.coach-head { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; border-bottom: 1px solid var(--border); }
+.coach-head h3 { margin: 0; font-size: 14px; }
+.coach-head-actions { display: flex; gap: 4px; align-items: center; }
+.coach-autosave { color: #7ee0a0; font-size: 10px; opacity: 0.8; margin-right: 2px; }
+.coach-head-actions .ghost { padding: 3px 8px; font-size: 11px; }
+.coach-section { padding: 10px 12px; border-bottom: 1px solid var(--border); }
+.coach-section-title { color: var(--text-muted); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 6px; }
+.coach-log { flex: 1; overflow-y: auto; }
+.coach-turn { font-weight: 700; font-variant-numeric: tabular-nums; padding: 0 5px; border-radius: 4px; background: rgba(255,255,255,0.06); }
+.coach-turn.p0 { color: var(--p0-color, #5aa9e6); }
+.coach-turn.p1 { color: var(--p1-color, #e06666); }
+.coach-notes { display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px; }
+.coach-note { line-height: 1.35; }
+.coach-note-input { display: flex; flex-direction: column; gap: 5px; }
+.coach-note-input textarea, .coach-comment { width: 100%; box-sizing: border-box; background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; color: var(--text); padding: 5px 7px; font: inherit; resize: vertical; }
+.coach-entry { padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
+.coach-entry.ai { background: rgba(120,200,255,0.04); }
+.coach-entry-head { display: flex; align-items: center; gap: 6px; }
+.coach-actor { width: 16px; text-align: center; }
+.coach-desc { flex: 1; font-variant-numeric: tabular-nums; }
+.coach-why { background: none; border: 1px solid var(--border); border-radius: 4px; color: var(--accent); font-size: 10px; padding: 1px 6px; cursor: pointer; }
+.coach-cands { width: 100%; border-collapse: collapse; margin: 5px 0; font-size: 11px; }
+.coach-cands td { padding: 2px 6px; vertical-align: top; }
+.coach-cand-score { text-align: right; color: var(--text-muted); font-variant-numeric: tabular-nums; width: 44px; }
+.coach-cands tr.chosen { background: rgba(102,187,106,0.14); }
+.coach-cands tr.chosen .coach-cand-desc { color: #7ee0a0; font-weight: 600; }
+.coach-comment { margin-top: 5px; font-size: 11px; }
+.coach-empty { color: var(--text-muted); padding: 8px 0; }
+
 .combat-log-panel {
   width: 280px;
   background: var(--bg-surface);
@@ -865,6 +1081,19 @@ label {
   margin-left: 4px;
 }
 
+/* Buff/debuff breakdown line: "Base ×mod ×mod = Effective" */
+.cb-modline .cb-formula { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; justify-content: flex-end; }
+.cb-base { font-weight: 700; }
+.cb-eff { font-weight: 700; }
+.cb-mod {
+  font-size: 10px;
+  padding: 0 5px;
+  border-radius: 6px;
+  white-space: nowrap;
+}
+.cb-mod.cb-buff { color: #7ee0a0; background: rgba(64, 200, 120, 0.14); }
+.cb-mod.cb-debuff { color: #f0a0a0; background: rgba(220, 80, 80, 0.16); }
+
 .cb-damage {
   color: var(--danger);
   font-weight: 700;
@@ -919,6 +1148,18 @@ label {
   font-size: 16px;
   font-weight: 800;
   color: var(--text);
+}
+.unit-sheet-code {
+  display: inline-block;
+  margin-right: 7px;
+  padding: 1px 6px;
+  border-radius: 5px;
+  background: rgba(120, 200, 255, 0.16);
+  color: #9fd0f0;
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  vertical-align: middle;
 }
 
 .unit-sheet-owner {
@@ -1270,6 +1511,22 @@ label {
 .tech-node-name { font-size: 12px; font-weight: 600; letter-spacing: 0.3px; line-height: 1.2; }
 .tech-node-status { font-size: 10px; letter-spacing: 1.5px; padding-top: 3px; width: 100%; border-top: 1px solid var(--border); }
 
+/* Per-tech unlock detail: units (+ their passives), granted passives, and upgrade lines. */
+.tech-node-detail {
+  width: 100%;
+  text-align: left;
+  font-size: 10.5px;
+  line-height: 1.35;
+  display: flex; flex-direction: column; gap: 2px;
+  padding-top: 4px; margin-top: 2px;
+  border-top: 1px dashed var(--border);
+}
+.tnd-unit { margin-bottom: 1px; }
+.tnd-unit-name { font-weight: 700; color: var(--accent); }
+.tnd-passive { color: var(--text-muted); padding-left: 8px; }
+.tnd-passive-line { color: #7ee0a0; font-weight: 600; }
+.tnd-upgrade { color: var(--text-muted); }
+
 .tech-node.available { cursor: pointer; border-color: var(--accent-dim); }
 .tech-node.available:hover { transform: translateY(-2px); border-color: var(--accent); box-shadow: 0 0 16px rgba(79, 195, 247, 0.28); }
 .tech-node.available .tech-node-icon { border-color: var(--accent); box-shadow: 0 0 10px rgba(79, 195, 247, 0.4); }
@@ -1282,3 +1539,23 @@ label {
 .tech-node.locked { opacity: 0.5; }
 .tech-node.locked .tech-node-icon img { filter: grayscale(1); }
 .tech-node.locked .tech-node-status { color: var(--text-muted); }
+
+/* Always-available Lvl-0 base node (e.g. Mine Lvl 1). */
+.tech-node.root { border-color: var(--border); background: rgba(255,255,255,0.04); cursor: default; }
+.tech-node.root .tech-node-status { color: var(--text-muted); letter-spacing: 1.5px; }
+
+/* Research price shown on each tech card. */
+.tech-node-cost { margin-left: 6px; color: var(--warning); font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: 0; }
+.tech-node.locked .tech-node-cost { color: var(--text-muted); }
+
+/* Mutually-exclusive choice locked out by its sibling: crossed out, non-clickable. */
+.tech-node.excluded { opacity: 0.42; cursor: not-allowed; border-color: rgba(214, 69, 69, 0.5); }
+.tech-node.excluded .tech-node-icon img { filter: grayscale(1); }
+.tech-node.excluded .tech-node-name,
+.tech-node.excluded .tech-node-detail { text-decoration: line-through; }
+.tech-node.excluded .tech-node-status { color: #d98a8a; }
+.tech-node.excluded::after {
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(to top left, transparent 48%, rgba(214,69,69,0.55) 49%, rgba(214,69,69,0.55) 51%, transparent 52%);
+  border-radius: 8px; pointer-events: none;
+}

@@ -12,12 +12,18 @@ export const AbilityDefSchema = z.object({
   cooldown: z.number().optional(),
   morphTo: z.string().optional(), // if set, casting morphs the unit into this unit type (e.g. assault mode)
   range: z.number().optional(), // Chebyshev cast range (tiles). Omitted = self/no-target.
-  targetKind: z.enum(['unit', 'tile']).optional(), // what the cast targets
+  minRange: z.number().optional(), // minimum Chebyshev cast range (tiles closer than this are illegal)
+  targetKind: z.enum(['unit', 'units', 'tile', 'grid2x2']).optional(), // 'units' = multi-unit pick
   targetClass: z.string().optional(), // if targetKind 'unit', restrict to this unitClass (e.g. "light")
+  targetClasses: z.array(z.string()).optional(), // if targetKind 'units', restrict to these unitClasses
+  maxTargets: z.number().optional(), // for targetKind 'units': how many distinct targets may be picked
   targetEnemy: z.boolean().optional(), // if targetKind 'unit', restrict to enemy units only
-  targetAlly: z.boolean().optional(), // if targetKind 'unit', restrict to friendly units only
+  targetAlly: z.boolean().optional(), // restrict to friendly units only
+  targetAfflicted: z.boolean().optional(), // Cure: only units with a removable affliction are eligible
   disabled: z.boolean().optional(), // greyed-out placeholder ability — never offered/castable yet
   duration: z.number().optional(), // effect duration in rounds (e.g. Spray Bile = 5)
+  requiresTech: z.string().optional(), // ability only castable once this tech is researched
+  supersededByTech: z.string().optional(), // ability hidden once this tech is researched (replaced)
 });
 
 export const TerrainTypeSchema = z.object({
@@ -41,7 +47,7 @@ export const UnitTypeSchema = z.object({
   attack: z.number().min(0),
   defence: z.number().min(0),
   movement: z.number().min(0),
-  attackRange: z.number().min(1), // max attack range (Chebyshev)
+  attackRange: z.number().min(0), // max attack range (Chebyshev); 0 = cannot attack (e.g. Burstling)
   minAttackRange: z.number().min(1).optional(), // min attack range; >1 = a banded weapon that can't fire closer (default 1)
   visibility: z.number().min(0), // fog sight radius: 0=own tile, 1=3x3, 2=5x5 …
   unitClass: z.string().optional(), // e.g. "light" — flavour/grouping, not yet mechanical
@@ -62,7 +68,7 @@ export const FactionDefSchema = z.object({
 });
 
 export const TechEffectSchema = z.object({
-  type: z.enum(['unlockUnit', 'globalModifier']),
+  type: z.enum(['unlockUnit', 'globalModifier', 'grantCondition']),
   params: z.record(z.union([z.number(), z.string()])),
 });
 
@@ -74,6 +80,7 @@ export const TechDefSchema = z.object({
   effects: z.array(TechEffectSchema),
   prerequisites: z.array(z.string()).optional(), // ALL must be researched
   prerequisitesAny: z.array(z.string()).optional(), // at least ONE must be researched (e.g. Crucible OR Mech Bay)
+  excludes: z.array(z.string()).optional(), // mutually-exclusive: researching any of these locks this tech out
   locked: z.boolean().optional(),
 });
 
@@ -97,10 +104,16 @@ export const GameConfigSchema = z.object({
   turnLimit: z.number().min(1),
   winConditions: z.object({
     captureAllCities: z.boolean(),
+    captureCapital: z.boolean().optional(),
     eliminateAllUnits: z.boolean(),
     highestScoreAtLimit: z.boolean(),
   }),
   combatConfig: CombatConfigSchema,
+  heal: z.object({
+    friendlyTerritory: z.number(),
+    neutralTerritory: z.number(),
+    enemyTerritory: z.number(),
+  }).optional(),
   scoreWeights: z.object({
     cityValue: z.number(),
     unitCostValue: z.number(),

@@ -1,4 +1,4 @@
-# Tactica — Unit Special Conditions
+# Rigbound — Unit Special Conditions
 
 Reusable, named **special conditions** that can be attached to any unit type. A unit
 opts in by listing the condition id in its `conditions` array in
@@ -44,7 +44,7 @@ opts in by listing the condition id in its `conditions` array in
 | `squinting_eyes_2` | Squinting eyes (L2) | 3×3 fully visible; the surrounding 5×5 ring as **fog** (≈ visibility 1.5). |
 | `dash_N` | Dash N | After attacking, the unit may move up to **N** tiles (default: no move after attacking). |
 | `corrosive` | Corrosive | *(passive ability)* The unit's attack applies the **`corrosive_1` condition** (−20% defence) to the target. |
-| `frazzled` | Frazzled | While inside an enemy's **area of influence** (the 3×3 around it), its movement is capped at **1**. |
+| `stumble` | Stumble | While inside an enemy's **area of influence** (the 3×3 around it), its movement is capped at **1**. |
 | `mountain_movement` | Mountain Movement | Can climb mountains (movement access only — **no combat or sight bonus**). |
 | `mountain_defense` | Mountain Defense | Can climb mountains; gains **×1.2 defence** while on a mountain. |
 | `mountain_shooter` | Mountain Shooter | Can climb mountains; gains **×1.2 attack** while on a mountain. |
@@ -52,7 +52,8 @@ opts in by listing the condition id in its `conditions` array in
 | `mountain_sight` | Mountain Sight | Can climb mountains; its **visibility becomes 2** while on a mountain. |
 | `mobile` | Mobile | Ignores terrain **movement** penalties for forest & mountains. *(Placeholder — no terrain move costs exist yet; wires into pathing later.)* |
 | `detect` | Detect | *(passive ability)* Reveals nearby **cloaked/burrowed** units. (Placeholder — no cloak/burrow units exist yet.) |
-| `slash` | Slash | *(passive ability)* Attack hits a **3-tile arc**: central tile 100% damage, the two side tiles 50%. Enemies only; **no retaliation**. Replaces the normal single-target attack. |
+| `slash` | Slash | *(passive ability)* Attack hits a **3-tile arc**: central tile 100% damage, the two side tiles 50%. Hits **all** units incl. friendly (friendly fire); **no retaliation**. Replaces the normal single-target attack. |
+| `repositioning` | Repositioning | *(passive ability)* **Cannot attack if it moved** this turn (and can't move once it attacked) — must stay put to fire. Same effect as the `noMoveAndAttack` trait. Used by the **Tank**. |
 
 > **Mountains are impassable by default** — no unit may move onto a mountain tile unless
 > it has one of the `mountain_*` passives above (`mountain_movement`, `mountain_defense`,
@@ -68,6 +69,85 @@ opts in by listing the condition id in its `conditions` array in
 >   −30%**. Do not stack (the higher level wins). Persist (not cleared at end of turn).
 >   Applied by units with the **`corrosive` passive** when they hit a surviving target
 >   (currently always `corrosive_1`).
+
+---
+
+## Area of Influence (AOI) — Zone of Control *(universal movement rule)*
+Every unit projects an **AOI = the 3×3 grid around it** (Chebyshev radius 1, excluding its
+own tile). By default **every** unit's movement is affected by enemy AOI:
+
+> **Entering an enemy AOI tile immediately STOPS the unit.** The tile is a legal **final
+> stop**, but the unit may not move any further from it — it cannot *pass through* AOI.
+
+- **Start tile is exempt.** A unit that begins its turn already inside an enemy AOI may move
+  **out** freely (the stop only triggers on *entering* an AOI tile via a step). It can also
+  step to an adjacent AOI tile as a 1-tile final move.
+- You may **cross at most one** AOI tile per move (as the final tile). Chaining through two
+  AOI tiles is impossible regardless of movement points.
+- **Only the tile you land on matters** — no diagonal corner-cutting rules.
+- **Hidden enemies project no AOI.** A **burrowed** or **cloaked** enemy that the mover
+  can't see does not halt movement (no information leak). A revealed/detected cloaked unit
+  *does* project AOI.
+- **Movement only** — AOI never affects attack range or line of sight.
+- **`stumble`** is unchanged and stacks on top: a Stumble unit inside an enemy AOI is
+  additionally capped to **1** total movement (see below).
+
+**`aoi_none` — "No AOI":** the unit projects **no** Area of Influence — enemies move freely
+through its zone (it never halts their movement). Used by the **Scout**, **Hive Scout**, and
+**Sentinel** (recon/observer units that watch rather than hold ground). It still occupies its
+own tile normally; only the surrounding zone-of-control is removed.
+
+**TODO (scaffolded, no unit opts in yet):**
+- **`aoi_large`** — the unit projects a **5×5** AOI (Chebyshev radius 2) instead of 3×3.
+- **`aoi_immune`** — the unit **ignores enemy AOI** when moving (never stopped by it).
+
+**Enforced in:** `game.ts` `enemyAOITiles` (builds the set of enemy-AOI tiles visible to the
+mover, honouring `unitHiddenByCloak`), passed into `pathfinding.ts` `getReachableTiles`
+(an AOI tile is recorded as a reachable STOP but never expanded from, except the start tile).
+UI: `IsoCanvas` tints enemy-AOI tiles amber for the selected unit (`drawAOIHighlight`).
+
+---
+
+## Bump, Push & Collide — canonical glossary
+Three distinct mechanics that are easy to confuse. Precise definitions:
+
+### Bump *(a movement-reveal — no damage)*
+A unit **trying to move onto** a tile it can't see clearly:
+- **onto a cloaked enemy** it can't see (e.g. a Reaper into a cloaked Wraith), OR
+- **onto impassable terrain hidden under cloud** (e.g. a Scuttling into a hidden mountain).
+
+The unit **does not move** — it stays put, **reveals** the cloaked unit (for the current
+turn) or the impassable tile (into fog memory), and (if it bumped an enemy) may still
+attack. **Who reveals a cloaked enemy:** *any* unit **except a blind one** — a blind unit
+bumps it but cannot pierce the cloak, so nothing is revealed. Burrowed enemies are **not**
+bumped — a mover **co-occupies** them (the Wyrm-under mechanic).
+
+### Blind death vs blocked *(lethal terrain)*
+Only for **blind** units (Scuttlings, or any `blind`-condition unit — NOT burrowed):
+- Walking onto a **HIDDEN lethal/void tile** (**water, lava, acid, chasm** — any
+  (FLYING units hover over these and are unharmed.)
+  `passable:false` terrain) → the unit **falls in and DIES** (the tile is then revealed).
+- If that impassable tile was **already revealed**, the unit simply **can't move onto it**
+  (blocked — the player sees the danger).
+- A hidden **non-lethal** impassable (a **mountain**) → a **bump** (reveal + no move), never
+  death.
+
+### Push & Collide *(forced movement — Ram / Percussive Shells)*
+A **push** is a forced move: **Ram** (Vindrace) and **Percussive Shells** (Titan) shove a
+LIGHT unit one tile (heavy/class-less units are immune). Outcomes:
+- empty passable tile → it **slides** there;
+- **COLLIDE** — driven into a **unit, building, mountain, or the map edge** → it takes
+  `COLLIDE_DAMAGE` (2) and **stays**; a LIGHT unit it collided with also takes 2 (heavy → 0);
+- into a **void tile** (water/lava/acid/chasm) → it **falls in and DIES**.
+
+("Collide" is the push-into-obstacle impact. Do **not** call it a "bump" — bump is the
+movement-reveal above.)
+
+**Enforced in:** `pathfinding.ts` `getReachableTiles` (bump targets via `hiddenEnemyTiles`
+/ blind `bumpEnemies`; hidden-void death moves & mountain bumps via `knownTiles`);
+`game.ts` `applyMove` (enemy reveal-bump, terrain bump, lethal-terrain death) and
+`getVisibleState` (a bump-revealed tile overrides cloak for the turn); `push.ts`
+`resolvePush` (`COLLIDE_DAMAGE`, void death). Reveals clear in `applyEndTurn`.
 
 ---
 
@@ -116,16 +196,18 @@ has this condition.
 discovers nothing around it. It may, however, **move into cloud/fog tiles** (movement
 isn't fog-gated); a selected blind unit highlights its move targets even on cloud tiles.
 
-**Bump:** if a blind unit tries to move onto a tile holding a **hidden enemy** (under
-cloud, or under fog), it doesn't move — it **stays put**, **reveals** that tile + the
-enemy for the rest of the turn, and may then **attack** (range 1) or stand. The bumped
-tile enters fog memory (its terrain persists as fog); the enemy is shown only this turn
-and returns to normal fog when the player's turn ends.
+**Bump & death** (see the **Bump, Push & Collide** glossary above for the full rules):
+- Moving onto a **hidden enemy** → **bump** (stay put, reveal it for the turn, may then
+  attack at range 1). A blind unit bumps but **cannot reveal a CLOAKED** enemy.
+- Moving onto a **hidden mountain** → **bump** (reveal + no move).
+- Moving onto a **HIDDEN lethal/void** tile (water/lava/acid/chasm) → **falls in and DIES**;
+  an **already-revealed** impassable tile is simply **blocked**.
 
 **Enforced in:** visibility 0 falls out of the normal sight code (`fog.ts`); blind move
-targets onto enemy tiles come from `pathfinding.ts` (`bumpEnemies`); the bump itself is
-in `game.ts` (`applyMove` + `GameState.revealedTiles`, cleared in `applyEndTurn`);
-cloud-tile move highlight is in `IsoCanvas.tsx`.
+targets (enemy bumps, mountain bumps, hidden-void death moves) come from `pathfinding.ts`
+(`bumpEnemies` / `knownTiles`); the bump/death itself is in `game.ts` (`applyMove` +
+`GameState.revealedTiles`, cleared in `applyEndTurn`); cloud-tile move highlight is in
+`IsoCanvas.tsx`.
 
 ## `squinting_eyes_1` / `squinting_eyes_2` — Squinting eyes
 **Rule:** the unit sees terrain/structures as **fog** at part of its range but never
@@ -156,13 +238,13 @@ affected unit's **defence by 20%** in all future combat until removed; `corrosiv
 `statuses`) and `combat.ts` (`resolveCombat` multiplies the defender's defence by 0.8 for
 `corrosive_1` / 0.7 for `corrosive_2`).
 
-## `frazzled` — Frazzled
+## `stumble` — Stumble
 **Rule:** while this unit is standing inside an **enemy's area of influence**, its
 movement is capped at **1** (regardless of its base movement or movement bonuses).
 
 **Area of influence (AOI)** — unless a unit states otherwise, a unit's AOI is the **3×3
 grid around it** (Chebyshev radius 1). Attack range does NOT widen it: a range-2 unit
-still has a 3×3 AOI. So Frazzled triggers when the unit is **adjacent to (incl.
+still has a 3×3 AOI. So Stumble triggers when the unit is **adjacent to (incl.
 diagonally) any enemy**. Counts all enemies, even unseen ones (the influence is real).
 
 **Enforced in:** `pathfinding.ts` (`getReachableTiles`) — caps `maxMove` to 1 when the
@@ -204,7 +286,7 @@ unit (NOT every tile adjacent to both — that would over-select).
 
 - **Central tile:** takes **100%** of the computed damage.
 - **Side tiles:** take **50%** each (floored at `minimumDamage`).
-- **Enemies only** — friendly units in the arc are untouched.
+- **Hits all units** — friendly units in the arc take damage too (friendly fire).
 - **No retaliation** — struck units don't counter-attack.
 
 Each target's damage is computed with the normal force-ratio formula (so its own
@@ -223,14 +305,19 @@ the split damage; click the central tile to swing.
 ## `cloak` — Cloak *(passive ability)*
 **Rule:** the unit is **invisible to enemy players** — filtered out of their view entirely,
 **even with fog of war off** (cloak is separate from fog). It is revealed to an enemy only
-when (a) that enemy has a **`detect`** unit adjacent to it (Chebyshev ≤ 1 — see `detect`), or
+when (a) that enemy has a **`detect`** unit adjacent to it (Chebyshev ≤ 1 — see `detect`),
 (b) the unit is **marked** (`unit.statuses` includes `marked` — a hook for future
-parasite/lock-on abilities; nothing applies it yet). The owner always sees their own cloaked
-units (rendered **ghosted** so you can tell). Used by the **Infiltrator**.
+parasite/lock-on abilities; nothing applies it yet), or (c) an enemy unit **bumps** it by
+trying to move onto its tile (a **bump** reveals it for that turn — see the glossary above).
+A **blind** mover is the exception: it bumps but can't pierce the cloak, so it reveals
+nothing. It also **uncloaks automatically while standing on a ruin or an ENEMY city**
+(a neutral or its own city keeps it cloaked). The owner always sees their own cloaked
+units (rendered **ghosted** so you can tell). Used by the **Wraith**.
 
 **Enforced in:** `game.ts` `unitHiddenByCloak` (filters the unit list in `getVisibleState`,
-both fog-on and fog-off branches). UI: cloaked own-units draw at reduced opacity
-(`drawUnit.ts`).
+both fog-on and fog-off branches; a tile bump-revealed this turn overrides cloak). Cloaked
+enemies are **bump targets** (not silent blockers) via `pathfinding.ts` `hiddenEnemyTiles`.
+UI: cloaked own-units draw at reduced opacity (`drawUnit.ts`).
 
 ## `detect` — Detect *(passive ability)*
 **Rule:** reveals **cloaked** (Infiltrator) and **burrowed** (Wyrm) enemy units within
@@ -250,11 +337,15 @@ mound**; enemies see nothing.
 
 **Co-tile occupancy (movement):**
 - A burrowed Wyrm may move **onto/under an enemy unit** (co-occupying its tile) — that's how
-  it sets up an `erupt` kill. It may **not** co-occupy a **friendly** unit's tile.
+  it sets up an `erupt` kill. It may **not** co-occupy a **friendly** unit's tile. When it
+  shares an enemy's tile, BOTH stay visible to the Wyrm's owner (the surface unit is drawn on
+  top; the Wyrm peeks out behind). Clicking the shared tile selects the **Wyrm first**, then
+  the enemy on the next click.
 - A burrowed Wyrm **passes UNDER** impassable tiles (mountains, buildings, resource tiles,
-  cities) — it may traverse them to reach a valid tile beyond (they aren't revealed when
-  passed under) — but it **cannot STOP/occupy** them. (Provisional — may expand later, e.g.
-  attacking REBs.) It also **can't Burrow or Erupt** while on a city/mountain/building tile.
+  cities, **ruins**) — it may traverse them to reach a valid tile beyond (they aren't revealed
+  when passed under) — but it **cannot STOP/occupy** them. (Provisional — may expand later,
+  e.g. attacking REBs.) It also **can't Burrow or Erupt** while on a city/mountain/building
+  tile, and **cannot found or capture cities** while burrowed.
 - To **other** units, a burrowed **enemy** Wyrm is invisible and does **not block** movement
   (they may unknowingly step onto it); a burrowed **friendly** Wyrm **does** block (no
   friendly co-tile). An **unburrowed** Wyrm blocks normally.
@@ -268,9 +359,38 @@ scuttling can't pass through a mountain, so it bumps the first one; a Wyrm passe
 intermediates and only bumps an impassable **destination**.)
 
 **Enforced in:** `game.ts` `getVisibleState`/`unitHiddenByCloak` (hidden); `getLegalActions`
-(no attack for burrowed; emits bump move actions with `bumpReveal`); `applyMove` (the bump —
-land + reveal); `pathfinding.ts` `getReachableTiles` (occupiable-vs-traversable + the `bumps`
-out-param, using the `buildings` arg and `isBurrowed`/`blind` flags).
+(no attack for burrowed; no capture; emits bump move actions with `bumpReveal`); `applyMove`
+(the bump — land + reveal); `economy.ts` `canFoundCity` (no found); `pathfinding.ts`
+`getReachableTiles` (occupiable-vs-traversable + the `bumps` out-param, using the `buildings`
+arg and `isBurrowed`/`blind` flags; ruins/cities/resources/buildings are non-stoppable).
+
+---
+
+## `twin_strike` — Body Slam *(passive ability — surfaced Wyrm)*
+*(Internal id stays `twin_strike`; the player-facing name is **Body Slam**.)*
+
+**Rule:** the surfaced Wyrm's attack replaces the normal single-target attack. It hits **two
+touching cells**: `tiles[0]` (**primary**, 100% damage) must be within the Wyrm's **3×3**
+(Chebyshev 1, never its own tile); `tiles[1]` (**secondary**, 50% damage) must be **adjacent**
+(Chebyshev 1) to the primary and also not the Wyrm's tile. **You must pick two tiles** — a
+struck tile hits whatever is on it, **friend or foe** (so if the only enemy is ringed by your
+own units, the second pick lands on a friendly, which is slammed too). **No retaliation.** The
+Wyrm may **move OR slam**, not both (`mustStayToAttack` — it must not have moved). Damage uses
+the normal combat formula per struck unit, then `slashHitDamage` scales the secondary to 50%.
+
+**Strike into fog/cloud:** the attack targets **tiles**, so either cell may be a fogged or
+clouded tile. Each struck tile is **revealed for the current turn** (via `revealedTiles`) so
+its unit and the damage show, and its terrain is written to **fog memory** (a clouded tile
+becomes fog permanently). At end of turn `revealedTiles` clears, so a surviving hidden unit
+reverts to hidden — the terrain stays as fog.
+
+**UI:** armed from the Unit Info panel ("Body Slam") and aimed with a **2-cell picker**
+(tick the first tile, then a touching second tile, then Continue — both are mandatory) —
+same flow as Ballistic Volley / territory expansion. Floating damage numbers show on both cells.
+
+**Enforced in:** `game.ts` `getLegalActions` (offers `wyrmStrike` pairs via `wyrmStrikePairs`,
+gated by `mustStayToAttack`), `applyWyrmStrike` (validate `wyrmStrikeLegal`, damage, reveal);
+web `strikeSelect` store slice + `StrikeSelectBar` + `strikePicker` in `IsoCanvas`.
 
 ---
 
@@ -385,7 +505,7 @@ gates retaliation). Max range still gets the `mountain_shooter_2` +1 via `effect
 - **Stalker** (`stalker`, Vanguard): `mountain_movement`, `mountain_shooter_2`, `mobile`.
 - **Lancer** (`lancer`, Vanguard): `mountain_shooter`.
 - **Scuttling** (`scuttling`, Hive): `sacrificial_founder`, `blind`.
-- **Scout** (`hive_scout`, Hive): `squinting_eyes_2`, `impotent_founder`, `frazzled`.
+- **Scout** (`hive_scout`, Hive): `squinting_eyes_2`, `impotent_founder`, `stumble`.
 - **Reaper** (`reaper`, Hive): `dash_1`.
 - **Scab** (`scab`, Hive): `corrosive`, `mountain_sight`.
 - **Vindrace** (`vindrace`, Hive): `slash`, `mountain_movement`.

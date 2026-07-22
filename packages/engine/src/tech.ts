@@ -25,6 +25,27 @@ export function getModifier(player: PlayerState, registry: DataRegistry, modifie
   return total;
 }
 
+/**
+ * Passive conditions granted to `unitTypeId` by a player's researched techs (via
+ * `grantCondition` effects). These stack on top of the unit's base `conditions` — e.g.
+ * Adrenal Glands → the Reaper gains dash_2 + aoi_immune. Same reader pattern as getModifier
+ * (no tech ids hardcoded elsewhere).
+ */
+export function grantedConditions(player: PlayerState, unitTypeId: string, registry: DataRegistry): string[] {
+  const out: string[] = [];
+  for (const techId of player.researchedTechs) {
+    const tech = registry.techs[techId];
+    if (!tech) continue;
+    for (const effect of tech.effects) {
+      if (effect.type === 'grantCondition' && effect.params['unit'] === unitTypeId) {
+        const c = effect.params['condition'];
+        if (typeof c === 'string') out.push(c);
+      }
+    }
+  }
+  return out;
+}
+
 /** Number of cities a player currently owns. */
 export function ownedCityCount(state: GameState, playerId: PlayerId): number {
   return state.cities.filter(c => c.owner === playerId).length;
@@ -39,7 +60,10 @@ export function techCost(level: number, cities: number, registry: DataRegistry):
 }
 
 export function techCostForPlayer(state: GameState, playerId: PlayerId, tech: TechDef, registry: DataRegistry): number {
-  return techCost(tech.level, ownedCityCount(state, playerId), registry);
+  const base = techCost(tech.level, ownedCityCount(state, playerId), registry);
+  // R&D (Refinement tech): reduces the ore cost of all future research.
+  const reduction = getModifier(state.players[playerId], registry, 'researchCostReduction');
+  return Math.max(0, Math.round(base * (1 - reduction)));
 }
 
 /**
@@ -69,6 +93,9 @@ export function isTechAvailable(state: GameState, playerId: PlayerId, tech: Tech
   if (tech.prerequisitesAny && tech.prerequisitesAny.length > 0) {
     if (!tech.prerequisitesAny.some(p => player.researchedTechs.includes(p))) return false;
   }
+  // Mutual exclusion: a researched excluded tech locks this one out (e.g. Wyrm's
+  // Tunneling Network ⊕ Aftershock — you may pick only one).
+  if (tech.excludes && tech.excludes.some(x => player.researchedTechs.includes(x))) return false;
 
   return true;
 }

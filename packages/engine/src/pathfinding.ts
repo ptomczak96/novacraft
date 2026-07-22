@@ -17,6 +17,9 @@ export function getReachableTiles(
   bumpEnemies: boolean = false, // blind units may target enemy tiles (to "bump"/reveal)
   buildings: { position: Coord }[] = [], // for burrowed units: can't move under buildings
   bumps?: Map<string, string>, // OUT: for blind/burrowed units, impassable-tile key → land-tile key
+  aoiTiles?: Set<string>, // enemy Area-of-Influence tiles ("x,y") — entering one STOPS movement
+  hiddenEnemyTiles?: Set<string>, // cloaked enemy tiles hidden from the mover → BUMP targets (any unit)
+  knownTiles?: Set<string>, // tiles the player has already seen — a blind unit won't walk into a KNOWN lethal tile
 ): Map<string, number> {
   let maxMove = unitType.movement + movementBonus;
   const ignoresTerrain = unitType.traits.includes('ignoresTerrainCost');
@@ -25,10 +28,10 @@ export function getReachableTiles(
   const isBurrowed = unitType.conditions?.includes('burrowed') ?? false;
   const buildingKeys = new Set(buildings.map(b => `${b.position.x},${b.position.y}`));
 
-  // "Frazzled": while standing inside an enemy's area of influence, this unit's movement
+  // "Stumble": while standing inside an enemy's area of influence, this unit's movement
   // is capped at 1. A unit's AOI is the 3×3 around it (Chebyshev radius 1) by default —
   // range doesn't widen it. See docs/conditions.md.
-  if (unitType.conditions?.includes('frazzled')) {
+  if (unitType.conditions?.includes('stumble')) {
     const inEnemyAOI = units.some(u => {
       if (u.owner === unit.owner) return false;
       const d = Math.max(Math.abs(u.position.x - unit.position.x), Math.abs(u.position.y - unit.position.y));
@@ -36,6 +39,9 @@ export function getReachableTiles(
     });
     if (inEnemyAOI) maxMove = Math.min(maxMove, 1);
   }
+
+  // "Slowed" (Medic's Slow): a flat movement cap of 1 while the status is active.
+  if (unit.statuses?.includes('slowed')) maxMove = Math.min(maxMove, 1);
 
   const reachable = new Map<string, number>(); // "x,y" -> cost
   // By DEFAULT no unit may move onto mountains; only units with a mountain-access
@@ -66,10 +72,12 @@ export function getReachableTiles(
     }
   }
 
-  // Blind (scuttling) and burrowed (Wyrm) units get "bump" targets: hidden impassable
-  // tiles show as selectable, and moving onto one bumps (reveal + waste move). This
-  // penalises blind movement into clouds. See docs/conditions.md.
-  const blindBump = conds.includes('blind') || isBurrowed;
+  // Blind (scuttling) units and burrowed (Wyrm) units treat impassable tiles specially.
+  // Blind: a HIDDEN non-lethal impassable (mountain) is a BUMP (reveal + no move); a HIDDEN
+  // lethal void tile (water/lava/acid/chasm) is a walk-in-and-DIE move; a KNOWN impassable
+  // is simply blocked. Burrowed: any impassable is a bump target (it can't surface there).
+  // See docs/conditions.md ("Bump", "blind", "burrowed").
+  const isBlindUnit = conds.includes('blind');
 
   while (queue.length > 0) {
     // Sort by cost (cheap priority queue)
@@ -77,6 +85,13 @@ export function getReachableTiles(
     const current = queue.shift()!;
     const currentKey = `${current.x},${current.y}`;
     if (current.cost > (visited.get(currentKey) ?? Infinity)) continue;
+
+    // Zone of Control: entering an enemy Area-of-Influence tile immediately stops the
+    // unit — the tile stays a legal STOP (already recorded in `reachable`) but the search
+    // never expands FROM it. The unit's own starting tile is exempt (it may move out of an
+    // AOI freely). See docs/conditions.md "Area of Influence".
+    const isStart = current.x === unit.position.x && current.y === unit.position.y;
+    if (aoiTiles && !isStart && aoiTiles.has(currentKey)) continue;
 
     for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [-1, 1], [1, -1], [1, 1]]) {
       const nx = current.x + dx;
@@ -102,22 +117,40 @@ export function getReachableTiles(
       // OCCUPIABLE — can the unit STOP here? Burrowed co-occupies enemies but not
       // buildings/resource/city tiles.
       let occ = terrainPass && !friendlyHere && !(enemyHere && !isBurrowed);
-      if (isBurrowed && (tile.isResourceTile || tile.isCity || buildingKeys.has(nKey))) occ = false;
+      // A burrowed Wyrm can't surface-stop on a city, ruin, resource tile, or building.
+      if (isBurrowed && (tile.isResourceTile || tile.isCity || tile.isRuin || buildingKeys.has(nKey))) occ = false;
 
-      // TERRAIN BUMP — an impassable-to-occupy tile (by terrain/building/resource/city,
-      // NOT by a unit) becomes a selectable bump target for blind/burrowed units; moving
-      // onto it lands on `current` and reveals it as fog. The land tile must itself be a
-      // valid STOP (the start, or an occupiable reachable tile) — never a pass-under tile
-      // (a burrowed Wyrm traverses impassables but can't land on them).
+      // TERRAIN — an un-standable tile (impassable terrain, not blocked by a unit). The
+      // land tile `current` must itself be a valid STOP (start, or an occupiable reachable
+      // tile) — never a pass-under tile (a burrowed Wyrm traverses impassables but can't
+      // land on them).
       const currentOccupiable = current.cost === 0 || reachable.has(currentKey);
-      if (blindBump && bumps && currentOccupiable && !occ && !enemyHere && !friendlyHere && !bumps.has(nKey)) {
-        bumps.set(nKey, currentKey);
+      if (!occ && !enemyHere && !friendlyHere) {
+        const isVoid = !terrain.passable; // water/lava/acid/chasm — lethal to walk into
+        if (isBurrowed) {
+          // Burrowed: any impassable destination is a bump target (it can't surface there).
+          if (bumps && currentOccupiable && !bumps.has(nKey)) bumps.set(nKey, currentKey);
+        } else if (isBlindUnit) {
+          if (isVoid) {
+            // Blind + lethal void: a HIDDEN one is a real (fatal) destination it can walk
+            // onto; a KNOWN one is blocked (the player sees the danger and won't step in).
+            if (!(knownTiles?.has(nKey) ?? false)) {
+              const prevR = reachable.get(nKey);
+              if (prevR === undefined || prevR > stepCost) reachable.set(nKey, stepCost);
+            }
+          } else if (bumps && currentOccupiable && !bumps.has(nKey)) {
+            // Blind + non-lethal impassable (mountain): BUMP (reveal + no move).
+            bumps.set(nKey, currentKey);
+          }
+        }
       }
 
-      // ENEMY BUMP — a blind (non-burrowed) unit may target a hidden enemy's tile to
-      // reveal it, but never paths through it.
+      // ENEMY BUMP — moving onto a tile with an enemy it can't see reveals it (any unit can
+      // bump a CLOAKED enemy via `hiddenEnemyTiles`; a blind unit bumps any hidden enemy via
+      // `bumpEnemies`). Never paths THROUGH the enemy tile.
       if (enemyHere && !isBurrowed) {
-        if (bumpEnemies && !reachable.has(nKey)) reachable.set(nKey, stepCost);
+        const bumpable = bumpEnemies || (hiddenEnemyTiles?.has(nKey) ?? false);
+        if (bumpable && !reachable.has(nKey)) reachable.set(nKey, stepCost);
         continue;
       }
 

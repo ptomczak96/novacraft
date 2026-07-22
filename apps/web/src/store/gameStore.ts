@@ -1,12 +1,15 @@
 import { create } from 'zustand';
 import type { GameState, GameConfig, Action, DataRegistry, VisibleState, Coord, CombatBreakdown } from '@tactica/engine';
 import {
-  createGame, getLegalActions, applyAction, getVisibleState,
-  getResult, replayGame, previewCombat,
+  createGame, createTestCombatGame, getLegalActions, applyAction, getVisibleState,
+  getResult, replayGame, previewCombat, previewAttack,
 } from '@tactica/engine';
 import { buildRegistry, defaultConfig, defaultTerrain, defaultUnits, defaultFactions, defaultTechs } from '@tactica/data';
 import type { TerrainType, UnitType, FactionDef, TechDef } from '@tactica/engine';
 import type { TileTheme } from '../iso/tileSprites.js';
+import { unitCode } from '../data/notation.js';
+import { describeAction } from '../data/coach.js';
+import type { CoachEntry, StrategyNote, CoachMeta } from '../data/coach.js';
 
 export interface CombatLogEntry {
   attacker: { name: string; attack: number; defence: number; hpBefore: number; hpAfter: number; maxHP: number };
@@ -30,6 +33,12 @@ export interface CombatEvent {
   retaliation: number;         // dealt back to attacker
   defenderKilled: boolean;
   attackerKilled: boolean;
+}
+
+// A multi-tile damage burst (Wyrm strike) — drives floating "-N" popups at each cell.
+export interface AoeDamageEvent {
+  seq: number;
+  hits: { x: number; y: number; amount: number; killed: boolean }[];
 }
 
 export type AppScreen = 'setup' | 'game' | 'mapEditor';
@@ -75,6 +84,26 @@ interface GameStore {
   territorySelect: { cityId: number; picks: Coord[] } | null;
   setTerritorySelect: (v: { cityId: number; picks: Coord[] } | null) => void;
 
+  // Ballistic Volley picker (Titan): active while the player ticks the 2×2 target square.
+  volleySelect: { unitId: number; abilityId: string; picks: Coord[] } | null;
+  setVolleySelect: (v: { unitId: number; abilityId: string; picks: Coord[] } | null) => void;
+
+  // Wyrm strike picker: active while the player ticks the 2 touching target cells.
+  strikeSelect: { unitId: number; picks: Coord[] } | null;
+  setStrikeSelect: (v: { unitId: number; picks: Coord[] } | null) => void;
+
+  // Multi-unit ability picker (Cure / Repair): tick up to maxTargets eligible ally tiles.
+  targetSelect: { unitId: number; abilityId: string; name: string; maxTargets: number; picks: Coord[] } | null;
+  setTargetSelect: (v: { unitId: number; abilityId: string; name: string; maxTargets: number; picks: Coord[] } | null) => void;
+
+  // A move/action by an engineer mid node-build is deferred behind a confirm dialog.
+  pendingNodeCancel: import('@tactica/engine').Action | null;
+  setPendingNodeCancel: (a: import('@tactica/engine').Action | null) => void;
+
+  // "Remove tracer round / explosives" prompt (a detecting ally clicked a marked friendly).
+  markRemoval: { removerId: number; target: Coord; kind: 'tracer' | 'explosive' } | null;
+  setMarkRemoval: (v: { removerId: number; target: Coord; kind: 'tracer' | 'explosive' } | null) => void;
+
   // Bot settings
   botSettings: [BotSetting, BotSetting];
   setBotSetting: (player: 0 | 1, setting: BotSetting) => void;
@@ -99,13 +128,31 @@ interface GameStore {
   lastCombatResult: CombatLogEntry | null;
   // Latest attack, for render-layer combat animations.
   lastCombatEvent: CombatEvent | null;
+  // Latest multi-tile damage burst (Wyrm strike), for floating damage popups.
+  lastAoeDamage: AoeDamageEvent | null;
+
+  // Board notation (UI-only): stable per-unit short codes (WA1, xVIN2…) keyed by unit id,
+  // plus the running per-(owner,code) counter. Assigned once and never renumbered.
+  unitLabels: Record<number, string>;
+  unitLabelSeq: Record<string, number>;
+  ensureUnitLabels: () => void;
+
+  // Coaching loop (UI-only): a move log with the AI's scored candidates + your annotations.
+  coachEnabled: boolean;
+  coachLog: CoachEntry[];
+  strategyNotes: StrategyNote[];
+  setCoachEnabled: (v: boolean) => void;
+  addCoachComment: (seq: number, text: string) => void;
+  addStrategyNote: (text: string) => void;
+  clearCoach: () => void;
 
   // Actions
   startGame: (factions: [string, string], seed: number) => void;
+  startTestCombat: (factions: [string, string], seed: number) => void;
   selectUnit: (unitId: number | null) => void;
   setSelectedCity: (c: Coord | null) => void;
   setHoveredTile: (c: Coord | null) => void;
-  executeAction: (action: Action) => void;
+  executeAction: (action: Action, coachMeta?: CoachMeta) => void;
   undo: () => void;
   saveGame: () => string;
   loadGame: (json: string) => void;
@@ -151,6 +198,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
   selectedCity: null,
   inspectedTile: null,
   territorySelect: null,
+  volleySelect: null,
+  strikeSelect: null,
+  targetSelect: null,
+  pendingNodeCancel: null,
+  markRemoval: null,
   hoveredTile: null,
   legalActions: [],
 
@@ -176,6 +228,45 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
   lastCombatResult: null,
   lastCombatEvent: null,
+  lastAoeDamage: null,
+  unitLabels: {},
+  unitLabelSeq: {},
+
+  coachEnabled: false,
+  coachLog: [],
+  strategyNotes: [],
+  setCoachEnabled: (v) => set({ coachEnabled: v }),
+  addCoachComment: (seq, text) => set({
+    coachLog: get().coachLog.map(e => e.seq === seq ? { ...e, comment: text } : e),
+  }),
+  addStrategyNote: (text) => {
+    const gs = get().gameState;
+    if (!text.trim() || !gs) return;
+    set({ strategyNotes: [...get().strategyNotes, { turn: gs.turn, player: gs.currentPlayer, text: text.trim() }] });
+  },
+  clearCoach: () => set({ coachLog: [], strategyNotes: [] }),
+
+  ensureUnitLabels: () => {
+    const { gameState, unitLabels, unitLabelSeq } = get();
+    if (!gameState) return;
+    const mirror = gameState.players[0]?.factionId != null
+      && gameState.players[0]?.factionId === gameState.players[1]?.factionId;
+    let labels = unitLabels;
+    let seq = unitLabelSeq;
+    // Assign in id order (= creation order) so codes reflect build order; only ever
+    // assign to NEW ids, so a death never renumbers survivors.
+    for (const u of [...gameState.units].sort((a, b) => a.id - b.id)) {
+      if (labels[u.id]) continue;
+      const code = unitCode(u.typeId);
+      const prefix = mirror ? (u.owner === 0 ? 'x' : 'y') : '';
+      const key = `${u.owner}:${prefix}${code}`;
+      const n = (seq[key] ?? 0) + 1;
+      if (labels === unitLabels) { labels = { ...unitLabels }; seq = { ...unitLabelSeq }; }
+      seq[key] = n;
+      labels[u.id] = `${prefix}${code}${n}`;
+    }
+    if (labels !== unitLabels) set({ unitLabels: labels, unitLabelSeq: seq });
+  },
 
   startGame: (factions, seed) => {
     const { config, registry } = get();
@@ -192,20 +283,70 @@ export const useGameStore = create<GameStore>((set, get) => ({
       inspectedTile: null,
       screen: 'game',
       showInterstitial: false,
+      unitLabels: {},
+      unitLabelSeq: {},
+      coachLog: [],
+      strategyNotes: [],
     });
+    get().ensureUnitLabels();
   },
 
-  selectUnit: (unitId) => set({ selectedUnitId: unitId, selectedCity: null, inspectedTile: null, abilityMode: null }),
-  setSelectedCity: (c) => set({ selectedCity: c, selectedUnitId: null, inspectedTile: null, abilityMode: null }),
+  startTestCombat: (factions, seed) => {
+    const { config, registry } = get();
+    const state = createTestCombatGame(config, registry, factions, seed);
+    const visible = getVisibleState(state, state.currentPlayer, registry);
+    const legal = getLegalActions(state, registry, state.currentPlayer);
+    set({
+      gameState: state,
+      visibleState: visible,
+      legalActions: legal,
+      botSettings: ['human', 'human'], // both human for a combat sandbox
+      stateHistory: [],
+      selectedUnitId: null,
+      selectedCity: null,
+      inspectedTile: null,
+      screen: 'game',
+      showInterstitial: false,
+      unitLabels: {},
+      unitLabelSeq: {},
+      coachLog: [],
+      strategyNotes: [],
+    });
+    get().ensureUnitLabels();
+  },
+
+  selectUnit: (unitId) => set({ selectedUnitId: unitId, selectedCity: null, inspectedTile: null, abilityMode: null, volleySelect: null, strikeSelect: null, targetSelect: null }),
+  setSelectedCity: (c) => set({ selectedCity: c, selectedUnitId: null, inspectedTile: null, abilityMode: null, volleySelect: null, strikeSelect: null, targetSelect: null }),
   setHoveredTile: (c) => set({ hoveredTile: c }),
   setInspectedTile: (c) => set({ inspectedTile: c }),
   abilityMode: null,
-  setAbilityMode: (m) => set({ abilityMode: m }),
-  setTerritorySelect: (v) => set({ territorySelect: v, selectedUnitId: null, selectedCity: null, inspectedTile: null }),
+  setAbilityMode: (m) => set({ abilityMode: m, volleySelect: null, strikeSelect: null, targetSelect: null }),
+  setTerritorySelect: (v) => set({ territorySelect: v, volleySelect: null, strikeSelect: null, targetSelect: null, selectedUnitId: null, selectedCity: null, inspectedTile: null }),
+  setVolleySelect: (v) => set({ volleySelect: v, strikeSelect: null, territorySelect: null, targetSelect: null, abilityMode: null, selectedUnitId: null, selectedCity: null, inspectedTile: null }),
+  setStrikeSelect: (v) => set({ strikeSelect: v, volleySelect: null, territorySelect: null, targetSelect: null, abilityMode: null, selectedUnitId: null, selectedCity: null, inspectedTile: null }),
+  setTargetSelect: (v) => set({ targetSelect: v, volleySelect: null, strikeSelect: null, territorySelect: null, abilityMode: null, selectedUnitId: null, selectedCity: null, inspectedTile: null }),
+  setPendingNodeCancel: (a) => set({ pendingNodeCancel: a }),
+  setMarkRemoval: (v) => set({ markRemoval: v }),
 
-  executeAction: (action) => {
+  executeAction: (action, coachMeta) => {
     const { gameState, registry, config } = get();
     if (!gameState) return;
+
+    // Coaching loop: record every move (with its human-readable description + any AI
+    // candidate scores) BEFORE applying, so descriptions use pre-action positions.
+    let coachLog = get().coachLog;
+    if (get().coachEnabled) {
+      const entry: CoachEntry = {
+        seq: (coachLog[coachLog.length - 1]?.seq ?? 0) + 1,
+        turn: gameState.turn,
+        player: gameState.currentPlayer,
+        actor: coachMeta?.actor ?? 'human',
+        desc: describeAction(action, gameState, get().unitLabels, registry),
+        candidates: coachMeta?.candidates,
+        comment: '',
+      };
+      coachLog = [...coachLog, entry];
+    }
 
     // Capture combat info before applying the action
     let combatLogEntry: CombatLogEntry | null = null;
@@ -217,10 +358,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
         const attackerType = registry.unitTypes[attacker.typeId];
         const defenderType = registry.unitTypes[defender.typeId];
         if (attackerType && defenderType) {
-          const result = previewCombat(
-            attacker, attackerType, defender, defenderType,
-            gameState.map, registry, gameState.config.combatConfig,
-          );
+          // previewAttack mirrors the actual resolution (incl. the Combined Arms ×1.2 on a
+          // repeat hit) so the log/popups match the HP the defender really loses.
+          const result = previewAttack(gameState, action.unitId, action.targetId, registry)
+            ?? previewCombat(attacker, attackerType, defender, defenderType, gameState.map, registry, gameState.config.combatConfig);
           combatLogEntry = {
             attacker: {
               name: attackerType.name,
@@ -259,6 +400,26 @@ export const useGameStore = create<GameStore>((set, get) => ({
       }
     }
 
+    // Wyrm strike: floating damage numbers on the two struck cells (primary 100%,
+    // secondary 50%). Computed from the true state so it works even into fog.
+    let aoeDamage: AoeDamageEvent | null = null;
+    if (action.type === 'wyrmStrike' && action.tiles.length === 2) {
+      const attacker = gameState.units.find(u => u.id === action.unitId);
+      const attackerType = attacker && registry.unitTypes[attacker.typeId];
+      if (attacker && attackerType) {
+        const minDmg = gameState.config.combatConfig.minimumDamage;
+        const hits = action.tiles.map((c, i) => {
+          const victim = gameState.units.find(u => u.id !== attacker.id && u.position.x === c.x && u.position.y === c.y);
+          const vt = victim && registry.unitTypes[victim.typeId];
+          if (!victim || !vt) return null;
+          const result = previewCombat(attacker, attackerType, victim, vt, gameState.map, registry, gameState.config.combatConfig);
+          const amount = i === 0 ? result.attackerDamage : Math.max(minDmg, Math.round(result.attackerDamage * 0.5));
+          return { x: c.x, y: c.y, amount, killed: victim.hp - amount <= 0 };
+        }).filter((h): h is NonNullable<typeof h> => h !== null);
+        if (hits.length) aoeDamage = { seq: (get().lastAoeDamage?.seq ?? 0) + 1, hits };
+      }
+    }
+
     const prevPlayer = gameState.currentPlayer;
     const newState = applyAction(gameState, action, registry);
     const visible = getVisibleState(newState, newState.currentPlayer, registry);
@@ -274,12 +435,17 @@ export const useGameStore = create<GameStore>((set, get) => ({
       stateHistory: [...get().stateHistory, gameState],
       selectedUnitId: null,
       territorySelect: null,
+      volleySelect: null,
+      strikeSelect: null,
       inspectedTile: null,
       abilityMode: null,
       showInterstitial,
       lastCombatResult: combatLogEntry ?? get().lastCombatResult,
       lastCombatEvent: combatEvent ?? get().lastCombatEvent,
+      lastAoeDamage: aoeDamage ?? get().lastAoeDamage,
+      coachLog,
     });
+    get().ensureUnitLabels(); // label any newly-spawned units (stable, never renumbered)
   },
 
   undo: () => {

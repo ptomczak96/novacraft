@@ -1,6 +1,12 @@
 import type { Unit, UnitType, GameMap, CombatConfig, DataRegistry, Tile } from './types.js';
 import type { PRNGState } from './prng.js';
 
+/** A single named multiplier applied to attack or defence (buff or debuff). */
+export interface CombatMod {
+  label: string; // e.g. "Combined Arms", "City", "Corrosive I"
+  mult: number;  // e.g. 1.2, 1.5, 0.8
+}
+
 export interface CombatBreakdown {
   attackForce: number;
   defenseForce: number;
@@ -9,6 +15,13 @@ export interface CombatBreakdown {
   terrainName: string;      // e.g. "Forest", "Plains (City)"
   rawDamage: number;        // before rounding/min
   finalDamage: number;      // after rounding/min
+  // Granular buff/debuff breakdown (for the combat log). Effective = base × all mods.
+  baseAttack: number;       // attacker's printed attack stat
+  effectiveAttack: number;  // after attackMods (mountain shooter, bile, combined arms…)
+  attackMods: CombatMod[];  // only mods that changed it (mult ≠ 1)
+  baseDefence: number;      // defender's printed defence stat
+  effectiveDefence: number; // after defenceMods (terrain/city/fortify, corrosive, bile)
+  defenceMods: CombatMod[]; // only mods that changed it (mult ≠ 1)
 }
 
 export interface CombatResult {
@@ -92,14 +105,19 @@ export function calculateDamage(
       terrainName: '',
       rawDamage: (f.attackForce / (f.totalForce || 1)) * attackStat * 4.5,
       finalDamage,
+      baseAttack: attackStat,
+      effectiveAttack: attackStat,
+      attackMods: [],
+      baseDefence: defenceStat,
+      effectiveDefence: defenceStat * defenseBonus,
+      defenceMods: [],
     },
   };
 }
 
 // A Fortified city acts as "walls" (there is no separate wall-building action):
 // a unit standing in a fortified city gets ×3 to its defense force. This replaces
-// any terrain bonus (it doesn't stack). A normal (un-fortified) city grants NO
-// inherent defense bonus — only its terrain, like any other tile.
+// any terrain bonus (it doesn't stack). A normal (un-fortified) city grants ×1.5.
 const FORTIFY_DEFENSE_MULTIPLIER = 3.0;
 
 /**
@@ -176,6 +194,28 @@ export function resolveCombat(
   const atkBileMult = attackerTile?.bile && attackerTile.bile.owner === attacker.owner ? 1.2 : 1;
   const effectiveAttack = attackerType.attack * (mountainShooter ? 1.2 : 1) * atkBileMult * attackMultiplier;
 
+  // ── Granular buff/debuff mods (for the combat log) ──
+  const attackMods: CombatMod[] = [];
+  if (mountainShooter) attackMods.push({ label: 'Mountain Shooter', mult: 1.2 });
+  if (atkBileMult !== 1) attackMods.push({ label: 'Spray Bile', mult: atkBileMult });
+  if (attackMultiplier !== 1) attackMods.push({ label: 'Combined Arms', mult: attackMultiplier });
+
+  const defenceMods: CombatMod[] = [];
+  if (defenderDefenseMultiplier !== 1) defenceMods.push({ label: getTerrainLabel(defenderTile, defenderTerrain), mult: defenderDefenseMultiplier });
+  if (corrosionMult !== 1) defenceMods.push({ label: statuses.includes('corrosive_2') ? 'Corrosive II' : 'Corrosive I', mult: corrosionMult });
+  if (defBileMult !== 1) defenceMods.push({ label: defBileMult > 1 ? 'Spray Bile (ally)' : 'Spray Bile (enemy)', mult: defBileMult });
+
+  // Effective defence INCLUDING the terrain/city/fortify force multiplier (display only —
+  // the force calc applies the terrain multiplier to defenseForce, same product).
+  const modInfo = {
+    baseAttack: attackerType.attack,
+    effectiveAttack,
+    attackMods,
+    baseDefence: defenderType.defence,
+    effectiveDefence: defenderType.defence * corrosionMult * defBileMult * defenderDefenseMultiplier,
+    defenceMods,
+  };
+
   // ONE force split yields both the attack damage and the retaliation, from the
   // sides' current (pre-damage) HP. Canonical Polytopia: retaliation = defenseResult
   // (driven by the DEFENDER'S DEFENSE stat), not a fresh counter-attack.
@@ -196,6 +236,7 @@ export function resolveCombat(
     terrainName: getTerrainLabel(defenderTile, defenderTerrain),
     rawDamage: (f.attackForce / (f.totalForce || 1)) * effectiveAttack * 4.5,
     finalDamage: damageToDefender,
+    ...modInfo,
   };
 
   const defenderHPAfter = defender.hp - damageToDefender;
@@ -227,6 +268,7 @@ export function resolveCombat(
       terrainName: getTerrainLabel(defenderTile, defenderTerrain),
       rawDamage: (f.defenseForce / (f.totalForce || 1)) * defenderType.defence * 4.5,
       finalDamage: damageToAttacker,
+      ...modInfo,
     };
   }
 

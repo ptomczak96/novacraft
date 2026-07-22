@@ -5,14 +5,20 @@
   "turnLimit": 50,
   "winConditions": {
     "captureAllCities": true,
+    "captureCapital": false,
     "eliminateAllUnits": false,
-    "highestScoreAtLimit": true
+    "highestScoreAtLimit": false
   },
   "combatConfig": {
     "hpScaling": true,
     "retaliationMultiplier": 0.5,
     "minimumDamage": 1,
     "damageVariance": 0
+  },
+  "heal": {
+    "friendlyTerritory": 4,
+    "neutralTerritory": 2,
+    "enemyTerritory": 0
   },
   "scoreWeights": {
     "cityValue": 10,

@@ -15,9 +15,21 @@ export interface TechNode {
   tier: Tier;
   desc: string;
   tentative?: boolean;
+  root?: boolean;        // always-available Lvl-0 base node (not a real engine tech)
   col?: number;          // horizontal slot within its tier row (for the DAG layout)
   prereqs?: string[];    // ALL required (draws a connector line from each)
   prereqsAny?: string[]; // at least ONE required (dashed connectors)
+  // Detail shown on the card: units this tech unlocks (their passives are looked up from
+  // the unit registry), faction-wide passive abilities it grants (by id), and freeform
+  // upgrade/active lines (for actives & TBD items that aren't unit passives).
+  unlockUnits?: string[];
+  unlockPassives?: string[];
+  unlockUpgrades?: string[];
+  // Mutually-exclusive picks (e.g. the Wyrm's two L3 upgrades): if any listed tech is
+  // researched, THIS node is crossed out. `excludeNote` is the hover text on the crossed
+  // node.
+  excludes?: string[];
+  excludeNote?: string;
 }
 
 export interface TechTreeDef {
@@ -28,23 +40,39 @@ export interface TechTreeDef {
   nodes: TechNode[];
 }
 
+// Refinement / Economy tree — shared by both factions (node ids match the ENGINE tech ids
+// in packages/data/json/tech-tree.json so research state lines up). `tier` = engine level;
+// `mine_1` is the always-available Lvl-0 root. Layout: economy branch (left), mine spine
+// (centre), plasma branch (right).
 const refinement: TechTreeDef = {
   id: 'refinement',
   name: 'Refinement',
   icon: 'Skillicon7_12.png',
   nodes: [
-    { id: 'ref_mine',       tier: 0, name: 'Mine',                icon: 'Skillicon7_12.png', desc: 'Builds a level 1 mine on top of ore. Available from the start.' },
-    { id: 'ref_drilling',   tier: 1, name: 'Drilling',           icon: 'Skillicon7_02.png', desc: 'Unlocks mine level 2.' },
-    { id: 'ref_prospect',   tier: 1, name: 'Prospecting',        icon: 'Skillicon7_01.png', desc: 'Shows all resource tiles within 4 squares of a city (not those already holding a REB).' },
-    { id: 'ref_slag',       tier: 2, name: 'Slag Wash',          icon: 'Skillicon7_04.png', desc: 'Increases output of all mines by 10%.' },
-    { id: 'ref_plasmatap',  tier: 2, name: 'Plasma Tap',         icon: 'Skillicon7_15.png', desc: 'Unlocks the plasma extractor.' },
-    { id: 'ref_refineries', tier: 2, name: 'Refineries',         icon: 'Skillicon7_06.png', desc: 'Allows the refinery REB2.' },
-    { id: 'ref_fracking',   tier: 3, name: 'Plasma Fracking',    icon: 'Skillicon7_03.png', desc: 'Unlocks the plasma purifier REB2.' },
-    { id: 'ref_shafts',     tier: 3, name: 'Subterranean Shafts', icon: 'Skillicon7_05.png', desc: 'Unlocks mine level 3.' },
-    { id: 'ref_crossborder', tier: 3, name: 'Cross-Border Economy', icon: 'Skillicon7_09.png', desc: "Lets REB2s extract from adjacent REB1s in other cities' territory." },
-    { id: 'ref_taxation',   tier: 4, name: 'Taxation',           icon: 'Skillicon7_07.png', desc: "Set a 'tax' on REB1s: reduces output by x% but increases supply.", tentative: true },
-    { id: 'ref_markets',    tier: 4, name: 'Markets',            icon: 'Skillicon7_08.png', desc: 'Increases the output of all mines by a further 10%.', tentative: true },
-    { id: 'ref_investment', tier: 4, name: 'Investment',         icon: 'Skillicon7_10.png', desc: 'Allows a term deposit for 5 or 10 turns.', tentative: true },
+    // ── Root (Lvl 0, always available) ──
+    { id: 'mine_1', tier: 0, col: 4, root: true, name: 'Mine Lvl 1', icon: 'Skillicon7_12.png', desc: 'Enables the Mine (Lvl 1). Available from the start.', unlockUpgrades: ['Build Mine (Lvl 1)'] },
+
+    // ── Mine spine (centre) ──
+    { id: 'mine_2',          tier: 1, col: 4, prereqs: ['mine_1'],         name: 'Mine Lvl 2',       icon: 'Skillicon7_02.png', desc: 'Unlocks Mine Level 2.', unlockUpgrades: ['Mine → Level 2'] },
+    { id: 'reinforced_rebs', tier: 2, col: 4, prereqs: ['mine_2'],         name: 'Reinforced REBs',  icon: 'Skillicon7_06.png', desc: 'REBs gain +1 HP. (Building-HP system pending.)', unlockUpgrades: ['REBs +1 HP — pending'] },
+    { id: 'mine_3',          tier: 3, col: 4, prereqs: ['reinforced_rebs'], name: 'Mine Lvl 3',      icon: 'Skillicon7_05.png', desc: 'Unlocks Mine Level 3.', unlockUpgrades: ['Mine → Level 3'] },
+
+    // ── Economy branch (left; main line one column left of the mine spine) ──
+    { id: 'prospecting',   tier: 1, col: 3, prereqs: ['mine_1'],      name: 'Prospecting',        icon: 'Skillicon7_01.png', desc: 'Reveals resource tiles within a 9×9 of any friendly city through the clouds (resource only — not any REB on it).', unlockUpgrades: ['Reveal resources within 9×9 of your cities'] },
+    { id: 'slag_wash',     tier: 1, col: 2, prereqs: ['prospecting'], name: 'Slag Wash',          icon: 'Skillicon7_04.png', desc: 'Increases all mine output by 10%.', unlockUpgrades: ['Mine output +10%'] },
+    { id: 'cross_border',  tier: 2, col: 3, prereqs: ['prospecting'], name: 'Cross Border Economy', icon: 'Skillicon7_09.png', desc: 'REB2s benefit from adjacent REB1s (within their 3×3) in the territory of OTHER friendly cities.', unlockUpgrades: ['REB2s use adjacent REB1s across your cities'] },
+    { id: 'rnd',           tier: 2, col: 2, prereqs: ['cross_border'], name: 'R&D',               icon: 'Skillicon7_07.png', desc: 'All future tech research costs 10% less ore.', unlockUpgrades: ['Research cost −10%'] },
+    { id: 'borderless',    tier: 3, col: 3, prereqs: ['cross_border'], name: 'Borderless Economy', icon: 'Skillicon7_15.png', desc: 'Buy unclaimed resource tiles adjacent (3×3) to a REB2 and outside any city territory: 100◈ (ore) / 200✦ (plasma). Tick tiles, then confirm. (Purchase UI pending.)', unlockUpgrades: ['Buy adjacent unclaimed resource tiles — pending'] },
+    { id: 'roads',         tier: 3, col: 2, prereqs: ['cross_border'], name: 'Roads',             icon: 'Skillicon7_08.png', desc: 'Roads. (Effect pending — coming soon.)', unlockUpgrades: ['(coming soon)'] },
+    { id: 'habitation_domes', tier: 3, col: 1, prereqs: ['cross_border'], name: 'Habitation Domes', icon: 'Skillicon7_10.png', desc: 'All cities gain +1 population capacity.', unlockUpgrades: ['All cities +1 population'] },
+
+    // ── Plasma branch (right) ──
+    { id: 'plasma_1',      tier: 1, col: 5, prereqs: ['mine_1'],   name: 'Plasma Lvl 1',       icon: 'Skillicon7_15.png', desc: 'Unlocks the Plasma Extractor (Lvl 1).', unlockUpgrades: ['Build Plasma Extractor (Lvl 1)'] },
+    { id: 'plasma_2',      tier: 2, col: 5, prereqs: ['plasma_1'], name: 'Plasma Lvl 2',       icon: 'Skillicon7_15.png', desc: 'Unlocks Plasma Extractor Level 2.', unlockUpgrades: ['Plasma Extractor → Level 2'] },
+    { id: 'plasma_3',      tier: 3, col: 5, prereqs: ['plasma_2'], name: 'Plasma Lvl 3',       icon: 'Skillicon7_15.png', desc: 'Unlocks Plasma Extractor Level 3.', unlockUpgrades: ['Plasma Extractor → Level 3'] },
+    { id: 'automated_extraction', tier: 1, col: 6, prereqs: ['plasma_1'], name: 'Automated Extraction', icon: 'Skillicon7_18.png', desc: 'Enemies standing on your REBs no longer block their output.', unlockUpgrades: ['REBs ignore enemy output-blocking'] },
+    { id: 'colonial_charter',     tier: 2, col: 6, prereqs: ['plasma_2'], name: 'Colonial Charter',     icon: 'Skillicon7_16.png', desc: 'Newly founded cities start at Level 2.', unlockUpgrades: ['Founded cities start at Level 2'] },
+    { id: 'transmutation',        tier: 3, col: 6, prereqs: ['plasma_2'], name: 'Transmutation',        icon: 'Skillicon7_03.png', desc: 'Convert 5 ore → 1 plasma. (Conversion UI pending.)', unlockUpgrades: ['5 ore → 1 plasma — pending'] },
   ],
 };
 
@@ -58,21 +86,75 @@ const armory: TechTreeDef = {
   // the prereq links here).
   nodes: [
     // ── Level 1 (roots) ──
-    { id: 'combined_arms',       tier: 1, col: 0,   prereqs: ['small_arms'], name: 'Combined Arms',       icon: 'Skillicon7_07.png', desc: 'Requires Small Arms. Repeat shots on the SAME target by your LIGHT units gain ×1.2 attack (2nd, 3rd, 4th… — does not stack); resets each turn and on switching target. (Combat logic TBD.)' },
-    { id: 'small_arms',          tier: 1, col: 1,   name: 'Small Arms',          icon: 'Skillicon7_10.png', desc: 'Enables the Bulwark and Lancer units.' },
-    { id: 'forge',               tier: 1, col: 5.5, name: 'Forge',               icon: 'Skillicon7_16.png', desc: 'Prerequisite tech — enables Mech Bay and Crucible.' },
+    { id: 'small_arms', tier: 1, col: 1, name: 'Small Arms', icon: 'Skillicon7_10.png', desc: 'Unlocks the Lancer. Branches into Triage, Advanced Weaponry and Engineering.', unlockUnits: ['lancer'] },
+    { id: 'forge',      tier: 1, col: 6, name: 'Forge',      icon: 'Skillicon7_16.png', desc: 'Prerequisite tech — enables Mech Bay and Crucible.' },
+
+    // ── Level 2: Small Arms branch (three siblings, gated only by Small Arms) ──
+    { id: 'triage',            tier: 2, col: 0, prereqs: ['small_arms'], name: 'Triage',            icon: 'Skillicon7_01.png', desc: 'Unlocks the Medic. (Medic behaviour TBD.)', unlockUnits: ['medic'] },
+    { id: 'advanced_weaponry', tier: 2, col: 1, prereqs: ['small_arms'], name: 'Advanced Weaponry', icon: 'Skillicon7_07.png', desc: 'Unlocks the Bulwark and grants the Combined Arms passive.', unlockUnits: ['defender'], unlockPassives: ['combined_arms'] },
+    { id: 'engineering',       tier: 2, col: 2, prereqs: ['small_arms'], name: 'Engineering',       icon: 'Skillicon7_18.png', desc: 'Unlocks the Engineer. (Engineer behaviour TBD.)', unlockUnits: ['engineer'] },
+    // ── Level 2: Forge branch ──
+    { id: 'mech_bay', tier: 2, col: 5, prereqs: ['forge'], name: 'Mech Bay', icon: 'Skillicon7_17.png', desc: 'Requires Forge. Unlocks the Stalker unit.', unlockUnits: ['stalker'] },
+    { id: 'crucible', tier: 2, col: 7, prereqs: ['forge'], name: 'Crucible', icon: 'Skillicon7_13.png', desc: 'Requires Forge. Unlocks the Tank unit.', unlockUnits: ['tank'] },
+
+    // ── Level 3: Small Arms branch (each gated by its L2 parent only) ──
+    { id: 'advanced_biomed',      tier: 3, col: 0, prereqs: ['triage'],            name: 'Advanced Biomed',      icon: 'Skillicon7_15.png', desc: 'Gives the Medic the Cure active (remove conditions) + 1–2 more actives (TBD).', unlockUpgrades: ['Medic — Cure (active): remove conditions', 'Medic — +1–2 more actives (TBD)'] },
+    { id: 'infiltration',         tier: 3, col: 1, prereqs: ['advanced_weaponry'], name: 'Infiltration',         icon: 'Skillicon7_11.png', desc: 'Unlocks the Wraith (comes with Raid + Plant Explosives).', unlockUnits: ['wraith'], unlockUpgrades: ['Wraith — Raid (active, TBD)', 'Wraith — Plant Explosives (active, TBD)'] },
+    { id: 'tactical_engineering', tier: 3, col: 2, prereqs: ['engineering'],       name: 'Tactical Engineering', icon: 'Skillicon7_08.png', desc: 'Unlocks building Nodes — 3×3 buff/debuff structures. (Specifics TBD.)', unlockUpgrades: ['Build Nodes — 3×3 buff/debuff structures (TBD)'] },
+    // ── Level 3: Forge branch ──
+    { id: 'sentinel',             tier: 3, col: 4,   prereqs: ['mech_bay'], name: 'Sentinel',             icon: 'Skillicon7_09.png', desc: 'Requires Mech Bay. Unlocks the Sentinel — an air sensory unit.', unlockUnits: ['sentinel'] },
+    { id: 'precision_targeting',  tier: 3, col: 5,   prereqs: ['mech_bay'], name: 'Precision Targeting',  icon: 'Skillicon7_04.png', desc: 'Requires Mech Bay. Grants the Stalker its Mountain Shooter II ability.', unlockUpgrades: ['Stalker — Mountain Shooter II'] },
+    { id: 'composite_plating',    tier: 3, col: 6,   prereqsAny: ['crucible', 'mech_bay'], name: 'Composite Plating', icon: 'Skillicon7_03.png', desc: 'Requires Crucible OR Mech Bay. Stalker and Tank gain a permanent ×1.2 defence.', unlockUpgrades: ['Stalker & Tank — Composite Plating (+20% DEF)'] },
+    { id: 'titan',                tier: 3, col: 7,   prereqs: ['crucible'], name: 'Titan',                icon: 'Skillicon7_12.png', desc: 'Requires Crucible. Unlocks the Titan unit.', unlockUnits: ['titan'] },
+    { id: 'advanced_projectiles', tier: 3, col: 8,   prereqs: ['crucible'], name: 'Advanced Projectiles', icon: 'Skillicon7_02.png', desc: 'Requires Crucible. Upgrades the Tank’s assault-mode range to 2–4.', unlockUpgrades: ['Tank — Assault range 2–4'] },
+    { id: 'tracer_rounds',        tier: 2, col: 4,   prereqs: ['mech_bay'], name: 'Tracer Rounds',        icon: 'Skillicon7_18.png', desc: 'Requires Mech Bay. Lets you mark an enemy unit. (Details TBD.)', unlockUpgrades: ['Mark an enemy unit (TBD)'] },
+  ],
+};
+
+// Hive's Armory (node ids match the ENGINE hive_armory tech ids). Two roots — Reaper and
+// Scab — that converge on the Wyrm at L3; the Wyrm then offers a one-of-two upgrade pick.
+const armoryHive: TechTreeDef = {
+  id: 'armory',
+  name: 'Armory',
+  icon: 'Skillicon7_13.png',
+  nodes: [
+    // ── Level 1 ──
+    { id: 'adrenal_glands', tier: 1, col: 0, prereqs: ['reaper_tech'], name: 'Adrenal Glands', icon: 'Skillicon7_07.png', desc: 'Gives the Reaper Dash II and Creep (ignores enemy AOI).', unlockUpgrades: ['Reaper — Dash II (2 move after attacking)', 'Reaper — Creep: ignores enemy AOI'] },
+    { id: 'reaper_tech',    tier: 1, col: 1, name: 'Reaper', icon: 'Skillicon7_10.png', desc: 'Unlocks the Reaper.', unlockUnits: ['reaper'] },
+    { id: 'scab_tech',      tier: 1, col: 3.5, name: 'Scab',   icon: 'Skillicon7_16.png', desc: 'Unlocks the Scab.', unlockUnits: ['scab'] },
     // ── Level 2 ──
-    { id: 'raiding',             tier: 2, col: 0,   prereqs: ['infiltration'], name: 'Raiding',             icon: 'Skillicon7_01.png', desc: 'Requires Infiltration. Wraiths steal resources from an enemy REB and damage/destroy it. (Details TBD.)' },
-    { id: 'infiltration',        tier: 2, col: 1,   prereqs: ['small_arms'], name: 'Infiltration',        icon: 'Skillicon7_11.png', desc: 'Requires Small Arms. Unlocks the Wraith unit.' },
-    { id: 'tracer_rounds',       tier: 2, col: 3,   prereqs: ['mech_bay'], name: 'Tracer Rounds',       icon: 'Skillicon7_18.png', desc: 'Requires Mech Bay. Lets you mark an enemy unit. (Details TBD.)' },
-    { id: 'mech_bay',            tier: 2, col: 4,   prereqs: ['forge'], name: 'Mech Bay',            icon: 'Skillicon7_17.png', desc: 'Requires Forge. Unlocks the Stalker unit.' },
-    { id: 'precision_targeting', tier: 2, col: 5,   prereqs: ['mech_bay'], name: 'Precision Targeting', icon: 'Skillicon7_04.png', desc: 'Requires Mech Bay. Grants the Stalker its Mountain Shooter II ability.' },
-    { id: 'crucible',            tier: 2, col: 7,   prereqs: ['forge'], name: 'Crucible',            icon: 'Skillicon7_13.png', desc: 'Requires Forge. Unlocks the Tank unit.' },
+    { id: 'burstling_tech', tier: 2, col: 0, prereqs: ['vindrace_tech'], name: 'Burstling', icon: 'Skillicon7_05.png', desc: 'Unlocks the Burstling. (Stats TBD.)', unlockUnits: ['burstling'] },
+    { id: 'vindrace_tech',  tier: 2, col: 1, prereqs: ['reaper_tech'],   name: 'Vindrace',  icon: 'Skillicon7_17.png', desc: 'Unlocks the Vindrace.', unlockUnits: ['vindrace'] },
+    { id: 'seercaust_tech', tier: 2, col: 3.5, prereqs: ['scab_tech'],     name: 'Seercaust', icon: 'Skillicon7_11.png', desc: 'Unlocks the Seercaust.', unlockUnits: ['seercaust'] },
+    { id: 'ravener_tech',   tier: 2, col: 4.5, prereqs: ['seercaust_tech'], name: 'Ravener',  icon: 'Skillicon7_01.png', desc: 'Unlocks the Ravener. (Stats TBD.)', unlockUnits: ['ravener'] },
     // ── Level 3 ──
-    { id: 'sentinel',            tier: 3, col: 4,   prereqs: ['mech_bay'], name: 'Sentinel',            icon: 'Skillicon7_09.png', desc: 'Requires Mech Bay. Unlocks the Sentinel — an air sensory unit with Detect II. (Stats TBD.)' },
-    { id: 'composite_plating',   tier: 3, col: 5.5, prereqsAny: ['crucible', 'mech_bay'], name: 'Composite Plating',   icon: 'Skillicon7_03.png', desc: 'Requires Crucible OR Mech Bay. Stalker and Tank gain a permanent ×1.2 defence. (Upgrade wiring TBD.)' },
-    { id: 'titan',               tier: 3, col: 6.5, prereqs: ['crucible'], name: 'Titan',              icon: 'Skillicon7_12.png', desc: 'Requires Crucible. Unlocks the Titan unit. (Stats TBD.)' },
-    { id: 'advanced_projectiles', tier: 3, col: 7.5, prereqs: ['crucible'], name: 'Advanced Projectiles', icon: 'Skillicon7_02.png', desc: 'Requires Crucible. Upgrades the Tank’s assault-mode range to 2–4 (default 2–3). (Upgrade wiring TBD.)' },
+    { id: 'hardened_carapace', tier: 3, col: 0,   prereqs: ['vindrace_tech'], name: 'Hardened Carapace', icon: 'Skillicon7_03.png', desc: 'The Reaper survives any hit at 1 HP (a blow that would kill it leaves it on 1).', unlockUpgrades: ['Reaper — survives any single hit at 1 HP'] },
+    { id: 'berserker_glands',  tier: 3, col: 1,   prereqs: ['behemoth_tech'], name: 'Berserker Glands',  icon: 'Skillicon7_04.png', desc: 'Below 50% HP the Behemoth gains +1 movement and +20% attack.', unlockUpgrades: ['Behemoth — below 50% HP: +1 move & +20% attack'] },
+    { id: 'behemoth_tech',     tier: 3, col: 2,   prereqs: ['vindrace_tech'], name: 'Behemoth',          icon: 'Skillicon7_12.png', desc: 'Unlocks the Behemoth. (Stats TBD.)', unlockUnits: ['behemoth'] },
+    { id: 'wyrm_tech',         tier: 3, col: 3.5, prereqsAny: ['vindrace_tech', 'seercaust_tech'], name: 'Wyrm', icon: 'Skillicon7_09.png', desc: 'Unlocks the Wyrm. Reachable from Vindrace OR Seercaust.', unlockUnits: ['wyrm'] },
+    { id: 'tunneling_network', tier: 3, col: 4.5, prereqs: ['wyrm_tech'], excludes: ['aftershock'],       excludeNote: 'Can only select 1 upgrade for Wyrm', name: 'Tunneling Network', icon: 'Skillicon7_05.png', desc: 'Wyrm burrows without spending a movement point (so it can burrow then move).', unlockUpgrades: ['Wyrm — burrow costs no movement'] },
+    { id: 'aftershock',        tier: 3, col: 5.5, prereqs: ['wyrm_tech'], excludes: ['tunneling_network'], excludeNote: 'Can only select 1 upgrade for Wyrm', name: 'Aftershock',        icon: 'Skillicon7_18.png', desc: 'After the Wyrm erupts, every unit (friend or foe) in its 3×3 takes a 3-attack hit.', unlockUpgrades: ['Wyrm — on erupt, all units in its 3×3 take a 3-attack hit'] },
+  ],
+};
+
+// ── Nodes tree (PURELY VISUAL / decorative) ──────────────────────────────────
+// A central "Nodes" tile with four branches radiating diagonally (NE/SE/SW/NW).
+// These ids are NOT engine techs — they carry no cost and no research/unlock logic.
+// Every node is flagged `root: true` so nodeState() always returns 'root' (a plain
+// decorative "BASE" card) and never tries to look up prereqs/research state, and
+// costOf() returns null (registry.techs has no entry for these ids). Layout uses a
+// 3-column / 3-row diamond: centre at (col 1, tier 1); branches on the diagonals.
+const nodes: TechTreeDef = {
+  id: 'nodes',
+  name: 'Nodes',
+  icon: 'Skillicon7_17.png',
+  nodes: [
+    { id: 'node_root',        tier: 1, col: 1, root: true, name: 'Nodes',       icon: 'Skillicon7_17.png', desc: 'Node network hub. (Visual only.)' },
+    // NW / NE on the upper row (tier 0), SW / SE on the lower row (tier 2).
+    { id: 'node_sensors',     tier: 0, col: 0, root: true, prereqs: ['node_root'], name: 'Sensors',     icon: 'Skillicon7_11.png', desc: 'Sensors branch. (Visual only.)' },
+    { id: 'node_mobility',    tier: 0, col: 2, root: true, prereqs: ['node_root'], name: 'Mobility',    icon: 'Skillicon7_07.png', desc: 'Mobility branch. (Visual only.)' },
+    { id: 'node_recruitment', tier: 2, col: 0, root: true, prereqs: ['node_root'], name: 'Recruitment', icon: 'Skillicon7_10.png', desc: 'Recruitment branch. (Visual only.)' },
+    { id: 'node_resources',   tier: 2, col: 2, root: true, prereqs: ['node_root'], name: 'Resources',   icon: 'Skillicon7_16.png', desc: 'Resources branch. (Visual only.)' },
   ],
 };
 
@@ -92,6 +174,17 @@ export const TECH_TREES: TechTreeDef[] = [
   blank(3),
 ];
 
+/** The research trees for a given faction — the Armory tab is faction-specific. */
+export function getTechTrees(factionId: string): TechTreeDef[] {
+  return [
+    refinement,
+    factionId === 'hive' ? armoryHive : armory,
+    nodes,
+    blank(1),
+    blank(2),
+  ];
+}
+
 /** Distinct tiers present in a tree, ascending. */
 export function treeTiers(tree: TechTreeDef): Tier[] {
   return [...new Set(tree.nodes.map(n => n.tier))].sort((a, b) => a - b);
@@ -107,10 +200,10 @@ export function isTierUnlocked(tree: TechTreeDef, tier: Tier, researched: Set<st
 }
 
 // ── DAG layout (Polytopia-style: levels on rows, connector lines between prereqs) ──
-export const NODE_W = 132;
-export const NODE_H = 96;
-const COL_W = 152;
-const ROW_H = 152;
+export const NODE_W = 188;
+export const NODE_H = 120; // minimum; cards grow with their unlock detail
+const COL_W = 210;
+const ROW_H = 300;
 
 export interface PositionedNode { node: TechNode; col: number; x: number; y: number; cx: number; cy: number; }
 export interface Edge { x1: number; y1: number; x2: number; y2: number; dashed: boolean }
@@ -142,12 +235,18 @@ export function layoutTree(tree: TechTreeDef): TreeLayout {
 }
 
 /** Card state from per-node prereqs (falls back to tier-gating when a node has no prereq data). */
-export function nodeState(node: TechNode, tree: TechTreeDef, researched: Set<string>): 'researched' | 'available' | 'locked' {
+export function nodeState(node: TechNode, tree: TechTreeDef, researched: Set<string>): 'researched' | 'available' | 'locked' | 'excluded' | 'root' {
+  if (node.root) return 'root'; // always-available Lvl-0 base (not researchable)
   if (researched.has(node.id)) return 'researched';
+  // Mutually-exclusive: a researched sibling crosses this one out.
+  if (node.excludes && node.excludes.some(e => researched.has(e))) return 'excluded';
   const hasPrereqData = (node.prereqs?.length ?? 0) > 0 || (node.prereqsAny?.length ?? 0) > 0;
   if (hasPrereqData) {
-    const allReq = (node.prereqs ?? []).every(p => researched.has(p));
-    const anyReq = !node.prereqsAny?.length || node.prereqsAny.some(p => researched.has(p));
+    // A prereq that points at a `root` base node counts as satisfied.
+    const rootIds = new Set(tree.nodes.filter(n => n.root).map(n => n.id));
+    const met = (id: string) => researched.has(id) || rootIds.has(id);
+    const allReq = (node.prereqs ?? []).every(met);
+    const anyReq = !node.prereqsAny?.length || node.prereqsAny.some(met);
     return allReq && anyReq ? 'available' : 'locked';
   }
   return isTierUnlocked(tree, node.tier, researched) ? 'available' : 'locked';

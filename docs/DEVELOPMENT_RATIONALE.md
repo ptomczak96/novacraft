@@ -1,4 +1,4 @@
-# Tactica — Development Rationale
+# Rigbound — Development Rationale
 
 A running log of **why** decisions were made — not just *what* changed, but the
 reasoning/discussion behind it. Companion to `ECONOMY.md` / `MODULES.md` (which
@@ -2718,3 +2718,886 @@ the warrior art was made for — the 2026-07-08 placeholder mapping to
 red-tint recruit roster over the old filtered list, and both rationale-log
 tails were preserved per the append-only rule. All 93 tests pass post-rebase;
 live smoke test shows the Vanguard warrior sprite on GEN 5 under the new fog.
+
+---
+
+## 2026-07-15 — David — Attack UI: range footprint, crossed-swords marker, lethal-damage skulls
+
+Enhanced the attack/target UI in `IsoCanvas`:
+- **Range footprint (red):** selecting a unit that can still act now paints a faint-red overlay
+  on every tile in its hypothetical attack/influence range — not just tiles with enemies.
+  Computed geometrically per unit: the attack band `[minAttackRange, effective max]` (with the
+  Mountain Shooter II +1 on a peak), the full Slash arc reach, and each active ability's range.
+  Hidden once the unit has attacked.
+- **Crossed-swords marker:** a small crossed-blades icon floats above any enemy the selected
+  unit can actually attack (direct attack targets + enemies inside a Slash's reach).
+- **Lethal skulls:** the hover damage preview now appends 💀 when the hit would kill. Hovering
+  an attackable enemy shows the defender's damage (+💀 if it dies) AND — on the attacker's own
+  tile — the retaliation it would take (+💀 if the retaliation kills it). Slash previews get the
+  skull too (Slash provokes no retaliation, so no attacker-side number).
+
+New draw helpers `drawAttackRangeHighlight` / `drawCrossedSwords`; `drawDamagePreview` gained a
+`lethal` flag. UI-only; 159 tests unaffected.
+
+TTR: none.
+
+---
+
+## 2026-07-15 — David — Rename "Frazzled" → "Stumble"; Slash now hits friendly units
+
+- **Rename:** the `frazzled` condition (movement capped at 1 inside an enemy AOI — Hive Scout)
+  renamed to **`stumble`** / "Stumble" across units.json, `pathfinding.ts`, `UnitSheet`,
+  `conditions.md`, and the condition test.
+- **Slash friendly fire:** `applySlash` no longer filters to enemies — it now damages **all**
+  units in the 3-tile arc except the Vindrace itself (friendly units caught in the swing take
+  the 100%/50% hit too). Still no retaliation. Slash is still only *offered* when the arc
+  contains ≥1 enemy (so friendlies are collateral, not a wasted swing). Damage preview + docs
+  updated; the old "friendly untouched" test flipped to assert friendly fire.
+
+TTR: none.
+
+---
+
+## 2026-07-15 — David — Setup: map-size preset dropdown
+
+Added a **Map Size** dropdown to the setup screen with presets — Tiny (11×11, default),
+Small (14×14), Medium (16×16), Large (18×18), Huge (20×20), Massive (30×30), and **Custom**.
+Selecting a preset sets `config.mapWidth`/`mapHeight` (via a `useEffect` reading fresh store
+config); the Width/Height number fields are disabled/greyed unless **Custom** is chosen, and
+their max was raised 24 → 40 to allow the larger presets/custom sizes. Default map is now Tiny.
+UI-only.
+
+TTR: none.
+
+---
+
+## 2026-07-15 — David — Unit Info panel: close arrow
+
+Added a small white **▶** close button to the Unit Info panel header (mirrors the Combat
+Log's ◀ collapse arrow — transparent button, inherited colour, 16px). Clicking it calls
+`selectUnit(null)`, deselecting the unit so the panel hides. UI-only.
+
+TTR: none.
+
+---
+
+## 2026-07-15 — David — Tank "Reconditioning" passive (can't attack after moving)
+
+Added a **`reconditioning`** passive to both Tank forms: a tank that has moved this turn
+cannot attack (and can't move once it has attacked) — it must stay put to fire. Same effect
+as the existing `noMoveAndAttack` trait (Catapult/Siege Tower); factored a shared
+`mustStayToAttack(unitType)` helper in `game.ts` that honours the trait OR the passive, used
+in both `getLegalActions` (skip attack after moving) and `applyAttack` (lock movement after
+firing). Registered in `UnitSheet` + `conditions.md`. 2 tests added.
+
+TTR: none.
+
+---
+
+## 2026-07-15 — David — Rename "reconditioning" passive → "repositioning"
+
+Corrected the passive id/name `reconditioning` → **`repositioning`** (Tank) across units.json,
+game.ts, UnitSheet, conditions.md, and the tank test. Effect unchanged (can't attack after
+moving; can't move after attacking).
+
+TTR: none.
+
+## 2026-07-01 — David
+
+**Investigated "melee attack appears to push/damage a unit behind the target."**
+Traced the whole combat path. Confirmed the engine is correct: `resolvePush`/`pushDir`
+are called ONLY from `applyPercussiveShells` (Titan) and the `ram` handler (Vindrace);
+normal `applyAttack` only mutates attacker + defender HP. A regression test (attacker →
+defender → third unit in a line) confirms the third unit's HP is unchanged after a
+normal melee attack. So there is NO real push/AoE leak into melee — push damage remains
+exclusive to Percussive Shells and Ram, as intended.
+
+The report was a **visual** artifact of Patrick's floating damage-number FX in
+`IsoCanvas.tsx`: the "-N" popup rose ~40–64px above the struck tile, which in the iso
+projection lands over whatever unit stands on the tile *behind* the target — so that
+rear unit looked like it took the hit. Fix: anchored the popup lower and reduced its
+rise (`sy - 20 - 14*pt`, was `sy - 40 - 24*pt`) so it stays over the actual struck unit.
+No engine/data change. (Note: the Vindrace **Slash** arc genuinely hits side tiles for
+50% — that is intended AoE, not a push, and is unaffected.)
+
+## 2026-07-15 — David
+
+**Added Titan active ability "Ballistic Volley."** A 2×2 area bombardment: the player
+arms it, ticks a 4-tile square, and confirms (same select-then-confirm flow as a city's
+territory expansion). Every unit standing in the square — friendly AND enemy — takes a
+flat 2 damage, with no retaliation. A Kinetic-Shielded unit spends its shield to negate
+the hit (consistent with Percussive Shells).
+
+Design decisions:
+- **Shape is a strict 2×2 square only** — no snakes/lines/other shapes. Enforced by
+  `enumerateVolleyGrids` (engine): it enumerates every in-bounds 2×2 whose four tiles all
+  fall in the range band, and the picker only offers tiles that keep the current picks a
+  subset of one legal grid. The engine re-validates on apply (`volleyGridLegal`), so a
+  hand-built illegal action is a no-op.
+- **Range band is 2–3 (Chebyshev), inclusive of every tile in the square.** The Titan
+  can't hit its own immediate ring (range ≤1) and can't reach range 4 — even if the first
+  ticked tile is at range 3, only range-2/3 tiles are ever selectable.
+- **Flat 2 damage, not force-ratio.** The user specified "2 attack damage to every unit,"
+  i.e. a fixed 2 (the Titan's attack stat is 4), so it bypasses the combat formula. The
+  amount is data-driven via the ability's `damage` effect (`params.amount`).
+- New ability plumbing: `AbilityDef.targetKind` gains `'grid2x2'` and an optional
+  `minRange`; `UseAbilityAction` gains optional `tiles: Coord[]`. UI adds a `volleySelect`
+  store slice + `VolleySelectBar`, reusing `drawTerritoryPicker` with a red "attack"
+  palette to distinguish a bombardment from territory growth.
+- Percussive Shells is unchanged; the Titan now has both actives.
+
+## 2026-07-15 — David
+
+**Fixed the recruit button drifting to weird positions, and made the recruit roster
+always complete.** Three related changes:
+
+1. **Recruit button drift (positioning bug).** The overlays (recruit button/panel,
+   territory bar, city-info card) were absolutely positioned inside `.map-container`,
+   which was itself the scroll container (`overflow:auto`). Panning/zooming makes the
+   board canvas overflow, so `.map-container` gained scroll height and every absolute
+   child anchored to the *scrolled content* rather than the visible box — the
+   `bottom:16px` recruit button ended up far down / near the top depending on scroll.
+   Fix: `.map-container` is now a non-scrolling positioning context (`overflow:hidden`);
+   the board canvas lives in a new inner `.map-scroll` layer that owns the pan/zoom
+   overflow. Overlays stay pinned to the visible box. (Starfield stays a direct,
+   non-scrolling background child.)
+
+2. **Roster no longer collapses on a full city.** `getRecruitOptions` used to `continue`
+   past any unlocked unit that didn't fit the city's population — so a pop-full city
+   showed only the tech-locked units (~3 greyed tiles). It now returns the ENTIRE faction
+   roster for an owned city always, adding a per-unit `fitsPop` flag (and keeping the
+   `locked` flag). Recruitability is decided by flags, not by hiding.
+
+3. **"Population Full" note.** When no unit fits (`opts.every(!fitsPop)`), the recruit
+   panel shows a ⚠️ "Population Full" banner across the top; pop-blocked cards render
+   dimmed/greyed (`.recruit-card--nopop`) and aren't clickable.
+
+Because the roster no longer early-returns `[]` when the city centre is occupied,
+`applyRecruit` now guards the single-spawn case itself (rejects if a unit stands on the
+city tile) — previously that guard was implicit in the roster being empty.
+
+## 2026-07-15 — David
+
+**Recruit menu reworked from unit tiles into a table.** Columns: **Unit** (icon + name,
+with the ore/plasma cost — or the lock/tech requirement — as a subtext line), **HP, ATT,
+DEF, MOV, RNG, VIS**, and **Abilities**. The Abilities cell shows **"None"** when the unit
+has no inherent active or passive, otherwise a **❓** that reveals a popup table on hover
+*or* click (the trigger is `tabindex`-focusable, and the popup shows on `:hover`/`:focus`/
+`:focus-within`, so both interactions work with no JS state). The popup lists each ability
+as **Type (Active/Passive) · Name · Effect**, reusing the descriptions already in
+`UnitSheet`'s `abilityDef` registry (now exported).
+
+Scope decision: the Abilities column covers **inherent** rules only — a unit's active
+casts (`unitType.abilities`) and its **passive**-category conditions. Pure *conditions*
+(limits/debuffs like Blind, or run-time debuffs like Corrosive/Stunned) are intentionally
+excluded, because the recruit menu describes a freshly-built unit and the user asked
+specifically for "actives and passives." Row greying (locked / unaffordable / pop-full)
+and the "Population Full" banner carry over from the previous card layout.
+
+## 2026-07-15 — David
+
+**Reworked the Wyrm mechanic (movement, co-tile visibility, and a new 2-cell attack).**
+
+*Burrowed movement / visibility fixes:*
+- A burrowed Wyrm now also **cannot stop on a ruin** (added `tile.isRuin` alongside
+  city/resource/building in `pathfinding.ts`), and **cannot found or capture cities**
+  (`canFoundCity` + the capture branch in `getLegalActions` now exclude `burrowed`). It
+  already couldn't move onto friendly tiles; that's unchanged.
+- The "enemy disappears when the Wyrm burrows under it" bug was a **render collision**:
+  `unitByPos` kept only one unit per tile, so on the Wyrm-owner's turn the surface enemy
+  and the burrowed Wyrm stacked and one hid the other (on the enemy's turn they never see
+  the Wyrm, so only the enemy drew — hence "reappears on their turn"). Fixed by tracking
+  ALL units per tile (`unitsByPos`, ordered [burrowed, surface]); the renderer draws both
+  (surface centred, burrowed peeking up-left). Engine visibility was already correct.
+- Clicking a shared tile now **cycles**: Wyrm first, enemy next, then inspect the tile.
+
+*New attack — Twin Strike (`twin_strike` condition, replaces the Wyrm's normal attack):*
+- Hits two touching cells — primary (100%) within the Wyrm's 3×3, secondary (50%) adjacent
+  to the primary; neither the Wyrm's own tile. New `WyrmStrikeAction { tiles: [Coord,Coord] }`,
+  `wyrmStrikePairs` (shared geometry, exported for the UI), `applyWyrmStrike`.
+- Decisions (asked): **no retaliation** (an overhead sweep, like Slash); **move OR strike,
+  not both** (added `twin_strike` to `mustStayToAttack`); co-tile display = **enemy on top,
+  Wyrm peeking**.
+- **Strikes into fog/cloud**: each struck tile is revealed for the turn (`revealedTiles`) and
+  written to fog memory (cloud → fog permanently); surviving hidden units revert to hidden at
+  end of turn when `revealedTiles` clears. Terrain stays fog.
+- UI: `strikeSelect` store slice + `StrikeSelectBar` + a 2-cell picker (same flow as Ballistic
+  Volley), armed from a "Twin Strike" button in the Unit Info panel; floating damage numbers on
+  both cells via a new `lastAoeDamage` FX event.
+
+## 2026-07-15 — David
+
+**Renamed the game "Tactica" → "Rigbound".** All user-facing branding and documentation now
+say Rigbound: the menu title (`SetupScreen` `RIGBOUND`), the browser tab (`index.html`),
+download filenames (`rigbound-save-*`, `rigbound-map.json`, `rigbound-balance.json`), the root
+package name, and every doc's H1 title. Per the user, the **repo folder stays `novacraft`**
+(to avoid breaking path files) and — per a follow-up decision — the internal **`@tactica/*`
+npm scope is left unchanged** (it's import wiring across 46 files; renaming it is high-risk for
+no player-visible benefit, and behaves like the "pathfiles" the user asked to leave alone).
+Historical dated entries in this log and `overlap.md` were left intact (append-only); only the
+document titles were rebranded.
+
+## 2026-07-15 — David
+
+**Implemented pathing: Area of Influence (AOI) / Zone of Control.** Every unit projects a
+3×3 AOI; by default every unit's movement is stopped on ENTERING an enemy AOI tile — the
+tile is a legal final stop but the search never expands from it, so you can cross at most
+one AOI tile per move and can't chain through two. The unit's own starting tile is exempt
+(it can move out of an AOI freely). Implemented as a `getReachableTiles` terminal-node rule
+(new `aoiTiles` param) fed by a new `enemyAOITiles` helper in `getLegalActions`.
+
+Decisions (asked):
+- **Hidden enemies project no AOI** — `enemyAOITiles` skips units hidden from the mover via
+  `unitHiddenByCloak` (burrowed/cloaked-undetected), so an unseen unit can't halt you or leak
+  its position. The UI mirrors this by building its tint from VISIBLE units only.
+- **AOI is visualised** — selected-unit's enemy-AOI tiles get an amber dashed tint
+  (`drawAOIHighlight`), distinct from move (green) and attack-range (red).
+- **Stumble unchanged** — universal AOI is stop-on-entry for everyone; Stumble additionally
+  caps that specific unit to 1 movement. Both apply; nothing about Stumble changed.
+
+Scaffolded for later (no unit opts in, documented in conditions.md): **`aoi_large`** (5×5
+projection) and **`aoi_immune`** (mover ignores enemy AOI). Verified against the user's exact
+examples (B2 enemy / B4 mover reaching D2 only at 3 MP via C4→D3→D2, start-exempt C3 cases,
+etc.) in `aoi.test.ts` (6 tests). Full suite 174 → 180 pass, no regressions incl. bot sims.
+
+## 2026-07-15 — David
+
+**Clarified & fixed bump / push / collide semantics.** The three mechanics were tangled —
+`push.ts` literally called its obstacle-impact a "bump". Established canonical terms
+(documented in docs/conditions.md "Bump, Push & Collide"):
+- **Bump** = a movement-reveal: a unit moving onto a *cloaked enemy* or *hidden impassable
+  terrain* → reveal + cancel the move (no damage).
+- **Collide** = a *pushed* unit (Ram / Percussive Shells) hitting a unit/building/mountain/
+  edge → `COLLIDE_DAMAGE` (renamed from `PUSH_BUMP_DAMAGE`, behaviour unchanged).
+- **Push** = the forced move itself.
+
+Mechanic changes (both asked & confirmed):
+- **Blind death on lethal terrain.** A blind unit that walks onto a HIDDEN void tile
+  (water/lava/acid/chasm — any `passable:false`) now **falls in and dies**; an
+  already-REVEALED impassable tile is **blocked**. A hidden **mountain** is still a bump.
+  Needed fog-awareness in the pathfinder (`knownTiles`) + a lethal-tile death in `applyMove`.
+  Per the user, ALL void terrain (incl. water) is lethal to anything that falls or is pushed in.
+- **Cloak bump by any unit.** A cloaked enemy is no longer a silent movement blocker — any
+  unit can move onto it to **bump + reveal it for the turn** (`hiddenEnemyTiles` in the
+  pathfinder; `getVisibleState` now lets a bump-revealed tile override cloak). The **only**
+  exception is a **blind** mover — it bumps but can't pierce the cloak (no reveal), per the user.
+
+Tests: `bump-push.test.ts` (4) covers hidden-lava death, revealed-lava blocked, non-blind
+cloak-bump reveal (+clear on end-turn), and blind-can't-reveal-cloak. Full suite 184 pass.
+
+## 2026-07-15 — David
+
+**Combat log now itemises buffs/debuffs, and Combined Arms is reflected in it.** Two issues:
+1. The log/FX were built from `previewCombat`, which hard-codes the Combined Arms multiplier
+   to 1 — so a repeat LIGHT-unit hit showed the WRONG (un-boosted) damage in the log even
+   though the engine applied ×1.2. Added `previewAttack(state, attackerId, targetId)` which
+   reads the same per-target `combinedArmsHits` the apply path uses; the store now builds the
+   log + damage popups from it, so the numbers match the HP actually lost. (Confirmed Combined
+   Arms is a FLAT ×1.2 on the 2nd+ hit per target — it does not compound to ×1.44.)
+2. Every buff/debuff (mountain shooter, Spray Bile, Combined Arms; terrain/city/fortify,
+   Corrosive, Bile) was collapsed into the force numbers with no explanation. Enriched
+   `CombatBreakdown` with `baseAttack/effectiveAttack/attackMods` and
+   `baseDefence/effectiveDefence/defenceMods` (`CombatMod = {label, mult}`), populated in
+   `resolveCombat`. `CombatLog.tsx` renders them as "Base ×mod (name) = Effective" lines,
+   buffs green / debuffs red, so a Stalker's hit now shows exactly how the defender's HP loss
+   was computed. Tests: `combat-log.test.ts` (3).
+
+## 2026-07-15 — David
+
+**Added "Test Combat Mode" — a fixed combat sandbox.** New card under the setup screen with
+Team 1 / Team 2 faction dropdowns and a "Start Test Combat" button. On start, the engine's
+new `createTestCombatGame(config, registry, [t1, t2], seed)` builds:
+- a **14×14** map (environmental terrain/resources/ruins from the normal mapgen, so it obeys
+  the biome / doubleResources / etc. settings);
+- **3 level-1 cities per team** — team 0 at c4/g4/k4, team 1 at c11/g11/k11 (first of each is
+  the capital), each with a clean 3×3 plains territory;
+- a **clean no-man's-land** in the middle (bounding box of the given corners a6/l7/l10/a9 →
+  cols a–l, rows 6–10): ruins & resources stripped, environmental terrain kept;
+- **2 of every unit each faction can build** (`faction.unitTypes`), spawned on passable,
+  non-mountain, unique tiles within Chebyshev 2 of the team's cities (on/next to territory).
+
+It obeys the same `config` as a normal game (fog, tech tree, rich start, win conditions).
+Decision: unit spawns **ignore tech locks** — a combat sandbox should field every unit even
+with the tech tree on (otherwise you couldn't test locked units); easy to gate later if
+wanted. Tests: `testcombat.test.ts` (6) — city layout, clean middle, 2-of-each, valid
+placement, playability, determinism. `.setup-screen` became a scrollable column to hold the
+second card.
+
+## 2026-07-16 — David
+
+**Vanguard Small Arms tech tree + unit overhaul.** New Armory shape:
+- **Small Arms (L1)** now unlocks **Lancer only** (Bulwark moved off it).
+- Three L2 techs, each gated ONLY by Small Arms (no cross-links): **Triage** (unlocks
+  **Medic**), **Advanced Weaponry** (unlocks **Bulwark** + grants the **Combined Arms**
+  passive), **Engineering** (unlocks **Engineer**).
+- Three L3 techs, each gated only by its L2 parent: **Advanced Biomed** (Triage → Medic
+  Cure active + more, TBD), **Infiltration** (Advanced Weaponry → unlocks **Wraith** with
+  Raid + Plant Explosives), **Tactical Engineering** (Engineering → build **Nodes**, TBD).
+- Forge branch unchanged except **Precision Targeting moved to L3**.
+
+Engine: `advanced_weaponry` replaces the standalone `combined_arms` tech as the source of
+the Combined Arms passive (combat check + tests updated); removed the old `combined_arms`
+and `raiding` techs. New units **Medic** (🧑‍⚕️) & **Engineer** (👷) added (placeholder
+stats, `impotent_founder`) and put in the Vanguard roster; Wraith gains a `raid` placeholder
+ability (kept Stun + Plant Explosives — flagged to confirm whether Stun stays).
+
+Tech UI: each card now shows its unlocks — **units** (with their passives bulleted, looked
+up live from the registry), **granted passives** (e.g. Combined Arms), and **upgrade/active
+lines** (Cure, Nodes, Mountain Shooter II, etc.). Card/row sizes enlarged to fit. Deferred
+behaviour (Medic/Engineer/Nodes/Cure/Raid) recorded in the memory TODO note.
+
+## 2026-07-16 — David
+
+**Wraiths uncloak on ruins and enemy cities.** `unitHiddenByCloak` now exposes a cloaked
+unit standing on a `isRuin` tile, or on a city owned by another player (enemy). Its own city
+and neutral cities keep it cloaked (per "enemy city"). Because AOI/bump eligibility both flow
+through `unitHiddenByCloak`, an uncloaked wraith also projects AOI and blocks/behaves like a
+normal visible unit while exposed. Test: `wraith-uncloak.test.ts` (3).
+
+## 2026-07-16 — David
+
+**Hive Armory tech tree + units.** New engine branch `hive_armory` (drawn like the Vanguard
+Armory). Layout: **Reaper (L1)** → **Vindrace (L2)** → { Hardened Carapace, Behemoth →
+Berserker Glands, Wyrm } (L3); **Adrenal Glands (L1) ← Reaper**; **Scab (L1)** → **Seercaust
+(L2)** → { Ravener (L2), Wyrm (L3) }. **Wyrm (L3) ← Vindrace OR Seercaust**, then a
+**Tunneling Network ⊕ Aftershock** one-of-two pick.
+
+- Gated hive units (reaper/vindrace/scab/seercaust/wyrm) behind their techs; added NEW
+  **Behemoth** & **Ravener** (placeholder stats, in the roster). Scuttling/Hive Scout stay
+  ungated.
+- **Mutual exclusion**: new `excludes` field on techs (schema + `isTechAvailable`); the UI
+  crosses the sibling out with hover "Can only select 1 upgrade for Wyrm".
+- **Faction-specific Armory**: `getTechTrees(factionId)` — Vanguard sees the Vanguard Armory,
+  Hive sees the Hive Armory; Refinement stays shared. `TechTreeView` takes `factionId`.
+- Upgrade MECHANICS (Adrenal→Dash II+Creep, Hardened Carapace 1-HP survival, Berserker Glands,
+  Tunneling Network, Aftershock) are shown in the tree but deferred/not-wired (same as the
+  Vanguard upgrades) — recorded in the memory TODO note.
+
+Also established a phrasing convention with the user for prereqs: **"X (Ln) ← Y"** = X is a
+level-n tech gated by Y; "← A OR B" for either-prereq; "A ⊕ B" for mutually exclusive.
+Tests: `hive-tech.test.ts` (3).
+
+## 2026-07-16 — David
+
+**Hive Armory tweaks.** Moved **Berserker Glands** to the LEFT of Behemoth (col 3→1) and
+pulled **Wyrm** in closer (col 4.5→3.5, Tunneling/Aftershock shifted with it) to condense the
+L3 row. Added **Burstling** (L2 ← Vindrace, placed to the left of Vindrace at col 0) — new
+`burstling_tech` unlocking the new **Burstling** unit (💥, placeholder stats, in the hive
+roster).
+
+## 2026-07-16 — David
+
+**Hive unit stats + new mechanics (Burstling, Ravener/Air, Behemoth).**
+- **Burstling** (💣, light, 50/10, ATK 0, MOV 2, range 0): new `self_destruct` active + a
+  `death_burst` condition — **whenever it dies (killed OR self-destructs) it deals 1 flat
+  damage to every unit in its 3×3, friend or foe**. Bursts **chain** (a burst that kills
+  another Burstling triggers that one). Implemented via a new `resolveDeaths` hook that all
+  kill-sites now funnel through (unifying the infected→scuttling spawn + the burst + recursive
+  chain sweep). Schema `attackRange` min lowered to 0 for the range-0 Burstling.
+- **Ravener** (🦇, **AIR**, 100/15, ATK 3, DEF 2, MOV 2, range 2): air units fly over terrain
+  (existing) and are now **immune to melee** (range-1) attacks — normal attack, Slash, and Wyrm
+  strike all skip air targets (`isAir` guard). Air still can't share tiles (default, kept as a
+  placeholder per the user). Sentinel is also air.
+- **Behemoth** (🦖, new `giant` class, 250/40, ATK 3, DEF 3, MOV 2, range 1). Berserker passive
+  deferred (tech-gated, unwired).
+
+Open air-unit mechanics (wyrm-erupt-under-flyer, air co-tile rules, AoE-vs-air) recorded in the
+memory note. Tests: `hive-units.test.ts` (5). Full suite 204.
+
+## 2026-07-17 — David
+
+**AI opponent — stage 1: wired the real GreedyBot + board notation.**
+- **Root cause of the "dumb bot":** the web app's `doBotTurn` used a throwaway inline heuristic
+  (pick any attack → first recruit → RANDOM move), and even the real GreedyBot generated its own
+  action list via `getLegalActionsFromVisible`, which NEVER emits foundCity/captureCity/build.
+  So no bot could settle or capture. Fix: bots now score the ENGINE's real `getLegalActions`
+  output (passed in); `Bot.chooseAction` gained an optional `legalActions` arg; the web app and
+  sim both pass it. Rewrote GreedyBot's eval (public `scoreAction`) to value founding (high, taper
+  with city count), capturing (top priority), economy builds/level-ups, smarter recruit (anti-
+  doomstack + treasury buffer), and anti-wander moves (aimless move < endTurn; reward advancing
+  to ruins/enemy cities). Result: greedy founds ~7 cities/game and beats random ~97% (faction-
+  neutralised). Sim gained `--faction-a/--faction-b` for controlled bot comparisons.
+- **Notation (UI-only):** chess coords — axis rulers (A/B/C top+bottom, 1/2/3 both sides) and the
+  tile readout now shows `C4` instead of `(2,3)`; stable 3-letter unit codes (`WA1`, `xVIN2`)
+  keyed by unit id so they survive Tank/Wyrm morphs and deaths without renumbering. Mirror matches
+  (same faction both sides) prefix codes x/y. Codes live in `data/notation.ts`; labels assigned in
+  the store (`ensureUnitLabels`). Shown in the Unit Info header.
+
+Full roadmap (coaching loop, search wrapper, sim metrics, difficulty ladder) + the surfaced
+vanguard≫hive balance problem recorded in the memory note.
+
+## 2026-07-17 — David
+
+**AI opponent — stage 2: coaching loop.** In-game Coach sidebar to mould the AI in your own
+words. Toggle via the top-bar "Coach" button, or "Train vs AI" on setup (you vs greedy, coach
+pre-enabled). Records EVERY move (human + AI) into `coachLog` via `executeAction(action, meta)`
+using pre-action state for descriptions (unit codes + chess coords, e.g. "WA1  C4 → D5"). Each
+AI move stores its **scored candidates** — the honest "why did you do this?": `GreedyBot`
+exposes `scoreAction` (added optional to the `Bot` interface), `doBotTurn` scores every legal
+action, keeps the top 8 (+ the chosen one), and the panel shows them ranked with the chosen row
+highlighted. Per-move comment boxes + a strategy-notes timeline capture your annotations; Export
+dumps `{ actionLog, strategyNotes, moves }` to JSON (the corpus we later translate into eval
+changes — the bot does NOT auto-learn from comments yet). New files: `data/coach.ts`
+(types + `describeAction`), `components/CoachPanel.tsx`. Store: `coachEnabled/coachLog/
+strategyNotes` + `addCoachComment/addStrategyNote/clearCoach`, cleared on new game.
+
+## 2026-07-17 — David
+
+**Coaching loop polish (from playtest feedback).**
+- **Manual bot turn-ending:** when coaching, a bot now plays its moves but HALTS before
+  `endTurn` (GameScreen `botTurnHalted`) instead of auto-advancing — so the human keeps the
+  bot's fog POV on screen to inspect + comment. A prominent "End <Faction>'s Turn ▶" button
+  submits the end. (The existing Step button still advances one bot action at a time.)
+- **Auto-persist:** the coach log + strategy notes + actionLog now autosave to `localStorage`
+  on every change (CoachPanel effect, key `rigbound-coach-autosave`) — automatic, survives
+  reload, no download spam. Per-move FILE writes aren't done because browsers can't update a
+  file without either a download-per-move or the File System Access API (opt-in, Chromium-
+  only) — deferred. Export still produces the shareable JSON.
+- **"Learn from my comments" (discussion, not built):** freeform prose isn't consumable by
+  classic ML (RL learns from win/loss, not opinions). The realistic path is (a) STRUCTURED
+  feedback tags → auto-tune eval weights, and/or (b) an LLM-in-the-loop that reads the
+  annotated export and proposes concrete eval/rule changes to approve. Recorded for later.
+
+## 2026-07-20 — David
+
+**Map icons for Burstling/Behemoth/Ravener now match the recruit table.** They had no bespoke
+vector art, so the map drew a plain player-colored circle while the recruit table showed
+emoji (💣/🦖/🦇). Added an `emojiUnit(emoji)` drawer factory in `drawUnit.ts` (player-colored
+disc + the matching emoji on top, so friend/foe stays readable) and registered the three in
+`UNIT_DRAWERS`. Medic/Engineer still use the generic circle (not requested) — easy to add the
+same way later.
+
+## 2026-07-20 — David
+
+**Wyrm (surfaced) defence 3 → 2.** The erupted/unburrowed Wyrm was too tanky (soaked too much
+firepower). Burrowed Wyrm stays at 0 (intentionally fragile while submerged).
+
+## 2026-07-20 — David
+
+**Added the `aoi_none` ("No AOI") passive; gave it to Scout, Hive Scout, and Sentinel.** These
+recon/observer units now project **no** Area of Influence — enemies move freely through their
+zone (their zone-of-control is removed; they still occupy their own tile). Implemented by
+skipping `aoi_none` units in `enemyAOITiles` (engine) and the matching IsoCanvas tint. Sibling
+to the scaffolded `aoi_large`/`aoi_immune`. Registered as a passive in UnitSheet; docs updated;
+test in `aoi.test.ts` (No-AOI transit allowed, Warrior still blocks).
+
+## 2026-07-20 — David
+
+**Economy tech tree overhaul (Refinement branch, shared by both factions).** Rebuilt the
+Refinement tree per the full spec — Lvl-0 root `mine_1` (always available) → three branches:
+mine spine (mine_2/reinforced_rebs/mine_3), economy branch (prospecting → slag_wash / cross_border
+→ rnd / borderless / roads / habitation_domes), plasma branch (plasma_1/2/3 + automated_extraction
+/ colonial_charter / transmutation). Engine tech ids match the UI so research state lines up;
+per-node prereqs drive both gating and connector lines. A new UI `root` node-state renders the
+always-on base (mine_1) and a prereq pointing at a root counts as satisfied.
+
+LIVE mechanics: mine L2/L3 + plasma extractor L1/L2/L3 gates (economy.json); **Slag Wash**
+(+10% mine, existing); **Prospecting** (reveal resource tiles within 9×9 of a friendly city as
+fog, resource-only — newly wired in getVisibleState); **R&D** (−10% research cost, techCostForPlayer);
+**Cross Border Economy** (REB2 counts adjacent REB1s across the owner's cities); **Habitation Domes**
+(+1 city pop, via cityPop(state) + cityHasCapacityFor); **Colonial Charter** (founded cities start L2);
+**Automated Extraction** (buildingBlocked returns false for the owner). PENDING/inert (researchable,
+TODO): **Reinforced REBs** (needs building-HP), **Borderless Economy** (needs the buy-tile picker —
+engine gate in, mechanic deferred), **Roads**, **Transmutation**. Old refinement techs (drilling/
+plasma_tap/refineries) removed; tests updated (mine_2/plasma_1 gates). Suite 209.
+
+## 2026-07-21 — David
+
+**Tech tree tweaks + research affordability fix.**
+- **Bug fix (negative ore):** `applyResearch` checked availability but NOT affordability, so
+  researching directly from the tech-tree UI (which bypasses the legal-action affordability
+  filter) could spend ore you didn't have and go negative. Added an `if (player.ore < cost)
+  return state` guard. Test added (`tech.test.ts` "Research affordability guard").
+- **Cost display:** every tech card (Refinement + Armory, both factions) now shows its live
+  research price — city-scaled and R&D-discounted — via `techCostForPlayer(gameState,
+  currentPlayer)`. (Cost table stays 50/60/70 base + 10/20/30 per extra city; verified
+  consistent by the existing scaling test.)
+- **Refinement layout:** shifted the economy branch one column right so Prospecting sits
+  adjacent to Mine Lvl 2, Cross Border to Reinforced REBs, and Borderless to Mine Lvl 3 — the
+  gap now matches the Mine↔Plasma spacing (1 column).
+
+## 2026-07-21 — David
+
+**Heal mechanic + REB-upgrade UI fix.**
+- **Passive heal** (≠ Cure): a unit that neither moved nor attacked during its turn recovers HP
+  at end of turn, by the territory it stands in — **friendly +4, neutral +2, enemy +0**
+  (data-driven in `config.json` → `config.heal`, engine falls back to 4/2/0). Capped at maxHP.
+  Wired into `applyEndTurn` (read before the hasMoved/hasAttacked reset). Tests in `heal.test.ts`.
+- **REB upgrade was un-reachable in the UI** (root cause of "researching Mine Lvl 2 doesn't
+  enable the upgrade"): `getLegalActions` emits `upgradeBuilding`, and the engine gating
+  (`canUpgradeBuilding` + economy.json `upgradeTechRequired`) was correct, but the map action-box
+  loop only drew Found City / Capture City — there was NO clickable Upgrade box at all. Added it:
+  clicking an owned REB below max level now shows an "Upgrade → L{n}" box (or "Locked: <tech>"
+  when the required tech isn't researched), dispatching `upgradeBuilding`. Confirmed all REB
+  research gates are correct (Mine Lvl 2/3 → mine L2/L3; Plasma Lvl 1/2/3 → extractor build/L2/L3;
+  refinery/purifier upgrade freely — no tech).
+
+## 2026-07-21 — David
+
+**Flying units no longer die on impassable terrain.** The lethal-terrain death in `applyMove`
+(added for blind ground units walking into hidden voids) fired for ANY unit ending on an
+impassable tile — including flyers, which pathfinding legitimately offers those tiles (they
+hover). Gated it with `!isAir(...)` so air units (Ravener/Sentinel) stand on water/lava/etc.
+unharmed. Test added in `hive-units.test.ts`.
+
+## 2026-07-21 — David
+
+**City level-up overhaul → 8 levels, new rewards, Hero placeholder.** Cap raised L4 → **L8**
+(supply thresholds extended to [2,5,9,14,20,27,35]; economy.city.maxLevel 8). New choice pairs
+(pick one each): L2 income+20/pop, **L3 fortify/beacon**, L4 territory/supply, **L5 muster/detect**,
+**L6 hero/conscription**, **L7 hero/plasma**, **L8 hero/pop**. Reveal Map cut.
+- **Fortify** rebalanced ×3 → **+50% (×1.5)**, and a plain (un-fortified) city now gives **no**
+  defense bonus (so Fortify is meaningful; only the fortified city TILE buffs).
+- New effects wired: **Beacon** (+1 city sight, fog.ts), **Muster** (recruited units may MOVE not
+  attack — applyRecruit spawn flag), **Detect** (city exposes cloaked/burrowed in its 3×3 —
+  unitHiddenByCloak), **Conscription** (recruit −20% ore — recruitOreCost, applied in
+  applyRecruit/getLegalActions/getRecruitOptions), **+10 Plasma** (calculatePlasmaIncome city bonus).
+- **Hero**: greyed out everywhere for now — `isChoiceAvailable` excludes it from getLegalActions
+  and applyLevelUpCity rejects it; the modal shows it disabled ("Coming soon"). Rule for later:
+  only one living hero at a time → grey the hero option when one exists.
+- Modal now renders BOTH choices from `levelUpChoices` (so Hero shows greyed). Tests updated
+  (fortify ×1.5, plain-city ×1.0, supply cap 8, beacon replaces reveal) + `city-upgrades.test.ts`.
+
+## 2026-07-21 — David
+
+**Reverted Fortify to the original values** (per clarification): un-fortified city ×1.5,
+fortified city ×3 (FORTIFY_DEFENSE_MULTIPLIER back to 3.0, plain-city ×1.5 restored in
+getDefenseMultiplier). Tests + level-up modal desc restored.
+
+## 2026-07-21 — David
+
+**Built the tech→unit grant system.** New `grantCondition` tech effect ({unit, condition}) +
+`grantedConditions(player, unitType)` reader (tech.ts) + `effectiveUnitType(state, unit)` helper
+(game.ts) that merges base conditions with tech-granted ones. Wired into getLegalActions
+(movement/AOI/range), applyAttack + previewAttack (combat), so a granted passive takes effect
+everywhere `.conditions` is read. `dashRange` now returns the MAX dash (granted dash_2 upgrades
+base dash_1). UnitSheet + the AOI tint show granted passives. First two techs now FULLY LIVE:
+- **Adrenal Glands** → Reaper gains **dash_2** (2-tile post-attack move) + **aoi_immune** (Creep:
+  ignores enemy zone-of-control). Both conditions already existed; the grant feeds them in.
+- **Precision Targeting** → Stalker gains **mountain_shooter_2**. NOTE: this was baked into the
+  base Stalker before; REMOVED from base so the tech is the real source (base Stalker no longer
+  gets the mountain +1 range / +20% atk until researched — a deliberate balance change).
+The other upgrade techs (Composite Plating, Advanced Projectiles, Hardened Carapace, Berserker
+Glands, Tunneling Network, Aftershock) still need their condition BEHAVIOURS implemented; the
+grant plumbing is now ready for them. Tests: `tech-grants.test.ts` + rewritten `stalker.test.ts`.
+
+---
+
+### 2026-07-21 — David
+
+**Cities exert Area of Influence (Zone of Control).** A city now projects the same 3×3
+zone-of-control as a unit: enemy units cannot move *through* the ring around a
+(discovered, enemy-owned) city — they may stop on a ring tile but the pathfinder won't
+expand past it. *Why:* cities were free to walk past, unlike every other board presence;
+making them exert AOI treats a city as a defended locus and forces attackers to spend a
+turn adjacent before pushing through. Neutral (owner `null`) cities project nothing, and
+under fog only cities the viewer has discovered project (no fog info-leak) — mirroring the
+unit AOI rules. Implemented in `enemyAOITiles` (engine) and the `aoiTiles` render memo
+(web). Test: `aoi.test.ts` "Cities project AOI".
+
+**Tunneling Network (Wyrm L3 upgrade) is now LIVE.** Previously an inert tech (empty
+`effects`). It now uses the tech→unit grant system: it grants the `tunneling_network`
+condition to the `wyrm`. In `applyUseAbility`, a Burrow cast by a Wyrm that has this
+condition is *free* — it does not set `hasMoved`/`hasAttacked` or start a cooldown, so the
+Wyrm can burrow and then move underground the same turn (its whole movement allowance).
+*Why:* fixes the user-reported bug ("tunneling network for a wyrm doesnt work — it cant
+move straight after burrowing"). Test: `hive-tech.test.ts` "Tunneling Network: Wyrm can
+burrow then move the same turn". Closes the Tunneling Network item in
+[[hive-tech-overhaul-todos]].
+
+**Burstling gains `impotent_founder`.** The Burstling can no longer found/capture a city
+(same as the other non-founder Hive units). *Why:* a suicide-bomber unit shouldn't be able
+to plant a capital.
+
+---
+
+### 2026-07-21 — David
+
+**Aftershock (Wyrm L3 upgrade) is now LIVE.** Previously an inert tech (empty `effects`).
+It now grants the `aftershock` condition to the Wyrm (both `wyrm` and `wyrm_burrowed`
+forms, since Erupt is cast from the burrowed form). In `applyUseAbility`'s erupt branch,
+after the surface-kill and morph, a Wyrm with `aftershock` deals **2 flat damage to every
+OTHER unit (friend or foe) in its 3×3** — the erupting Wyrm itself is unharmed. Reuses the
+Burstling-burst pattern (`applyAftershock` → shield-aware flat damage → `sweepDead`, which
+chains death-bursts). *Why:* user reported "aftershock still not having effect on 3×3
+around erupting wyrm." Test: `hive-tech.test.ts` "Aftershock: erupting Wyrm deals 2 damage
+to its 3×3". Closes the Aftershock item in [[hive-tech-overhaul-todos]].
+
+---
+
+### 2026-07-21 — David
+
+**Buffed the two Hive AoE bursts.** `AFTERSHOCK_DAMAGE` 2 → **3** and
+`BURSTLING_BURST_DAMAGE` 1 → **2**. So an erupting Wyrm with Aftershock now hits every other
+unit in its 3×3 for 3 (still on top of outright-killing whatever it surfaced under), and a
+Burstling's death burst / Self Destruct hits its 3×3 for 2 (friend and foe, chains through
+other Burstlings as before). *Why:* user tuning — the 1/2 values were too weak to matter.
+UI descriptions updated (UnitSheet Self Destruct + Death Burst, techTrees Aftershock);
+tests updated (`hive-units.test.ts`, `hive-tech.test.ts`).
+
+---
+
+### 2026-07-21 — David
+
+**Area bursts are "attacks" (vs defence/cover), not flat HP loss. Supersedes the earlier
+same-day entry** that set Aftershock/Burstling to flat 3/2 damage. The user clarified the
+intent: Aftershock = **3 attack**, Burstling Self Destruct / Death Burst = **2 attack**,
+and Ballistic Volley = **2 attack** per square — where "attack" resolves through the
+Polytopia force formula against each target's defence and terrain/city/fortify cover, with
+NO retaliation. Implemented a shared `areaAttackDamage(state, target, attackStat, registry)`
+helper (full-strength attacker, `calculateDamage` + `getDefenseMultiplier`, floored at
+`combatConfig.minimumDamage`); Aftershock, Burstling burst, and Ballistic Volley all route
+through it. *Consequence:* against an open-ground 2-DEF/10-HP warrior a 2-attack hit lands
+5 and a 3-attack hit lands 8 — much stronger than the old flat values, but scales down vs
+high-defence targets and cover, exactly like a normal attack. Tests updated
+(`hive-units`, `hive-tech`, `volley`); UI text updated (UnitSheet Self Destruct / Death
+Burst / Ballistic Volley, VolleySelectBar, techTrees Aftershock).
+
+---
+
+### 2026-07-21 — David
+
+**Renamed the Wyrm's "Twin Strike" → "Body Slam"** (player-facing only; the internal
+condition id stays `twin_strike` and the action stays `wyrmStrike` to avoid a churny,
+invisible refactor across engine/data/tests). Updated all user-facing strings: UnitSheet
+(meta name + description + the Attack button, now "Body Slam — pick 2 tiles"),
+StrikeSelectBar (counter, hint, and the confirm button relabelled "Continue"), MapView
+comment, coach notation ("body-slams"), and docs/conditions.md. *Behaviour was already
+what the user described* and is unchanged: it's a passive that replaces the normal attack
+with a mandatory 2-tile picker — tick a first tile, pick a touching second, Continue; both
+picks are required, and a struck tile hits whatever's on it (friend or foe), so slamming an
+enemy ringed by your own units forces a friendly to eat the second hit (100%/50%, no
+retaliation). Only the wording was clarified to spell out the mandatory-second-tile /
+friendly-fire rule.
+
+**Confirmed Burstling Self Destruct scales off FULL HP, not current HP.** This was already
+the case since the area-attack refactor (`areaAttackDamage` uses a full-strength `1/1`
+attacker ratio, so the burst's force is independent of the Burstling's remaining HP). Added
+a regression test proving a 1-HP Burstling's Self Destruct deals identical damage to a
+full-HP one (`hive-units.test.ts`).
+
+---
+
+### 2026-07-21 — David
+
+**Burrowed Wyrm now has `impotent_founder` + `aoi_none`.** Added both conditions to the
+`wyrm_burrowed` unit type. *Founding:* `canFoundCity` already blocked burrowed units (via the
+`burrowed` guard), so this is belt-and-suspenders + it now shows in the UI — a burrowed Wyrm
+can't found cities. *AOI:* previously a burrowed Wyrm projected no AOI only because
+`enemyAOITiles` skips HIDDEN enemies; the moment it was **detected** (a friendly Detect unit
+adjacent) it would start exerting a 3×3 zone of control. `aoi_none` makes "no AOI" intrinsic
+— a detected burrowed Wyrm still halts nobody's pathing. Tests added in `aoi.test.ts`
+(detected burrowed Wyrm blocks no movement; burrowed Wyrm can't found on a ruin while a
+warrior on the same ruin can).
+
+---
+
+### 2026-07-21 — David
+
+**Fixed: burrowed Wyrm couldn't slide under units (bumped instead).** `applyMove`'s
+enemy-bump branch only exempted a *burrowed enemy* on the target tile — it never checked
+whether the **mover** was burrowed. So a burrowed Wyrm moving onto any occupied tile
+(cloaked Wraith or a plain visible enemy) triggered a bump: it stayed put and, for a
+cloaked enemy, wastefully revealed it. Added a `moverBurrowed` check so a burrowed mover
+falls through to a normal move and **co-occupies** the tile (sliding under, as intended for
+Erupt). This was the single miss behind both reported symptoms (bump-reveal on a Wraith,
+and "can't move under other units"). Tests: `hive-units.test.ts` (burrowed Wyrm co-occupies
+a cloaked Wraith and a plain warrior, actually moving rather than bumping).
+
+**Click-cycling on a shared tile now loops.** The IsoCanvas stack-cycle already selected
+`unit[0] → unit[1] → tile`, but it dead-ended on the tile step (kept the last unit
+selected, so further clicks re-inspected the tile). Made it a true loop: the tile step now
+deselects the units and inspects the tile, and a further click loops back to `unit[0]`
+(unit[0] → unit[1] → … → TILE → unit[0]). This is what surfaces when a burrowed Wyrm and an
+(owned-visible) enemy share a tile after the co-occupy fix above.
+
+---
+
+### 2026-07-21 — David
+
+**Burrowed Wyrm now ignores enemy AOI (`aoi_immune`) — the real reason it "couldn't move
+under an enemy".** The earlier `applyMove` co-occupy fix was correct but only helped when
+the Wyrm was already ADJACENT to the target. From 2+ tiles away, the enemy's own Area of
+Influence (its 3×3 zone of control) made every tile adjacent to it a terminal stop, so the
+pathfinder halted the Wyrm one tile short and never offered a move onto the enemy's tile.
+An underground unit shouldn't be stopped by a surface zone of control, so `wyrm_burrowed`
+now also has `aoi_immune` (already wired in `getLegalActions` — a mover with it passes
+`undefined` for the AOI set). Combined with `aoi_none` (projects none) the burrowed Wyrm is
+fully decoupled from AOI: it neither exerts nor is stopped by it. Test:
+`hive-units.test.ts` "tunnels UNDER an enemy from 2 tiles away".
+
+---
+
+### 2026-07-22 — David
+
+**Reworked the start-menu options below Turn Limit into three grouped sections.**
+- **Win Conditions (radio, pick one):** Capture all cities · Capture capital · Highest score
+  at turn limit. Added a new `captureCapital` win condition (`winConditions.captureCapital`):
+  a player who no longer holds any capital (each starts with one; capitals can only be
+  captured, never destroyed) loses, the opponent still holding a capital wins. Checked in
+  `checkWinConditions`; game-over label added in GameScreen ("Enemy capital captured").
+- **Resources (radio, pick one):** Normal · Double resources (`mapgen.doubleResources`, 2×
+  map spawn) · Unlimited resources (new `unlimitedResources` flag → players start with a
+  999,999 wallet, effectively unlimited for a game; income still accrues).
+- **Mechanics (checkboxes, any subset):** Tech Tree (`techTreeEnabled`) · Fog of War
+  (`fogOfWar`) · Nodes (new `nodesEnabled` flag — carried through config but Nodes behaviour
+  is not implemented yet; scaffolding only).
+
+The default config now carries a SINGLE win condition (Capture all cities) instead of the
+old captureAllCities+highestScoreAtLimit pair — matching the "pick exactly one" rule. As a
+consequence a game only auto-terminates at the turn limit when "Highest score at turn limit"
+is chosen; the fuzz test now sets that win condition explicitly rather than relying on the
+default. Tests: `engine.test.ts` capital-capture win. Rich Start remains as a separate
+testing toggle beneath the three sections.
+
+---
+
+### 2026-07-22 — David
+
+**Medic fleshed out (Triage + Advanced Biomed actives).** The Medic (unlocked by Triage)
+now has real abilities instead of placeholder stats:
+- **Heal** (base — a Medic implies Triage): range-1 cast on a friendly unit, restores 8 HP
+  (clamped to max). Spends the turn, so once per turn. Can't target self or enemies.
+- **Slow** (needs **Advanced Biomed**): range-2 cast on an enemy → `slowed` status, movement
+  capped at 1 for 3 rounds. New timed-status system: `unit.statusExpiry[status] = round` set
+  on cast, cleared on the round-wrap in `applyEndTurn` (mirrors the bile-tile expiry). Pathfinding
+  caps `maxMove` to 1 while `slowed` (next to the `stumble` cap).
+- **Tracer Round** (needs Advanced Biomed): left as a **disabled greyed placeholder** for now —
+  future mechanic is a 3-turn enemy tag revealing its position + 3×3 sight, visible only while
+  the tagged unit is within friendly detection range (same visibility rule as the Wraith's
+  Plant Explosives).
+
+New generic hook: abilities can carry `requiresTech` — `getLegalActions` won't offer the ability
+until the owner has researched it, and the UnitSheet hides it from the castable list (showing it
+under "Locked Upgrades" via `GATED_UPGRADES['medic']`) until then. Tests: `medic.test.ts`.
+Supersedes the Medic placeholders noted in [[vanguard-tech-overhaul-todos]].
+
+**Start menu tweaks:** removed the "Rich start — for testing" checkbox. "Unlimited Resources"
+now grants **10,000 ore + 10,000 plasma** per team (was 999,999).
+
+---
+
+### 2026-07-22 — David
+
+**Engineer fleshed out + Medic Heal reworked into Cure I/II. New multi-unit ability system.**
+Added a generic `targetKind: 'units'` ability kind — pick up to `maxTargets` DISTINCT friendly
+units of allowed `targetClasses` within range, each healed by the ability's `heal` effect
+("cannot stack" = distinct targets, capped at maxTargets, applied once). Plus two ability
+gating fields: `requiresTech` (show only once researched) and `supersededByTech` (hide once an
+upgrade tech is researched). Shared engine helper `getAbilityUnitTargets` drives both
+`getLegalActions` and the UI picker so they agree.
+
+- **Medic** (Triage): **Cure I** — 1 target, +8 HP, **light units only**, range 1. Advanced
+  Biomed **supersedes Cure I with Cure II** — 2 targets, +10 HP each. (Slow + Tracer-placeholder
+  unchanged.) The earlier one-off `heal` ability was removed in favour of Cure I/II.
+- **Engineer** (Engineering): **Repair I** — 1 target, +5 HP, **heavy/giant units only**, range 1.
+  Tactical Engineering **supersedes Repair I with Repair II** — 2 targets, +8 HP each, and adds
+  **Build Node** as a disabled greyed placeholder (Nodes still TBD).
+
+*Deferred:* Repair is unit-only for now — buildings have no HP/damage model yet (see the
+building hit-count backlog), so building repair is documented in the ability text but not wired.
+
+UI: new `targetSelect` store slice + `TargetSelectBar` (tick up to N green-highlighted allies,
+Confirm), wired through IsoCanvas (highlight + click) and MapView. UnitSheet hides
+superseded/locked abilities (they show under "Locked Upgrades" via `GATED_UPGRADES`). Tests:
+`medic.test.ts` (Cure I/II, Repair I/II, class filtering, supersede, dedupe/cap, Build-Node
+disabled). Supersedes Medic/Engineer placeholders in [[vanguard-tech-overhaul-todos]].
+
+---
+
+### 2026-07-22 — David
+
+**Medic naming fix + Cure reworked (supersedes the same-day Cure I/II entry).** The user
+mixed up the names: the HEALING abilities are now **Heal I / Heal II** (same effects as the
+former Cure I/II — 1×+8 light, then 2×+10 light with Advanced Biomed). "Cure" is now a
+DISTINCT ability: **remove all afflicting conditions** (infected, corrosive, stunned, …) from
+one adjacent friendly unit (any class, range 1), added by **Advanced Biomed**. There is no
+Cure II. **Slow was dropped** (user chose to replace it with Cure).
+
+Implementation: the multi-unit (`targetKind:'units'`) apply branch now does HP heal when the
+ability has a `heal` effect, else a **cleanse** (strip every status not in `POSITIVE_STATUSES`
+= {shielded}, plus clear `statusExpiry`/`infectedBy`). New ability flag `targetAfflicted` makes
+Cure only offer/​highlight allies that actually carry an affliction. Medic kit is now
+Heal I → (Biomed) Heal II + Cure + Tracer-placeholder.
+
+The `slowed` status plumbing (pathfinding movement cap + `statusExpiry` expiry) stays in the
+engine as dormant, reusable infrastructure even though no ability applies `slowed` anymore.
+Tests updated in `medic.test.ts` (Heal I/II, Cure cleanse + afflicted-only targeting).
+
+## 2026-07-22 — David — Purely-visual "Nodes" research tab
+
+Added a decorative-only "Nodes" tab to the research/tech-tree UI (apps/web/src/data/techTrees.ts,
+rendered by TechTreeView.tsx). It is a central "Nodes" tile with four diagonal branches —
+Sensors (NW), Mobility (NE), Recruitment (SW), Resources (SE) — laid out as a 3×3 diamond
+(centre at col 1/tier 1; branches on the corners) with links from the centre to each branch.
+
+These are NOT engine techs. Every node is flagged `root: true` so nodeState() short-circuits
+to the 'root'/decorative "BASE" state before any prereq/research lookup, and costOf() returns
+null because registry.techs has no entry for these ids — so they render gracefully with no cost
+and no research interaction. The branch nodes still carry `prereqs: ['node_root']` purely so
+layoutTree() draws the connector links (edges ignore node state). Ids: node_root,
+node_sensors, node_mobility, node_recruitment, node_resources. It replaces one of the three
+blank placeholder tabs (now two blanks). No engine/data changes.
+
+---
+
+### 2026-07-22 — David
+
+**Nodes — Engineer-built 3×3 territory structures (Build Node is now live).** New `NodeState`
+on GameState (id/owner/position/building/buildTurnsLeft/builderUnitId) + `nextNodeId`, added
+to VisibleState (own always; enemy on visible tiles). The Engineer's **Build Node** active
+(now enabled, targetKind `tile`, range 1, requires Tactical Engineering):
+- **Cost 100 ore.** Placement (`canPlaceNode`): the node's whole 3×3 must be on-map, all
+  neutral (no owner), and free of any city/ruin, and not overlap another node's 3×3.
+  `getLegalActions` only offers valid tiles.
+- **Construction = 2 of the builder's turns.** The node ticks down at the end of each of the
+  owner's turns in `applyEndTurn`; at 0 it completes. **Any action by the builder cancels it**
+  (move/attack/slash/cast all call `cancelNodeForActingUnit`), and **the builder dying**
+  removes it (`resolveDeaths` hook). Explicit `cancelNodeBuild` action too.
+- **On completion** the node claims its 3×3 (neutral tiles → owner) as friendly territory, so
+  the EXISTING systems make it "normal friendly territory": units heal there (end-turn heal
+  reads `tile.owner`) and it **projects a 3×3 AOI** on enemies (added to `enemyAOITiles`,
+  like a city). Builder is freed.
+
+UI: node drawn as a diamond (dashed/translucent while building, solid when done) via
+`drawNode`; territory shows automatically via tile ownership. Build Node arms the normal
+tile-target ability flow (only valid tiles highlight). A node-building Engineer's move/act
+click is gated behind a **"Cancel Node construction?"** confirm dialog (`NodeCancelDialog`);
+Yes dispatches the deferred action (engine cancels the node). Tests: `nodes.test.ts` (place/
+cost, validation, 2-turn completion + territory, cancel, move-cancels, death-cancels, AOI, heal).
+
+**Deferred / notes:** node territory grants no income (no city association — heal + AOI only,
+as specified); enemy nodes aren't remembered under fog yet (their claimed territory still
+shows via tile ownership); the confirm dialog covers map move/attack clicks (casting another
+active mid-build still auto-cancels in the engine but via the ability button, without the
+dialog). Also added the **visual-only Nodes research tab** (central "Nodes" + 4 diagonal
+branches Mobility/Resources/Recruitment/Sensors — no effects yet).
+
+---
+
+### 2026-07-22 — David
+
+**Tracer Round (Medic) & Plant Explosives (Wraith) — enemy "marks".** New `UnitMark` on Unit
+(`{kind:'tracer'|'explosive', owner, turnsLeft}`), applied by the now-enabled abilities
+(tracer_round: 3 turns; plant_explosives: 2 turns) onto an enemy unit (range 3).
+- **Ticking:** marks count down at the end of the MARKED unit's owner's turn (in `applyEndTurn`).
+  A tracer just vanishes at 0; an **explosive DETONATES** — a 5-attack hit (`areaAttackDamage`)
+  on the unit — then is removed.
+- **Visibility (per-viewer, in `getVisibleState` via `withVisibleMarks`):** the PLACER always
+  sees the mark (blinking dot + Unit-Info chip with X/N); the MARKED unit's own team sees it
+  ONLY while it has Detect on that unit (`teamHasDetectOn`, same rule as cloak). Move out of
+  Detect → the mark hides again.
+- **Tracer vision:** a tracer reveals the traced enemy's **3×3 to the placer through fog**
+  (added to `computeVisibility`).
+- **Removal (`removeMark` action):** an ADJACENT friendly ally (not the marked unit itself),
+  while the mark is Detect-visible to its team and the remover hasn't attacked/cast yet, may
+  strip it — consuming its attack/cast (move→remove is fine; attack/cast→remove is not).
+
+UI: blinking blue/red dots over marked units (`drawMarkDots`, ~1s blink; only marks the viewer
+may see); Unit-Info "Markers" chips with X/3 or X/2; removal via a "Remove tracer round/
+explosives" bar (select a detecting ally, click the marked friendly → confirm). Tests:
+`marks.test.ts`; updated the two old "disabled placeholder" tests.
+
+**Deferred:** planting explosives on BUILDINGS (units only for now — buildings have no HP/damage
+model yet, so building detonation is a no-op and building-targeting isn't wired; see the
+building hit-count backlog). Enemy marks aren't fog-remembered (consistent with units).

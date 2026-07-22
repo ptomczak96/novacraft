@@ -1,5 +1,5 @@
 {
-  "name": "tactica",
+  "name": "rigbound",
   "private": true,
   "workspaces": [
     "packages/*",

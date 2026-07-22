@@ -1,9 +1,25 @@
 [
   {
-    "id": "drilling",
-    "name": "Drilling",
+    "id": "mine_2",
+    "name": "Mine Lvl 2",
     "branch": "refinement",
     "level": 1,
+    "effects": []
+  },
+  {
+    "id": "reinforced_rebs",
+    "name": "Reinforced REBs",
+    "branch": "refinement",
+    "level": 2,
+    "prerequisites": ["mine_2"],
+    "effects": []
+  },
+  {
+    "id": "mine_3",
+    "name": "Mine Lvl 3",
+    "branch": "refinement",
+    "level": 3,
+    "prerequisites": ["reinforced_rebs"],
     "effects": []
   },
   {
@@ -19,23 +35,103 @@
     "id": "slag_wash",
     "name": "Slag Wash",
     "branch": "refinement",
-    "level": 2,
+    "level": 1,
+    "prerequisites": ["prospecting"],
     "effects": [
       { "type": "globalModifier", "params": { "modifier": "mineOutputBonus", "value": 0.1 } }
     ]
   },
   {
-    "id": "plasma_tap",
-    "name": "Plasma Tap",
+    "id": "cross_border",
+    "name": "Cross Border Economy",
     "branch": "refinement",
     "level": 2,
+    "prerequisites": ["prospecting"],
     "effects": []
   },
   {
-    "id": "refineries",
-    "name": "Refineries",
+    "id": "rnd",
+    "name": "R&D",
     "branch": "refinement",
     "level": 2,
+    "prerequisites": ["cross_border"],
+    "effects": [
+      { "type": "globalModifier", "params": { "modifier": "researchCostReduction", "value": 0.1 } }
+    ]
+  },
+  {
+    "id": "borderless",
+    "name": "Borderless Economy",
+    "branch": "refinement",
+    "level": 3,
+    "prerequisites": ["cross_border"],
+    "effects": []
+  },
+  {
+    "id": "roads",
+    "name": "Roads",
+    "branch": "refinement",
+    "level": 3,
+    "prerequisites": ["cross_border"],
+    "effects": []
+  },
+  {
+    "id": "habitation_domes",
+    "name": "Habitation Domes",
+    "branch": "refinement",
+    "level": 3,
+    "prerequisites": ["cross_border"],
+    "effects": [
+      { "type": "globalModifier", "params": { "modifier": "cityPopBonus", "value": 1 } }
+    ]
+  },
+  {
+    "id": "plasma_1",
+    "name": "Plasma Lvl 1",
+    "branch": "refinement",
+    "level": 1,
+    "effects": []
+  },
+  {
+    "id": "plasma_2",
+    "name": "Plasma Lvl 2",
+    "branch": "refinement",
+    "level": 2,
+    "prerequisites": ["plasma_1"],
+    "effects": []
+  },
+  {
+    "id": "plasma_3",
+    "name": "Plasma Lvl 3",
+    "branch": "refinement",
+    "level": 3,
+    "prerequisites": ["plasma_2"],
+    "effects": []
+  },
+  {
+    "id": "automated_extraction",
+    "name": "Automated Extraction",
+    "branch": "refinement",
+    "level": 1,
+    "prerequisites": ["plasma_1"],
+    "effects": [
+      { "type": "globalModifier", "params": { "modifier": "unblockRebOutput", "value": 1 } }
+    ]
+  },
+  {
+    "id": "colonial_charter",
+    "name": "Colonial Charter",
+    "branch": "refinement",
+    "level": 2,
+    "prerequisites": ["plasma_2"],
+    "effects": []
+  },
+  {
+    "id": "transmutation",
+    "name": "Transmutation",
+    "branch": "refinement",
+    "level": 3,
+    "prerequisites": ["plasma_2"],
     "effects": []
   },
 
@@ -45,36 +141,66 @@
     "branch": "armory",
     "level": 1,
     "effects": [
-      { "type": "unlockUnit", "params": { "unit": "defender" } },
       { "type": "unlockUnit", "params": { "unit": "lancer" } }
     ]
   },
   {
-    "id": "combined_arms",
-    "name": "Combined Arms",
+    "id": "triage",
+    "name": "Triage",
     "branch": "armory",
-    "level": 1,
+    "level": 2,
     "prerequisites": ["small_arms"],
+    "effects": [
+      { "type": "unlockUnit", "params": { "unit": "medic" } }
+    ]
+  },
+  {
+    "id": "advanced_weaponry",
+    "name": "Advanced Weaponry",
+    "branch": "armory",
+    "level": 2,
+    "prerequisites": ["small_arms"],
+    "effects": [
+      { "type": "unlockUnit", "params": { "unit": "defender" } }
+    ]
+  },
+  {
+    "id": "engineering",
+    "name": "Engineering",
+    "branch": "armory",
+    "level": 2,
+    "prerequisites": ["small_arms"],
+    "effects": [
+      { "type": "unlockUnit", "params": { "unit": "engineer" } }
+    ]
+  },
+  {
+    "id": "advanced_biomed",
+    "name": "Advanced Biomed",
+    "branch": "armory",
+    "level": 3,
+    "prerequisites": ["triage"],
     "effects": []
   },
   {
     "id": "infiltration",
     "name": "Infiltration",
     "branch": "armory",
-    "level": 2,
-    "prerequisites": ["small_arms"],
+    "level": 3,
+    "prerequisites": ["advanced_weaponry"],
     "effects": [
       { "type": "unlockUnit", "params": { "unit": "wraith" } }
     ]
   },
   {
-    "id": "raiding",
-    "name": "Raiding",
+    "id": "tactical_engineering",
+    "name": "Tactical Engineering",
     "branch": "armory",
-    "level": 2,
-    "prerequisites": ["infiltration"],
+    "level": 3,
+    "prerequisites": ["engineering"],
     "effects": []
   },
+
   {
     "id": "forge",
     "name": "Forge",
@@ -104,9 +230,11 @@
     "id": "precision_targeting",
     "name": "Precision Targeting",
     "branch": "armory",
-    "level": 2,
+    "level": 3,
     "prerequisites": ["mech_bay"],
-    "effects": []
+    "effects": [
+      { "type": "grantCondition", "params": { "unit": "stalker", "condition": "mountain_shooter_2" } }
+    ]
   },
   {
     "id": "sentinel",
@@ -153,5 +281,134 @@
     "level": 3,
     "prerequisitesAny": ["crucible", "mech_bay"],
     "effects": []
+  },
+
+  {
+    "id": "reaper_tech",
+    "name": "Reaper",
+    "branch": "hive_armory",
+    "level": 1,
+    "effects": [
+      { "type": "unlockUnit", "params": { "unit": "reaper" } }
+    ]
+  },
+  {
+    "id": "adrenal_glands",
+    "name": "Adrenal Glands",
+    "branch": "hive_armory",
+    "level": 1,
+    "prerequisites": ["reaper_tech"],
+    "effects": [
+      { "type": "grantCondition", "params": { "unit": "reaper", "condition": "dash_2" } },
+      { "type": "grantCondition", "params": { "unit": "reaper", "condition": "aoi_immune" } }
+    ]
+  },
+  {
+    "id": "vindrace_tech",
+    "name": "Vindrace",
+    "branch": "hive_armory",
+    "level": 2,
+    "prerequisites": ["reaper_tech"],
+    "effects": [
+      { "type": "unlockUnit", "params": { "unit": "vindrace" } }
+    ]
+  },
+  {
+    "id": "burstling_tech",
+    "name": "Burstling",
+    "branch": "hive_armory",
+    "level": 2,
+    "prerequisites": ["vindrace_tech"],
+    "effects": [
+      { "type": "unlockUnit", "params": { "unit": "burstling" } }
+    ]
+  },
+  {
+    "id": "hardened_carapace",
+    "name": "Hardened Carapace",
+    "branch": "hive_armory",
+    "level": 3,
+    "prerequisites": ["vindrace_tech"],
+    "effects": []
+  },
+  {
+    "id": "behemoth_tech",
+    "name": "Behemoth",
+    "branch": "hive_armory",
+    "level": 3,
+    "prerequisites": ["vindrace_tech"],
+    "effects": [
+      { "type": "unlockUnit", "params": { "unit": "behemoth" } }
+    ]
+  },
+  {
+    "id": "berserker_glands",
+    "name": "Berserker Glands",
+    "branch": "hive_armory",
+    "level": 3,
+    "prerequisites": ["behemoth_tech"],
+    "effects": []
+  },
+  {
+    "id": "scab_tech",
+    "name": "Scab",
+    "branch": "hive_armory",
+    "level": 1,
+    "effects": [
+      { "type": "unlockUnit", "params": { "unit": "scab" } }
+    ]
+  },
+  {
+    "id": "seercaust_tech",
+    "name": "Seercaust",
+    "branch": "hive_armory",
+    "level": 2,
+    "prerequisites": ["scab_tech"],
+    "effects": [
+      { "type": "unlockUnit", "params": { "unit": "seercaust" } }
+    ]
+  },
+  {
+    "id": "ravener_tech",
+    "name": "Ravener",
+    "branch": "hive_armory",
+    "level": 2,
+    "prerequisites": ["seercaust_tech"],
+    "effects": [
+      { "type": "unlockUnit", "params": { "unit": "ravener" } }
+    ]
+  },
+  {
+    "id": "wyrm_tech",
+    "name": "Wyrm",
+    "branch": "hive_armory",
+    "level": 3,
+    "prerequisitesAny": ["vindrace_tech", "seercaust_tech"],
+    "effects": [
+      { "type": "unlockUnit", "params": { "unit": "wyrm" } }
+    ]
+  },
+  {
+    "id": "tunneling_network",
+    "name": "Tunneling Network",
+    "branch": "hive_armory",
+    "level": 3,
+    "prerequisites": ["wyrm_tech"],
+    "excludes": ["aftershock"],
+    "effects": [
+      { "type": "grantCondition", "params": { "unit": "wyrm", "condition": "tunneling_network" } }
+    ]
+  },
+  {
+    "id": "aftershock",
+    "name": "Aftershock",
+    "branch": "hive_armory",
+    "level": 3,
+    "prerequisites": ["wyrm_tech"],
+    "excludes": ["tunneling_network"],
+    "effects": [
+      { "type": "grantCondition", "params": { "unit": "wyrm_burrowed", "condition": "aftershock" } },
+      { "type": "grantCondition", "params": { "unit": "wyrm", "condition": "aftershock" } }
+    ]
   }
 ]

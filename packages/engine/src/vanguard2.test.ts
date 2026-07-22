@@ -74,7 +74,7 @@ describe('Combined Arms — light unit repeat-shot ×1.2 per target', () => {
   it('the 2nd light attack on the same target hits harder than the 1st', () => {
     const drop = (withTech: boolean) => {
       let s = base(0);
-      if (withTech) s.players[0].researchedTechs = ['combined_arms'];
+      if (withTech) s.players[0].researchedTechs = ['advanced_weaponry'];
       s.units.push(mk(1, 'lancer', 0, 3, 3), mk(2, 'lancer', 0, 3, 4), { ...mk(3, 'defender', 1, 4, 3), hp: 20 });
       const before = u(s, 3)!.hp;
       s = applyAction(s, { type: 'attack', unitId: 1, targetId: 3 }, registry);

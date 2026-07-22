@@ -60,7 +60,7 @@ export function Inspector() {
                   {c.isCapital ? '★ Capital' : 'City'} (L{c.level})
                 </span>
                 <span className="stat-value">
-                  units {unitsHomedAt(gameState, c.id)}/{cityPop(c, registry)} · {cityProduction(c, registry)}◈ · supply {c.supply}
+                  units {unitsHomedAt(gameState, c.id)}/{cityPop(c, registry, gameState)} · {cityProduction(c, registry)}◈ · supply {c.supply}
                 </span>
               </div>
             ))}

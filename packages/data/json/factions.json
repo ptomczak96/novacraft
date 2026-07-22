@@ -4,13 +4,13 @@
     "name": "Vanguard",
     "color": "#3d7bb5",
     "startingUnits": [{ "unit": "warrior", "count": 1 }],
-    "unitTypes": ["scout", "warrior", "lancer", "defender", "stalker", "tank", "wraith", "titan", "sentinel"]
+    "unitTypes": ["scout", "warrior", "lancer", "medic", "defender", "engineer", "stalker", "tank", "wraith", "titan", "sentinel"]
   },
   {
     "id": "hive",
     "name": "Hive",
     "color": "#8a4fa0",
     "startingUnits": [{ "unit": "scuttling", "count": 2 }],
-    "unitTypes": ["scuttling", "hive_scout", "reaper", "scab", "vindrace", "seercaust", "wyrm"]
+    "unitTypes": ["scuttling", "hive_scout", "reaper", "burstling", "scab", "vindrace", "seercaust", "behemoth", "ravener", "wyrm"]
   }
 ]

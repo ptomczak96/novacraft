@@ -1,4 +1,4 @@
-# Tactica — Project Conventions
+# Rigbound — Project Conventions
 
 ## Architecture Rules
 
@@ -46,6 +46,7 @@
 - `docs/MODULES.md` — module map, shared-core rules, how to avoid merge clashes
 - `docs/DEVELOPMENT_RATIONALE.md` — the *why* behind decisions (see logging rule below)
 - `docs/overlap.md` — cross-module hand-off log (see "commit to overlap" rule below)
+- `docs/AI_OPPONENT.md` — AI-bot design notes, options ladder & next steps (parked 2026-07-17)
 
 ## Cross-module overlap log (REQUIRED)
 

@@ -10,10 +10,8 @@ export class RandomBot implements Bot {
     this.prng = createPRNG(seed);
   }
 
-  chooseAction(visibleState: VisibleState, registry: DataRegistry): Action {
-    // Reconstruct legal actions from visible state — for bots we use a simplified approach
-    // In practice, bots receive the visible state and compute actions from it
-    const actions = getLegalActionsFromVisible(visibleState, registry);
+  chooseAction(visibleState: VisibleState, registry: DataRegistry, legalActions?: Action[]): Action {
+    const actions = legalActions ?? getLegalActionsFromVisible(visibleState, registry);
     if (actions.length === 0) return { type: 'endTurn' };
 
     const [idx, nextPrng] = nextInt(this.prng, 0, actions.length - 1);

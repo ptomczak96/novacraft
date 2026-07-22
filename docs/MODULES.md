@@ -1,4 +1,4 @@
-# Tactica — Modules & How We Avoid Clashing
+# Rigbound — Modules & How We Avoid Clashing
 
 A shared map of the codebase for two people working in parallel. This is about
 *coordination*, not ownership — either of us can work in any module; we just

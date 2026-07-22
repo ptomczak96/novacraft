@@ -73,16 +73,16 @@ describe('Vindrace Slash (engine)', () => {
     expect(before - hp(s, 4)!).toBe(sideDmg); // both sides equal
   });
 
-  it('hits enemies only — a friendly unit in the arc is untouched', () => {
+  it('hits ALL units in the arc — friendly units take damage too (friendly fire)', () => {
     let s = base();
     s.units.push(
       mk(1, 'vindrace', 1, 3, 3),
       mk(2, 'defender', 0, 4, 3),  // enemy centre
-      mk(5, 'reaper', 1, 4, 2),    // friendly side — must be unharmed
+      mk(5, 'reaper', 1, 4, 2),    // friendly side — now DOES take damage
     );
-    const reaperHP = hp(s, 5);
+    const reaperHP = hp(s, 5)!;
     s = applyAction(s, { type: 'slash', unitId: 1, target: { x: 4, y: 3 } } as SlashAction, registry);
-    expect(hp(s, 5)).toBe(reaperHP);
+    expect(hp(s, 5)!).toBeLessThan(reaperHP); // friendly hit
     expect(hp(s, 2)!).toBeLessThan(registry.unitTypes['defender'].maxHP);
   });
 

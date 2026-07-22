@@ -90,7 +90,8 @@ describe('City production / pop (capacity) / supply→level', () => {
     expect(cityLevelForSupply(5, registry)).toBe(3);
     expect(cityLevelForSupply(9, registry)).toBe(4);
     expect(cityLevelForSupply(20, registry)).toBe(6);
-    expect(cityLevelForSupply(999, registry)).toBe(6);
+    expect(cityLevelForSupply(35, registry)).toBe(8);
+    expect(cityLevelForSupply(999, registry)).toBe(8); // capped at maxLevel 8
   });
 });
 
@@ -129,7 +130,7 @@ describe('REB1 — mines (output + supply)', () => {
     const a = makeOreTile(state, cap.position, 1, 0);
 
     state = applyAction(state, { type: 'build', kind: 'mine', position: a }, registry);
-    state = applyAction(state, { type: 'research', techId: 'drilling' }, registry); // Drilling unlocks mine L2
+    state = applyAction(state, { type: 'research', techId: 'mine_2' }, registry); // Drilling unlocks mine L2
     const before = calculateOreIncome(state, 0, registry); // L1 city (20 base) + 10 mine = 30
     state = applyAction(state, { type: 'upgradeBuilding', position: a }, registry);
 
@@ -154,6 +155,7 @@ describe('REB1 — extractors (plasma)', () => {
     let state = createGame(getConfig(), registry, ['vanguard', 'hive'], 7);
     const cap = capitalOf(state, 0);
     state.players[0].ore = 800;
+    state = applyAction(state, { type: 'research', techId: 'plasma_1' }, registry); // gate: extractor
     const v = makeOreTile(state, cap.position, 1, 0);
     state.map.tiles[v.y][v.x].resourceKind = 'plasma'; // make it a plasma vent
 
@@ -163,6 +165,7 @@ describe('REB1 — extractors (plasma)', () => {
     expect(calculatePlasmaIncome(state, 0, registry)).toBe(plasmaBefore + 5); // +5 plasma
     expect(calculateOreIncome(state, 0, registry)).toBe(oreBefore); // never any ore
 
+    state = applyAction(state, { type: 'research', techId: 'plasma_2' }, registry); // gate: extractor L2
     state = applyAction(state, { type: 'upgradeBuilding', position: v }, registry); // → L2
     expect(calculatePlasmaIncome(state, 0, registry)).toBe(plasmaBefore + 10); // total 10 at L2
   });
@@ -229,6 +232,7 @@ describe('REB2 — purifiers (require an adjacent extractor)', () => {
     let state = createGame(getConfig(), registry, ['vanguard', 'hive'], 7);
     const cap = capitalOf(state, 0);
     state.players[0].ore = 1200;
+    state = applyAction(state, { type: 'research', techId: 'plasma_1' }, registry); // gate: extractor
 
     const vent = makeOreTile(state, cap.position, 1, 0);
     state.map.tiles[vent.y][vent.x].resourceKind = 'plasma'; // a plasma vent, no extractor
@@ -597,19 +601,15 @@ describe('City leveling (choice-based)', () => {
     expect(cityProduction(after, registry)).toBe(20 + 10 + 20); // capital base + level + bonus
   });
 
-  it('L2→3 "reveal" levels the city to 3 and discovers fog toward the enemy', () => {
+  it('L2→3 "beacon" levels the city to 3 and grants it +1 sight', () => {
     const registry = getRegistry();
     let state = createGame(getConfig({ fogOfWar: true }), registry, ['vanguard', 'hive'], 7);
     const cap = capitalOf(state, 0);
     cap.level = 2; cap.supply = 5; // ready to reach L3 (threshold 5)
     state.currentPlayer = 0;
-
-    const countMem = (s: typeof state) => s.memory[0].tiles.reduce((n, row) => n + row.filter(Boolean).length, 0);
-    const before = countMem(state);
-
-    state = applyAction(state, { type: 'levelUpCity', cityId: cap.id, choice: 'reveal' }, registry);
+    state = applyAction(state, { type: 'levelUpCity', cityId: cap.id, choice: 'beacon' }, registry);
     expect(cityAt(state, cap.position)!.level).toBe(3);
-    expect(countMem(state)).toBeGreaterThan(before); // newly discovered (fog) tiles
+    expect(cityAt(state, cap.position)!.beacon).toBe(true);
   });
 });
 

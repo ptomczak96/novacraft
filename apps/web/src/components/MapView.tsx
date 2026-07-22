@@ -4,7 +4,14 @@ import { useGameStore } from '../store/gameStore.js';
 import { IsoCanvas } from '../iso/IsoCanvas.js';
 import { Starfield } from '../iso/Starfield.js';
 import { TerritorySelectBar } from './TerritorySelectBar.js';
+import { VolleySelectBar } from './VolleySelectBar.js';
+import { StrikeSelectBar } from './StrikeSelectBar.js';
+import { TargetSelectBar } from './TargetSelectBar.js';
+import { NodeCancelDialog } from './NodeCancelDialog.js';
+import { MarkRemovalBar } from './MarkRemovalBar.js';
 import { CityEconomyLines } from './EconomyBreakdown.js';
+import { abilityDef } from './UnitSheet.js';
+import { coordLabel } from '../data/notation.js';
 
 const UNIT_ICONS: Record<string, string> = {
   scout: '🏃',
@@ -12,6 +19,8 @@ const UNIT_ICONS: Record<string, string> = {
   lancer: '🪖',
   archer: '🏹',
   defender: '🛡️',
+  medic: '🧑‍⚕️',
+  engineer: '👷',
   wraith: '🥷',
   stalker: '🕷️',
   titan: '🗿',
@@ -21,9 +30,12 @@ const UNIT_ICONS: Record<string, string> = {
   scuttling: '🐛',
   hive_scout: '👁️',
   reaper: '🦅',
+  burstling: '💣',
   scab: '⚗️',
   vindrace: '🦏',
   seercaust: '🔮',
+  behemoth: '🦖',
+  ravener: '🦇',
   wyrm: '🪱',
   ironclad_berserker: '🪓',
   ironclad_siege_tower: '🏰',
@@ -84,6 +96,9 @@ export function MapView() {
     return getRecruitOptions(gameState, registry, gameState.currentPlayer, selectedCity);
   }, [gameState, registry, selectedCity]);
 
+  // Pop is "full" when the city can't fit even the smallest available unit.
+  const popFull = recruitOptions.length > 0 && recruitOptions.every(o => !o.fitsPop);
+
   // Collapse the menu whenever the selected city changes.
   useEffect(() => { setShowRecruit(false); }, [selectedCity]);
 
@@ -94,7 +109,7 @@ export function MapView() {
       c => c.position.x === selectedCity.x && c.position.y === selectedCity.y,
     );
     if (!city) return null;
-    const popMax = cityPop(city, registry);
+    const popMax = cityPop(city, registry, gameState ?? undefined);
     // Weighted, rounded up — scuttlings count 0.5 each (a pair = 1).
     const popUsed = Math.ceil(visibleState.units
       .filter(u => visibleState.unitHomeCity[u.id] === city.id)
@@ -118,10 +133,28 @@ export function MapView() {
   return (
     <div className="map-container" style={{ position: 'relative' }}>
       <Starfield pan={pan} />
-      <IsoCanvas mode="game" pan={pan} onPanChange={setPan} />
+      {/* Only the board scrolls/zooms; overlays below stay pinned to the visible box. */}
+      <div className="map-scroll">
+        <IsoCanvas mode="game" pan={pan} onPanChange={setPan} />
+      </div>
 
       {/* Territory-expansion picker — pinned to the map's top-right corner */}
       <TerritorySelectBar />
+
+      {/* Ballistic Volley 2×2 target picker (Titan) */}
+      <VolleySelectBar />
+
+      {/* Wyrm Body Slam 2-cell picker */}
+      <StrikeSelectBar />
+
+      {/* Cure / Repair multi-unit target picker (Medic / Engineer) */}
+      <TargetSelectBar />
+
+      {/* Confirm dialog for cancelling in-progress Node construction */}
+      <NodeCancelDialog />
+
+      {/* Remove tracer round / explosives prompt */}
+      <MarkRemovalBar />
 
       {/* City info card — pop & supply for the selected city (any owner) */}
       {cityInfo && (
@@ -181,7 +214,7 @@ export function MapView() {
               <div className="tile-info-note">Enemy units: −20% DEF · movement penalty (TBD)</div>
             </div>
           )}
-          <div className="tile-info-note tile-info-coord">({tileInfo.coord.x}, {tileInfo.coord.y})</div>
+          <div className="tile-info-note tile-info-coord">{coordLabel(tileInfo.coord.x, tileInfo.coord.y)}</div>
         </div>
       )}
 
@@ -194,37 +227,97 @@ export function MapView() {
         </div>
       )}
 
-      {/* Recruit panel — all buildable units; unaffordable ones are tinted red */}
+      {/* Recruit panel — the full roster as a table; locked / unaffordable / pop-blocked
+          rows are greyed rather than hidden. A "Population Full" banner tops the list when
+          the city has no room. The Abilities column shows a ? (hover/click for details)
+          or "None". */}
       {showRecruit && selectedCity && recruitOptions.length > 0 && (
-        <div className="recruit-panel">
-          {recruitOptions.map(opt => {
-            const ut = registry.unitTypes[opt.unitTypeId];
-            if (!ut) return null;
-            const cls = `recruit-card${opt.locked ? ' recruit-card--locked' : opt.affordable ? '' : ' recruit-card--unaffordable'}`;
-            const title = opt.locked
-              ? `Locked — research ${opt.lockedBy && opt.lockedBy.length ? opt.lockedBy.join(' / ') : 'the required tech'} to unlock`
-              : opt.affordable ? undefined : 'Not enough resources';
-            return (
-              <div
-                key={opt.unitTypeId}
-                className={cls}
-                title={title}
-                onClick={() => {
-                  if (opt.locked || !opt.affordable) return;
-                  executeAction({ type: 'recruit', unitTypeId: opt.unitTypeId, cityPosition: selectedCity });
-                  setShowRecruit(false);
-                }}
-              >
-                <div className="name">{UNIT_ICONS[opt.unitTypeId] || '●'} {ut.name}</div>
-                {opt.locked
-                  ? <div className="cost">🔒 {opt.lockedBy && opt.lockedBy.length ? opt.lockedBy.join(' / ') : 'Locked'}</div>
-                  : <div className="cost">{opt.cost}◈{opt.plasmaCost > 0 ? ` ${opt.plasmaCost}✦` : ''}</div>}
-                <div className="stats">
-                  HP:{ut.maxHP} ATK:{ut.attack} DEF:{ut.defence} MOV:{ut.movement} RNG:{ut.attackRange}
-                </div>
-              </div>
-            );
-          })}
+        <div className="recruit-panel recruit-panel--table">
+          {popFull && (
+            <div className="recruit-popfull">
+              <span className="recruit-popfull-ico" aria-hidden>⚠️</span> Population Full
+            </div>
+          )}
+          <table className="recruit-table">
+            <thead>
+              <tr>
+                <th className="ru-unit">Unit</th>
+                <th>HP</th><th>ATT</th><th>DEF</th><th>MOV</th><th>RNG</th><th>VIS</th>
+                <th>Abilities</th>
+              </tr>
+            </thead>
+            <tbody>
+              {recruitOptions.map(opt => {
+                const ut = registry.unitTypes[opt.unitTypeId];
+                if (!ut) return null;
+                const recruitable = !opt.locked && opt.affordable && opt.fitsPop;
+                const rowCls = `recruit-row${opt.locked ? ' recruit-row--locked' : !opt.fitsPop ? ' recruit-row--nopop' : opt.affordable ? '' : ' recruit-row--unaffordable'}`;
+                const title = opt.locked
+                  ? `Locked — research ${opt.lockedBy && opt.lockedBy.length ? opt.lockedBy.join(' / ') : 'the required tech'} to unlock`
+                  : !opt.fitsPop ? 'Population full — no room for this unit'
+                  : opt.affordable ? undefined : 'Not enough resources';
+                // Inherent actives (ability casts) + passives (passive-category conditions).
+                const actives = ut.abilities.map(a => abilityDef(a.id));
+                const passives = (ut.conditions ?? []).map(id => abilityDef(id)).filter(d => d.category === 'passive');
+                const rows = [
+                  ...actives.map(d => ({ kind: 'Active', ...d })),
+                  ...passives.map(d => ({ kind: 'Passive', ...d })),
+                ];
+                return (
+                  <tr
+                    key={opt.unitTypeId}
+                    className={rowCls}
+                    title={title}
+                    onClick={() => {
+                      if (!recruitable) return;
+                      executeAction({ type: 'recruit', unitTypeId: opt.unitTypeId, cityPosition: selectedCity });
+                      setShowRecruit(false);
+                    }}
+                  >
+                    <td className="ru-unit">
+                      <span className="ru-ico" aria-hidden>{UNIT_ICONS[opt.unitTypeId] || '●'}</span>
+                      <span className="ru-name">{ut.name}</span>
+                      <span className="ru-cost">
+                        {opt.locked
+                          ? <>🔒 {opt.lockedBy && opt.lockedBy.length ? opt.lockedBy.join(' / ') : 'Locked'}</>
+                          : <>{opt.cost}◈{opt.plasmaCost > 0 ? ` ${opt.plasmaCost}✦` : ''}</>}
+                      </span>
+                    </td>
+                    <td>{ut.maxHP}</td>
+                    <td>{ut.attack}</td>
+                    <td>{ut.defence}</td>
+                    <td>{ut.movement}</td>
+                    <td>{ut.attackRange}</td>
+                    <td>{ut.visibility}</td>
+                    <td className="ru-abil-cell">
+                      {rows.length === 0
+                        ? <span className="ru-none">None</span>
+                        : (
+                          <span className="ru-abil" tabIndex={0} onClick={e => e.stopPropagation()}>
+                            <span className="ru-abil-q" aria-label="Abilities">❓</span>
+                            <span className="ru-abil-pop" role="tooltip">
+                              <span className="ru-abil-title">{ut.name} — Abilities</span>
+                              <table className="ru-abil-table">
+                                <thead><tr><th>Type</th><th>Name</th><th>Effect</th></tr></thead>
+                                <tbody>
+                                  {rows.map((r, i) => (
+                                    <tr key={i}>
+                                      <td className={`ru-abil-kind ${r.kind.toLowerCase()}`}>{r.kind}</td>
+                                      <td className="ru-abil-name">{r.name}</td>
+                                      <td className="ru-abil-desc">{r.desc || '—'}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </span>
+                          </span>
+                        )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       )}
     </div>

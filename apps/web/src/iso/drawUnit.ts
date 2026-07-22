@@ -240,6 +240,10 @@ const UNIT_DRAWERS: Record<string, UnitDrawFn> = {
   seercaust: drawSeercaust,
   wyrm: drawWyrm,
   wyrm_burrowed: drawWyrmBurrowed,
+  // Emoji tokens (match the recruit-table icons) until bespoke art exists.
+  burstling: emojiUnit('💣'),
+  behemoth: emojiUnit('🦖'),
+  ravener: emojiUnit('🦇'),
 };
 
 // The Stalker — a six-legged walker with a ranged cannon. Placeholder art (Patrick to
@@ -1596,4 +1600,18 @@ function drawGenericUnit(
   outlined(ctx, color, () => {
     ctx.arc(cx, cy, 8, 0, Math.PI * 2);
   }, 1.5);
+}
+
+// EMOJI token — a player-colored disc (so friend/foe stays readable) with the same emoji
+// the recruit table uses on top. For units without bespoke vector art yet.
+function emojiUnit(emoji: string): UnitDrawFn {
+  return (ctx, cx, cy, color) => {
+    outlined(ctx, color, () => { ctx.arc(cx, cy, 8, 0, Math.PI * 2); }, 1.5);
+    ctx.save();
+    ctx.font = '12px system-ui, "Apple Color Emoji", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(emoji, cx, cy);
+    ctx.restore();
+  };
 }

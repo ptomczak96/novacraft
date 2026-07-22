@@ -1,12 +1,31 @@
 import React, { useState } from 'react';
 import { useGameStore } from '../store/gameStore.js';
-import type { CombatBreakdown } from '@tactica/engine';
+import type { CombatBreakdown, CombatMod } from '@tactica/engine';
 
-function BreakdownSection({ label, breakdown, attackerName, defenderName }: {
+// One "Base ×mod ×mod = Effective" line, with each buff (green) / debuff (red) named.
+function ModLine({ label, base, effective, mods }: {
+  label: string; base: number; effective: number; mods: CombatMod[];
+}) {
+  return (
+    <div className="combat-breakdown-row cb-modline">
+      <span className="cb-label">{label}</span>
+      <span className="cb-formula">
+        <span className="cb-base">{base}</span>
+        {mods.map((m, i) => (
+          <span key={i} className={`cb-mod ${m.mult >= 1 ? 'cb-buff' : 'cb-debuff'}`}>
+            ×{m.mult} {m.label}
+          </span>
+        ))}
+        {mods.length > 0 && <span className="cb-eff"> = {effective.toFixed(effective % 1 ? 1 : 0)}</span>}
+      </span>
+    </div>
+  );
+}
+
+function BreakdownSection({ label, breakdown, showMods = true }: {
   label: string;
   breakdown: CombatBreakdown;
-  attackerName: string;
-  defenderName: string;
+  showMods?: boolean;
 }) {
   const terrainNote = breakdown.terrainBonus > 1
     ? ` (${breakdown.terrainName})`
@@ -16,6 +35,12 @@ function BreakdownSection({ label, breakdown, attackerName, defenderName }: {
     <div className="combat-breakdown-section">
       <div className="combat-breakdown-header">{label}</div>
       <div className="combat-breakdown">
+        {showMods && (
+          <>
+            <ModLine label="Attack" base={breakdown.baseAttack} effective={breakdown.effectiveAttack} mods={breakdown.attackMods} />
+            <ModLine label="Defence" base={breakdown.baseDefence} effective={breakdown.effectiveDefence} mods={breakdown.defenceMods} />
+          </>
+        )}
         <div className="combat-breakdown-row">
           <span className="cb-label">Atk Force</span>
           <span className="cb-formula">
@@ -133,8 +158,6 @@ export function CombatLog() {
       <BreakdownSection
         label={`${attacker.name} attacks`}
         breakdown={attackBreakdown}
-        attackerName={attacker.name}
-        defenderName={defender.name}
       />
       <div className="combat-log-hp-result">
         <span>{defender.name}: {defender.hpBefore} &rarr; {defender.hpAfter} HP</span>
@@ -147,8 +170,7 @@ export function CombatLog() {
           <BreakdownSection
             label={`${defender.name} defends`}
             breakdown={retaliationBreakdown}
-            attackerName={defender.name}
-            defenderName={attacker.name}
+            showMods={false}
           />
           <div className="combat-log-hp-result">
             <span>{attacker.name}: {attacker.hpBefore} &rarr; {attacker.hpAfter} HP</span>

@@ -1,4 +1,4 @@
-# Tactica — Game Design Document (v1)
+# Rigbound — Game Design Document (v1)
 
 ## Map
 

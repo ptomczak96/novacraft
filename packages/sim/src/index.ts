@@ -1,5 +1,5 @@
 import {
-  createGame, applyAction, getVisibleState, getResult, computeScores,
+  createGame, applyAction, getVisibleState, getResult, computeScores, getLegalActions,
   type GameState, type GameConfig, type GameResult, type DataRegistry, type Action,
 } from '@tactica/engine';
 import { buildRegistry, defaultConfig } from '@tactica/data';
@@ -19,6 +19,10 @@ const botAType = getArg('bot-a', 'greedy');
 const botBType = getArg('bot-b', 'greedy');
 const baseSeed = parseInt(getArg('seed', '42'));
 const outDir = getArg('out', 'results/default');
+// Optional faction overrides (default: first two factions). Force both the SAME faction
+// (e.g. --faction-a vanguard --faction-b vanguard) to compare BOTS with faction neutralised.
+const factionAArg = getArg('faction-a', '');
+const factionBArg = getArg('faction-b', '');
 
 function createBot(type: string, seed: number): Bot {
   switch (type) {
@@ -69,7 +73,10 @@ function runSingleGame(
     const currentPlayer = state.currentPlayer;
     const bot = bots[currentPlayer];
     const visible = getVisibleState(state, currentPlayer, registry);
-    const action = bot.chooseAction(visible, registry);
+    // Feed the bot the ENGINE's real legal actions (incl. foundCity/captureCity/build/…),
+    // not a limited visible-state reconstruction.
+    const legal = getLegalActions(state, registry, currentPlayer);
+    const action = bot.chooseAction(visible, registry, legal);
 
     // Track recruits
     if (action.type === 'recruit') {
@@ -139,8 +146,8 @@ function main() {
   const registry = buildRegistry();
   const config: GameConfig = { ...defaultConfig, fogOfWar: false };
   const factionIds = Object.keys(registry.factions);
-  const f0 = factionIds[0] || 'vanguard';
-  const f1 = factionIds[1] || 'hive';
+  const f0 = factionAArg || factionIds[0] || 'vanguard';
+  const f1 = factionBArg || factionIds[1] || 'hive';
 
   console.log(`\n=== TACTICA SIMULATION ===`);
   console.log(`Games: ${numGames} | Bot A: ${botAType} | Bot B: ${botBType} | Seed: ${baseSeed}`);

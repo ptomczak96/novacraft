@@ -17,7 +17,7 @@ export function EditorPanel() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'tactica-balance.json';
+    a.download = 'rigbound-balance.json';
     a.click();
     URL.revokeObjectURL(url);
   };

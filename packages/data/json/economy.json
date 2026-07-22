@@ -17,12 +17,12 @@
   "startingPlasma": 0,
 
   "city": {
-    "maxLevel": 6,
+    "maxLevel": 8,
     "capitalBaseProduction": 20,
     "cityBaseProduction": 10,
     "productionPerLevel": 10,
     "popBase": 2,
-    "supplyThresholds": [2, 5, 9, 14, 20],
+    "supplyThresholds": [2, 5, 9, 14, 20, 27, 35],
     "territoryRadius": 1,
     "capitalSightRadius": 2
   },
@@ -37,7 +37,7 @@
       "outputByLevel": [10, 20, 30],
       "supplyByLevel": [1, 2, 4],
       "techRequired": null,
-      "upgradeTechRequired": ["drilling", null]
+      "upgradeTechRequired": ["mine_2", "mine_3"]
     },
     "extractor": {
       "on": "plasma",
@@ -47,8 +47,8 @@
       "costByLevel": [100, 125, 200],
       "outputByLevel": [5, 10, 20],
       "supplyByLevel": [2, 3, 4],
-      "techRequired": null,
-      "upgradeTechRequired": [null, null]
+      "techRequired": "plasma_1",
+      "upgradeTechRequired": ["plasma_2", "plasma_3"]
     },
     "refinery": {
       "on": "land",

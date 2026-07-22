@@ -188,7 +188,12 @@ describe('Determinism', () => {
 describe('Fuzz test', () => {
   it('100 random games complete without errors', () => {
     const registry = getRegistry();
-    const config = getConfig({ turnLimit: 30 });
+    // Enable the score-at-limit win so games are guaranteed to terminate by the turn limit
+    // (the default config now carries a single, non-score win condition).
+    const config = getConfig({
+      turnLimit: 30,
+      winConditions: { captureAllCities: true, captureCapital: false, eliminateAllUnits: false, highestScoreAtLimit: true },
+    });
 
     for (let game = 0; game < 100; game++) {
       let state = createGame(config, registry, ['vanguard', 'hive'], game);
@@ -221,7 +226,7 @@ describe('Win conditions', () => {
   it('detects elimination win', () => {
     const registry = getRegistry();
     const config = getConfig({
-      winConditions: { captureAllCities: false, eliminateAllUnits: true, highestScoreAtLimit: false },
+      winConditions: { captureAllCities: false, captureCapital: false, eliminateAllUnits: true, highestScoreAtLimit: false },
       turnLimit: 100,
     });
     let state = createGame(config, registry, ['vanguard', 'hive'], 42);
@@ -234,6 +239,22 @@ describe('Win conditions', () => {
     expect(state.phase).toBe('finished');
     expect(state.winner).toBe(0);
     expect(state.winConditionMet).toBe('eliminateAllUnits');
+  });
+
+  it('detects capital-capture win when a player loses their capital', () => {
+    const registry = getRegistry();
+    const config = getConfig({
+      winConditions: { captureAllCities: false, captureCapital: true, eliminateAllUnits: false, highestScoreAtLimit: false },
+      turnLimit: 100,
+    });
+    let state = createGame(config, registry, ['vanguard', 'hive'], 42);
+    // Player 1's capital falls to player 0 (simulate the capture).
+    const enemyCapital = state.cities.find(c => c.isCapital && c.owner === 1)!;
+    enemyCapital.owner = 0;
+    state = applyAction(state, { type: 'endTurn' }, registry); // triggers the win check
+    expect(state.phase).toBe('finished');
+    expect(state.winner).toBe(0);
+    expect(state.winConditionMet).toBe('captureCapital');
   });
 });
 

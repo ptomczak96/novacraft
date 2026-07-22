@@ -46,7 +46,7 @@ describe('Mountains: default impassable; only mountain-condition units climb', (
   });
 });
 
-describe('Condition: frazzled', () => {
+describe('Condition: stumble', () => {
   it('caps movement at 1 only when adjacent to an enemy (AOI = the 3×3, not attack range)', () => {
     const state = createGame({ ...defaultConfig, fogOfWar: false }, registry, ['vanguard', 'hive'], 7);
     for (let y = 2; y <= 8; y++) for (let x = 2; x <= 8; x++) state.map.tiles[y][x].terrain = 'plains';
@@ -56,7 +56,7 @@ describe('Condition: frazzled', () => {
     // No enemy nearby → full movement (2) reaches a tile 2 away.
     expect(reach([]).has('7,5')).toBe(true);
 
-    // Adjacent enemy (in the scout's 3×3) → frazzled → movement 1.
+    // Adjacent enemy (in the scout's 3×3) → stumble → movement 1.
     const adjacent = { id: 2, typeId: 'warrior', owner: 0, position: { x: 6, y: 5 }, hp: 10, hasMoved: false, hasAttacked: false, abilityCooldowns: {} };
     const near = reach([adjacent]);
     expect(near.has('3,5')).toBe(false); // 2 west — out of reach now

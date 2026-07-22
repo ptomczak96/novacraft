@@ -8,8 +8,23 @@ import { CombatLog } from './CombatLog.js';
 import { TechTreeView } from './TechTreeView.js';
 import { LevelUpModal } from './LevelUpModal.js';
 import type { Action } from '@tactica/engine';
-import { getLegalActions, playerEconomy } from '@tactica/engine';
+import { getLegalActions, getVisibleState, playerEconomy } from '@tactica/engine';
+import { GreedyBot, RandomBot } from '@tactica/bots';
+import type { Bot } from '@tactica/bots';
 import { ResourceBreakdown } from './EconomyBreakdown.js';
+import { CoachPanel } from './CoachPanel.js';
+import { describeAction } from '../data/coach.js';
+import type { CoachMeta } from '../data/coach.js';
+
+// Persistent bot instances (per player slot) so each bot keeps its PRNG state across turns.
+const BOT_CACHE: Record<string, Bot> = {};
+function getBot(player: number, setting: string): Bot {
+  const key = `${player}:${setting}`;
+  if (!BOT_CACHE[key]) {
+    BOT_CACHE[key] = setting === 'random' ? new RandomBot(1000 + player) : new GreedyBot(undefined, 5000 + player);
+  }
+  return BOT_CACHE[key];
+}
 
 export function GameScreen() {
   const {
@@ -18,6 +33,7 @@ export function GameScreen() {
     executeAction, undo, saveGame, setScreen,
     editorOpen, setEditorOpen, inspectorOpen, setInspectorOpen,
     botSettings, autoPlay, setAutoPlay,
+    coachEnabled, setCoachEnabled,
   } = useGameStore();
 
   const autoPlayRef = useRef(autoPlay);
@@ -28,6 +44,9 @@ export function GameScreen() {
   const [techOpen, setTechOpen] = useState(false);
   const [showIncome, setShowIncome] = useState(false);
   const [showPlasma, setShowPlasma] = useState(false);
+  // Coaching: when on, a bot plays its moves but HALTS before ending its turn, so you can
+  // inspect the board from the bot's point of view and comment before advancing.
+  const [botTurnHalted, setBotTurnHalted] = useState(false);
   const handleResearch = useCallback((id: string) => {
     executeAction({ type: 'research', techId: id });
   }, [executeAction]);
@@ -43,36 +62,54 @@ export function GameScreen() {
     const actions = state.legalActions;
     if (actions.length === 0) return;
 
-    let action: Action;
-    if (botSetting === 'random') {
-      action = actions[Math.floor(Math.random() * actions.length)];
-    } else {
-      // Greedy: simple heuristic — prefer attacks > moves > endTurn
-      const attacks = actions.filter(a => a.type === 'attack');
-      const recruits = actions.filter(a => a.type === 'recruit');
-      const moves = actions.filter(a => a.type === 'move');
-      if (attacks.length > 0) {
-        action = attacks[0];
-      } else if (recruits.length > 0) {
-        action = recruits[0];
-      } else if (moves.length > 0) {
-        action = moves[Math.floor(Math.random() * moves.length)];
+    // Use the real bot classes (packages/bots), fed the ENGINE's real legal actions so the
+    // bot can found/capture/build — not the old inline stub that picked random moves.
+    const bot = getBot(currentPlayer, botSetting);
+    const visible = getVisibleState(state.gameState, currentPlayer, state.registry);
+    const action: Action = bot.chooseAction(visible, state.registry, actions);
+
+    // Coaching: don't auto-end the bot's turn — halt so the human can review + comment.
+    if (state.coachEnabled && action.type === 'endTurn') { setBotTurnHalted(true); return; }
+
+    // Coaching: capture the bot's scored candidates (its "why did you do this?").
+    let coachMeta: CoachMeta | undefined;
+    if (state.coachEnabled) {
+      if (bot.scoreAction) {
+        const scored = actions
+          .map(a => ({ a, score: bot.scoreAction!(a, visible, state.registry) }))
+          .sort((x, y) => y.score - x.score);
+        const top = scored.slice(0, 8);
+        if (!top.some(s => s.a === action)) {
+          top.push({ a: action, score: scored.find(s => s.a === action)?.score ?? 0 });
+        }
+        coachMeta = {
+          actor: 'ai',
+          candidates: top.map(({ a, score }) => ({
+            desc: describeAction(a, state.gameState!, state.unitLabels, state.registry),
+            score: Math.round(score * 10) / 10,
+            chosen: a === action,
+          })),
+        };
       } else {
-        action = { type: 'endTurn' };
+        coachMeta = { actor: 'ai' };
       }
     }
 
-    state.executeAction(action);
+    state.executeAction(action, coachMeta);
   }, []);
 
   useEffect(() => {
     if (!gameState || gameState.phase !== 'playing') return;
     const currentBot = botSettings[gameState.currentPlayer];
     if (currentBot === 'human') return;
+    if (botTurnHalted) return; // waiting for the human to click "End Bot Turn"
 
     const timer = setTimeout(doBotTurn, autoPlay ? 100 : 500);
     return () => clearTimeout(timer);
-  }, [gameState?.currentPlayer, gameState?.turn, gameState?.actionLog.length, botSettings, autoPlay, doBotTurn]);
+  }, [gameState?.currentPlayer, gameState?.turn, gameState?.actionLog.length, botSettings, autoPlay, doBotTurn, botTurnHalted]);
+
+  // Clear the halt whenever the turn advances (a new player is up).
+  useEffect(() => { setBotTurnHalted(false); }, [gameState?.currentPlayer, gameState?.turn]);
 
   if (!gameState || !visibleState) return null;
 
@@ -86,7 +123,7 @@ export function GameScreen() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `tactica-save-turn${gameState.turn}.json`;
+    a.download = `rigbound-save-turn${gameState.turn}.json`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -102,6 +139,12 @@ export function GameScreen() {
 
   const handleStep = () => {
     doBotTurn();
+  };
+
+  // Coaching: the human submits the bot's end-of-turn after reviewing its moves.
+  const handleEndBotTurn = () => {
+    setBotTurnHalted(false);
+    useGameStore.getState().executeAction({ type: 'endTurn' }, { actor: 'ai' });
   };
 
   // Per-city income breakdown (shown on hover over the ore / plasma totals). A single
@@ -150,6 +193,11 @@ export function GameScreen() {
             </span>
           </div>
           <div className="top-bar-actions">
+            {botSettings[currentPlayer] !== 'human' && botTurnHalted && (
+              <button className="primary" onClick={handleEndBotTurn}>
+                End {faction?.name ?? 'Bot'}'s Turn ▶
+              </button>
+            )}
             {botSettings[currentPlayer] !== 'human' && (
               <>
                 <button className="ghost" onClick={handleStep}>Step</button>
@@ -174,12 +222,18 @@ export function GameScreen() {
             <button className="ghost" onClick={() => setEditorOpen(!editorOpen)}>
               {editorOpen ? 'Close Editor' : 'Editor'}
             </button>
+            <button className={coachEnabled ? 'danger' : 'ghost'} onClick={() => setCoachEnabled(!coachEnabled)}>
+              {coachEnabled ? 'Coach ✓' : 'Coach'}
+            </button>
             <button className="ghost" onClick={() => setScreen('setup')}>Menu</button>
           </div>
         </div>
 
         {/* Map */}
         <MapView />
+
+        {/* Coaching sidebar (self-hides when disabled) */}
+        <CoachPanel />
 
         {/* City level-up choice (pops when an owned city has enough supply) */}
         <LevelUpModal />
@@ -195,6 +249,7 @@ export function GameScreen() {
             <p>
               {gameState.winConditionMet === 'eliminateAllUnits' && 'All enemy units eliminated'}
               {gameState.winConditionMet === 'captureAllCities' && 'All cities captured'}
+              {gameState.winConditionMet === 'captureCapital' && 'Enemy capital captured'}
               {gameState.winConditionMet === 'highestScoreAtLimit' && `Highest score at turn ${config.turnLimit}`}
             </p>
             <button className="primary" onClick={() => setScreen('setup')}>New Game</button>
@@ -223,6 +278,7 @@ export function GameScreen() {
       {techOpen && (
         <TechTreeView
           factionName={faction?.name || `Player ${currentPlayer + 1}`}
+          factionId={faction?.id ?? 'vanguard'}
           researched={new Set(player.researchedTechs)}
           onResearch={handleResearch}
           onClose={() => setTechOpen(false)}

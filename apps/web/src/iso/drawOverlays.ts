@@ -4,10 +4,92 @@ import {
   LABEL_FONT, LABEL_COLOR, PLAYER_COLORS,
 } from './constants.js';
 import { tileToScreenShifted } from './projection.js';
+import { colLetter } from '../data/notation.js';
 import type { GameMap, CityState, TileVisibility } from '@tactica/engine';
 
 const HW = TILE_W / 2;
 const HH = TILE_H / 2;
+
+// Blinking marker dots above a unit: blue = Tracer Round, red = Plant Explosives.
+// `on` toggles the blink (driven by a ~1s timer in the caller).
+export function drawMarkDots(
+  ctx: CanvasRenderingContext2D,
+  tx: number,
+  ty: number,
+  mapHeight: number,
+  kinds: ('tracer' | 'explosive')[],
+  on: boolean,
+) {
+  if (!on || kinds.length === 0) return;
+  const { sx, sy } = tileToScreenShifted(tx, ty, mapHeight, 0);
+  const cx = sx;
+  const topY = sy - 10; // above the tile's top vertex (over the unit's head)
+  kinds.forEach((kind, i) => {
+    const x = cx + (i - (kinds.length - 1) / 2) * 11;
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(x, topY, 4, 0, Math.PI * 2);
+    ctx.fillStyle = kind === 'tracer' ? '#3aa0ff' : '#ff3a3a';
+    ctx.shadowColor = ctx.fillStyle;
+    ctx.shadowBlur = 6;
+    ctx.fill();
+    ctx.restore();
+  });
+}
+
+// A Node marker: a diamond/gem at the centre of its tile. `building` = under construction
+// (translucent, dashed outline); complete = solid.
+export function drawNode(
+  ctx: CanvasRenderingContext2D,
+  tx: number,
+  ty: number,
+  mapHeight: number,
+  color: string,
+  building: boolean,
+) {
+  const { sx, sy } = tileToScreenShifted(tx, ty, mapHeight, 0);
+  const cx = sx;
+  const cy = sy + HH - 8; // tile centre, raised a touch so it reads as a standing marker
+  const w = HW * 0.62;
+  const h = TILE_H * 0.62;
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - h / 2);
+  ctx.lineTo(cx + w / 2, cy);
+  ctx.lineTo(cx, cy + h / 2);
+  ctx.lineTo(cx - w / 2, cy);
+  ctx.closePath();
+  ctx.globalAlpha = building ? 0.4 : 0.85;
+  ctx.fillStyle = color;
+  ctx.fill();
+  ctx.globalAlpha = 1;
+  ctx.lineWidth = 2.5;
+  ctx.strokeStyle = color;
+  if (building) ctx.setLineDash([5, 4]);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.restore();
+}
+
+/**
+ * Chess-style axis rulers: column letters (A, B, C…) along the top & bottom edges, row
+ * numbers (1, 2, 3…) down the left & right edges — drawn just outside the diamond grid.
+ */
+export function drawAxisLabels(ctx: CanvasRenderingContext2D, map: GameMap) {
+  const H = map.height, W = map.width;
+  ctx.save();
+  ctx.font = LABEL_FONT;
+  ctx.fillStyle = 'rgba(220, 230, 245, 0.75)';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  const put = (tx: number, ty: number, text: string) => {
+    const { sx, sy } = tileToScreenShifted(tx, ty, H, 0);
+    ctx.fillText(text, sx + HW, sy + HH);
+  };
+  for (let x = 0; x < W; x++) { put(x, -1, colLetter(x)); put(x, H, colLetter(x)); }   // top & bottom
+  for (let y = 0; y < H; y++) { put(-1, y, String(y + 1)); put(W, y, String(y + 1)); }  // left & right
+  ctx.restore();
+}
 
 /**
  * Draw a colored diamond overlay on a tile (for move/attack highlights).
@@ -81,16 +163,23 @@ export function drawCloud(ctx: CanvasRenderingContext2D, tx: number, ty: number,
  * Territory-expansion picker overlay: faint green diamonds on eligible tiles and
  * a solid green diamond + check-mark on each ticked tile.
  */
+const PICKER_PALETTES = {
+  territory: { eligible: 'rgba(64, 220, 120, 0.28)', fill: 'rgba(48, 200, 100, 0.5)', stroke: 'rgba(40, 255, 120, 0.95)' },
+  attack: { eligible: 'rgba(230, 90, 60, 0.28)', fill: 'rgba(220, 70, 50, 0.5)', stroke: 'rgba(255, 110, 80, 0.95)' },
+} as const;
+
 export function drawTerritoryPicker(
   ctx: CanvasRenderingContext2D,
   map: GameMap,
   mapHeight: number,
   eligible: { x: number; y: number }[],
   picks: { x: number; y: number }[],
+  palette: keyof typeof PICKER_PALETTES = 'territory',
 ) {
+  const pal = PICKER_PALETTES[palette];
   for (const t of eligible) {
     const terrain = map.tiles[t.y]?.[t.x]?.terrain ?? 'plains';
-    drawHighlight(ctx, t.x, t.y, mapHeight, terrain, 'rgba(64, 220, 120, 0.28)');
+    drawHighlight(ctx, t.x, t.y, mapHeight, terrain, pal.eligible);
   }
   for (const t of picks) {
     const elev = ELEVATION[map.tiles[t.y]?.[t.x]?.terrain ?? 'plains'] ?? 0;
@@ -102,9 +191,9 @@ export function drawTerritoryPicker(
     ctx.lineTo(sx, sy + TILE_H);
     ctx.lineTo(sx - HW, sy + HH);
     ctx.closePath();
-    ctx.fillStyle = 'rgba(48, 200, 100, 0.5)';
+    ctx.fillStyle = pal.fill;
     ctx.fill();
-    ctx.strokeStyle = 'rgba(40, 255, 120, 0.95)';
+    ctx.strokeStyle = pal.stroke;
     ctx.lineWidth = 2.5;
     ctx.stroke();
     // Check mark
@@ -157,6 +246,76 @@ export function drawBileOverlay(
   drawHighlight(ctx, tx, ty, mapHeight, terrainId, 'rgba(150, 60, 200, 0.30)');
 }
 
+/** Faint red overlay for a tile within the selected unit's hypothetical attack/influence range. */
+export function drawAttackRangeHighlight(
+  ctx: CanvasRenderingContext2D,
+  tx: number,
+  ty: number,
+  mapHeight: number,
+  terrainId: string,
+) {
+  drawHighlight(ctx, tx, ty, mapHeight, terrainId, 'rgba(230, 70, 70, 0.16)');
+}
+
+/** Enemy Area-of-Influence (zone of control) tile: a faint amber tint + dashed border,
+ *  distinct from move (green) and attack-range (red) so players read it as "entering
+ *  here stops your move". */
+export function drawAOIHighlight(
+  ctx: CanvasRenderingContext2D,
+  tx: number,
+  ty: number,
+  mapHeight: number,
+  terrainId: string,
+) {
+  const elev = ELEVATION[terrainId] ?? 0;
+  const { sx, sy } = tileToScreenShifted(tx, ty, mapHeight, elev);
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(sx, sy);
+  ctx.lineTo(sx + HW, sy + HH);
+  ctx.lineTo(sx, sy + TILE_H);
+  ctx.lineTo(sx - HW, sy + HH);
+  ctx.closePath();
+  ctx.fillStyle = 'rgba(240, 170, 40, 0.12)';
+  ctx.fill();
+  ctx.setLineDash([5, 4]);
+  ctx.lineWidth = 1.5;
+  ctx.strokeStyle = 'rgba(245, 180, 60, 0.55)';
+  ctx.stroke();
+  ctx.restore();
+}
+
+/** Small crossed-swords marker above a tile — an enemy here can be attacked. */
+export function drawCrossedSwords(
+  ctx: CanvasRenderingContext2D,
+  tx: number,
+  ty: number,
+  mapHeight: number,
+  terrainId: string,
+) {
+  const elev = ELEVATION[terrainId] ?? 0;
+  const { sx, sy } = tileToScreenShifted(tx, ty, mapHeight, elev);
+  const cx = sx;
+  const cy = sy + HH - 24; // float above the unit
+  const r = 6;
+  // Two crossed blades (X), each with a small pommel dot.
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.lineWidth = 2.4;
+  ctx.strokeStyle = 'rgba(20,24,40,0.9)'; // dark outline pass
+  for (let pass = 0; pass < 2; pass++) {
+    ctx.beginPath();
+    ctx.moveTo(cx - r, cy - r); ctx.lineTo(cx + r, cy + r);
+    ctx.moveTo(cx + r, cy - r); ctx.lineTo(cx - r, cy + r);
+    ctx.stroke();
+    ctx.lineWidth = 1.4;
+    ctx.strokeStyle = '#e8e8ee'; // bright blades
+  }
+  ctx.fillStyle = '#c9a24a';
+  for (const [dx, dy] of [[-r, r], [r, r]]) { ctx.beginPath(); ctx.arc(cx + dx, cy + dy, 1.4, 0, Math.PI * 2); ctx.fill(); }
+  ctx.restore();
+}
+
 /** Highlight for a valid ability-cast target tile (purple — distinct from attack red). */
 export function drawAbilityHighlight(
   ctx: CanvasRenderingContext2D,
@@ -191,6 +350,7 @@ export function drawDamagePreview(
   mapHeight: number,
   terrainId: string,
   damage: number,
+  lethal: boolean = false, // append a skull if this damage would kill the unit
 ) {
   const elev = ELEVATION[terrainId] ?? 0;
   const { sx, sy } = tileToScreenShifted(tx, ty, mapHeight, elev);
@@ -198,7 +358,7 @@ export function drawDamagePreview(
   const cy = sy + HH;
 
   // Badge background
-  const text = `-${damage}`;
+  const text = lethal ? `-${damage} 💀` : `-${damage}`;
   ctx.font = 'bold 11px sans-serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';

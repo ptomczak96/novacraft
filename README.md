@@ -1,4 +1,4 @@
-# Tactica — Turn-Based Strategy Prototype
+# Rigbound — Turn-Based Strategy Prototype
 
 A rapid-iteration prototyping platform for a turn-based tactical strategy game. Cross between The Battle of Polytopia (4X-lite) and Into the Breach (deterministic tactical combat).
 

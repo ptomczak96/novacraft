@@ -1,4 +1,4 @@
-# Tactica — Cross-Module Overlap Log
+# Rigbound — Cross-Module Overlap Log
 
 Hand-off log for work that crosses module boundaries: when a change in one
 contributor's module needs work, correction, or wiring in **another**
@@ -161,3 +161,24 @@ so no hand-off needed). Design: economy mirrors `city.fortified` onto the city-c
 extra `FORTIFY_MULTIPLIER = 1.5` **on top of** the base city ×1.5 → fortified city =
 **×2.25** to the defender's force. "Inside" = the **city centre tile** (where the unit
 stands). Tunable via the `FORTIFY_MULTIPLIER` constant. **Status:** DONE.
+
+### 2026-07-01 — David → Patrick (apps/web combat FX) — Open
+**What:** Nudged the floating damage-number position in `IsoCanvas.tsx`
+(`sy - 40 - 24*pt` → `sy - 20 - 14*pt`).
+**Why:** At the higher float it drifted over a unit standing on the tile *behind* the
+target, so users read it as that rear unit taking damage (reported as a phantom "push").
+**How to wire:** If you re-tune the popup FX, keep the anchor close to the struck unit's
+head (small rise) so it doesn't overlap the tile behind. Engine is confirmed correct —
+this is purely FX placement.
+
+### 2026-07-15 — David → Patrick (apps/web rendering / combat FX) — Open
+**What:** Restructured the unit-draw loop in `IsoCanvas.tsx` to support MULTIPLE units per
+tile (`unitsByPos: Map<key, Unit[]>`, replacing the single-unit `unitByPos`, which is now
+derived as the topmost unit). The draw loop iterates the stack and draws a burrowed unit with
+a peek offset. Also added a new FX event `lastAoeDamage` (store) → floating "-N" popups for the
+Wyrm's 2-cell strike, consumed in a new `useEffect` beside the `lastCombatEvent` one.
+**Why:** a burrowed Wyrm co-occupies an enemy's tile; both must stay visible, and the strike
+needs per-cell damage numbers.
+**How to wire:** if you add sprite-based unit rendering or new co-tile cases, keep using
+`unitsByPos` (stack) for drawing and `unitByPos` (top) for hover tooltips. The peek offset for
+burrowed co-tile units lives in the draw loop (posOverride `-0.32,-0.32`) — tune there.

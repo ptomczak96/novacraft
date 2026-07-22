@@ -1,4 +1,4 @@
-# Tactica — Economy Design (current state)
+# Rigbound — Economy Design (current state)
 
 Handoff/reference for the `economy` branch. This is the source of truth for the
 economy system; tuning numbers live in `packages/data/json/economy.json`, logic

@@ -80,10 +80,10 @@ describe('Wraith: Stun', () => {
     expect(getLegalActions(s, registry, 1).some(a => 'unitId' in a && a.unitId === 2)).toBe(true);
   });
 
-  it('Plant Explosives (disabled placeholder) is never offered as an action', () => {
+  it('Plant Explosives is offered on an enemy unit in range', () => {
     const s = base();
     s.units.push(mk(1, 'wraith', 0, 3, 3), mk(2, 'warrior', 1, 4, 3));
     const acts = getLegalActions(s, registry, 0).filter(a => a.type === 'useAbility') as UseAbilityAction[];
-    expect(acts.some(a => a.abilityId === 'plant_explosives')).toBe(false);
+    expect(acts.some(a => a.abilityId === 'plant_explosives' && a.target.x === 4 && a.target.y === 3)).toBe(true);
   });
 });
