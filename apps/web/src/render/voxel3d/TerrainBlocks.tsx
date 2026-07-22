@@ -81,6 +81,8 @@ interface TerrainSets {
   lavaPane: BlockInstance[];
   oreCrystal: BlockInstance[];
   plasmaCrystal: BlockInstance[];
+  orePatch: BlockInstance[];
+  plasmaPatch: BlockInstance[];
   ruinPillar: BlockInstance[];
   cityBase: BlockInstance[];
   cityTower: BlockInstance[];
@@ -91,6 +93,7 @@ function buildTerrain(map: MapData, visibility: TileVisibility[][] | undefined, 
   const s: TerrainSets = {
     mountainBase: [], mountainPeak: [], forestCanopy: [], forestTrunk: [],
     waterPane: [], lavaPane: [], oreCrystal: [], plasmaCrystal: [],
+    orePatch: [], plasmaPatch: [],
     ruinPillar: [], cityBase: [], cityTower: [], cityWindow: [],
   };
   for (let y = 0; y < map.height; y++) {
@@ -156,10 +159,17 @@ function buildTerrain(map: MapData, visibility: TileVisibility[][] | undefined, 
         s.ruinPillar.push({ pos: [cx + 0.18, 0.18, cz - 0.15], scale: [0.18, 0.36, 0.18], rotY: jitter });
         s.ruinPillar.push({ pos: [cx - 0.2, 0.09, cz + 0.18], scale: [0.16, 0.18, 0.16], rotY: -jitter });
       }
-      if (tile.resourceKind === 'ore') {
-        s.oreCrystal.push({ pos: [cx - 0.2, 0.14, cz - 0.2], scale: [0.16, 0.28, 0.16], rotY: 0.6 + jitter });
-      } else if (tile.resourceKind === 'plasma') {
-        s.plasmaCrystal.push({ pos: [cx - 0.2, 0.14, cz - 0.2], scale: [0.16, 0.28, 0.16], rotY: 0.6 + jitter });
+      // Resources as ground deposits, not beacons: a low shard cluster in the
+      // tile corner + a faint glow patch. Sub-bloom emissive — they should
+      // read on inspection, not from across the board.
+      if (tile.resourceKind === 'ore' || tile.resourceKind === 'plasma') {
+        const shards = tile.resourceKind === 'ore' ? s.oreCrystal : s.plasmaCrystal;
+        const patch = tile.resourceKind === 'ore' ? s.orePatch : s.plasmaPatch;
+        const ox = cx - 0.24, oz = cz - 0.24;
+        shards.push({ pos: [ox, 0.07, oz], scale: [0.09, 0.15, 0.09], rotY: 0.6 + jitter });
+        shards.push({ pos: [ox + 0.13, 0.05, oz - 0.05], scale: [0.06, 0.1, 0.06], rotY: 1.4 - jitter });
+        shards.push({ pos: [ox - 0.06, 0.035, oz + 0.12], scale: [0.05, 0.07, 0.05], rotY: jitter * 2 });
+        patch.push({ pos: [ox + 0.02, 0.006, oz + 0.02], scale: [0.42, 0.008, 0.42], rotY: jitter });
       }
     }
   }
@@ -185,8 +195,11 @@ export function TerrainBlocks({ map, visibility, theme = 'city' }: {
       <Blocks instances={sets.forestCanopy} color={desert ? '#2f5c3a' : '#2a6b4f'} />
       <Blocks instances={sets.waterPane} color="#1e3a5f" opacity={0.65} castShadow={false} />
       <Blocks instances={sets.lavaPane} color="#2a0d05" emissive="#ff5a1f" emissiveIntensity={1.4} castShadow={false} />
-      <Blocks instances={sets.oreCrystal} color="#000000" emissive="#ffb84d" emissiveIntensity={3} />
-      <Blocks instances={sets.plasmaCrystal} color="#000000" emissive="#33f0ff" emissiveIntensity={3} />
+      {/* Shards: dim self-lit mineral, well under the bloom threshold. */}
+      <Blocks instances={sets.oreCrystal} color="#3a2c18" emissive="#c8842e" emissiveIntensity={0.55} />
+      <Blocks instances={sets.plasmaCrystal} color="#123338" emissive="#2ab8c8" emissiveIntensity={0.55} />
+      <Blocks instances={sets.orePatch} color="#000000" emissive="#c8842e" emissiveIntensity={0.4} opacity={0.3} castShadow={false} />
+      <Blocks instances={sets.plasmaPatch} color="#000000" emissive="#2ab8c8" emissiveIntensity={0.4} opacity={0.3} castShadow={false} />
       <Blocks instances={sets.ruinPillar} color="#565e75" />
       <Blocks instances={sets.cityBase} color="#262c3d" />
       <Blocks instances={sets.cityTower} color="#39415a" />
