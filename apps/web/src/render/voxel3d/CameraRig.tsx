@@ -8,8 +8,8 @@ import { LAYER_NO_REFLECT } from './layers.js';
 const FIT_FRACTION = 0.7;
 /** Head-room above the floor included in the fit (units, corner risers). */
 const FIT_HEADROOM = 1.8;
-/** Initial zoom relative to the fitted view — tiles start twice as big. */
-const DEFAULT_ZOOM_FACTOR = 2;
+/** Initial zoom relative to the fitted view (4 = large, board-filling tiles). */
+const DEFAULT_ZOOM_FACTOR = 4;
 const MIN_ZOOM_FACTOR = 0.6;
 const MAX_ZOOM_FACTOR = 6;
 /** Pixels of pointer travel before a press counts as a drag, not a click. */
@@ -21,16 +21,19 @@ export interface CameraInteraction {
 }
 
 /**
- * Dimetric game camera: orthographic, azimuth 45°, elevation ~35°. Starts at
- * 2× the fitted zoom; left-drag grab-pans the arena and the wheel zooms
+ * Dimetric game camera: orthographic, azimuth 45°, elevation ~35°. Starts
+ * zoomed well past the fitted view; left-drag grab-pans the arena and the wheel zooms
  * toward the cursor. Orientation is always fixed — panning translates the
  * camera in its own screen plane. `?debugCam=1` swaps in OrbitControls.
  */
-export function CameraRig({ width, height, debugCam, interaction }: {
+export function CameraRig({ width, height, debugCam, interaction, focus }: {
   width: number;
   height: number;
   debugCam: boolean;
   interaction?: React.MutableRefObject<CameraInteraction>;
+  /** World x/z to centre the initial (zoomed) view on — e.g. the player's
+   *  starting units, so a new game doesn't open staring at mid-board fog. */
+  focus?: [number, number] | null;
 }) {
   const camRef = React.useRef<THREE.OrthographicCamera>(null);
   const size = useThree(s => s.size);
@@ -57,10 +60,13 @@ export function CameraRig({ width, height, debugCam, interaction }: {
     basePos: new THREE.Vector3(),
   });
 
-  // New arena → reset pan/zoom.
+  // New arena → reset pan/zoom and re-apply the initial focus.
+  const pendingFocusRef = React.useRef<[number, number] | null>(null);
   React.useMemo(() => {
     viewRef.current.pan.set(0, 0, 0);
     viewRef.current.zoomFactor = fixedCam ? 1 : DEFAULT_ZOOM_FACTOR;
+    pendingFocusRef.current = fixedCam ? null : (focus ?? null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [width, height, fixedCam]);
 
   const applyView = React.useCallback(() => {
@@ -103,6 +109,19 @@ export function CameraRig({ width, height, debugCam, interaction }: {
     const zoomX = (2 * 0.92) / (maxX - minX);
     viewRef.current.fitZoom = Math.min(zoomY, zoomX);
     viewRef.current.basePos.set(cx + d, d * 0.82, cz + d);
+    // Centre the opening view on the focus point (project the offset into the
+    // camera plane — the view-direction component doesn't affect framing).
+    const pf = pendingFocusRef.current;
+    if (pf) {
+      pendingFocusRef.current = null;
+      const delta = new THREE.Vector3(pf[0] - cx, 0, pf[1] - cz);
+      const right = new THREE.Vector3().setFromMatrixColumn(cam.matrixWorld, 0);
+      const upS = new THREE.Vector3().setFromMatrixColumn(cam.matrixWorld, 1);
+      viewRef.current.pan
+        .set(0, 0, 0)
+        .addScaledVector(right, delta.dot(right))
+        .addScaledVector(upS, delta.dot(upS));
+    }
     applyView();
   }, [cx, cz, d, width, height, size.width, size.height, applyView]);
 

@@ -136,7 +136,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   registry: buildRegistry(),
   tileTheme: 'default',
   setTileTheme: (t) => set({ tileTheme: t }),
-  musicMuted: false,
+  musicMuted: true, // default muted (Patrick's preference)
   setMusicMuted: (v) => set({ musicMuted: v }),
 
   rebuildRegistry: () => {

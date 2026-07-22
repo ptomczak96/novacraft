@@ -4,7 +4,7 @@ import { Canvas } from '@react-three/fiber';
 import { Environment } from '@react-three/drei';
 import type { ArenaTheme, VoxelArenaProps } from './types.js';
 import { BACKGROUND_COLOR, FOG_COLOR } from './palette.js';
-import { CityBlocks, HazeLayers, Bokeh, Rain, FogClouds, DustMotes, FrameStats } from './Atmosphere.js';
+import { CityBlocks, HazeLayers, Bokeh, FogClouds, DustMotes, FrameStats } from './Atmosphere.js';
 import { Signage } from './Signage.js';
 import { CameraRig, type CameraInteraction } from './CameraRig.js';
 import { Lights } from './Lights.js';
@@ -33,6 +33,16 @@ export function VoxelArena({
 
   // Shared with CameraRig: a grab-pan drag must not fire a tile click on release.
   const interaction = React.useRef<CameraInteraction>({ suppressClick: false });
+
+  // Opening camera focus: the player's starting units (captured once per map).
+  const focus = React.useMemo<[number, number] | null>(() => {
+    const friendly = units.filter(u => !u.hostile);
+    if (friendly.length === 0) return null;
+    const ax = friendly.reduce((s2, u) => s2 + u.gridPos.x, 0) / friendly.length;
+    const ay = friendly.reduce((s2, u) => s2 + u.gridPos.y, 0) / friendly.length;
+    return [ax + 0.5, ay + 0.5];
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [map]);
 
   // Visual theme, detected from the map's dominant terrain (works for both
   // generated desert-biome maps and hand-built editor maps).
@@ -73,7 +83,7 @@ export function VoxelArena({
     >
       <color attach="background" args={[theme === 'desert' ? '#241628' : BACKGROUND_COLOR]} />
       <fog attach="fog" args={[theme === 'desert' ? '#3a2145' : FOG_COLOR, fogNear, fogFar]} />
-      <CameraRig width={map.width} height={map.height} debugCam={debugCam} interaction={interaction} />
+      <CameraRig width={map.width} height={map.height} debugCam={debugCam} interaction={interaction} focus={focus} />
       <Lights width={map.width} height={map.height} theme={theme} quality={quality} />
       <React.Suspense fallback={null}>
         <Floor
@@ -106,7 +116,7 @@ export function VoxelArena({
             <>
               <Bokeh width={map.width} height={map.height} />
               <Signage width={map.width} height={map.height} />
-              <Rain width={map.width} height={map.height} />
+              {/* Rain temporarily disabled (Patrick, 2026-07-22). */}
             </>
           )}
           <DustMotes width={map.width} height={map.height} theme={theme} />

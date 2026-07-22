@@ -111,33 +111,36 @@ function buildTerrain(map: MapData, visibility: TileVisibility[][] | undefined, 
         const teamColor = tile.owner != null
           ? TEAM_COLORS[tile.owner % TEAM_COLORS.length]
           : '#8fb4ff';
-        s.cityBase.push({ pos: [cx, 0.1, cz], scale: [0.9, 0.2, 0.9] });
-        s.cityTower.push({ pos: [cx, 0.55, cz], scale: [0.45, 0.7, 0.45] });
-        s.cityWindow.push({ pos: [cx, 0.62, cz], scale: [0.47, 0.08, 0.47], color: teamColor });
+        // Back corner of the tile so a garrisoned unit at the centre stays
+        // visible in front of its own base.
+        const bx = cx - 0.24, bz = cz - 0.24;
+        s.cityBase.push({ pos: [bx, 0.05, bz], scale: [0.52, 0.1, 0.52] });
+        s.cityTower.push({ pos: [bx, 0.4, bz], scale: [0.34, 0.6, 0.34] });
+        s.cityWindow.push({ pos: [bx, 0.46, bz], scale: [0.36, 0.07, 0.36], color: teamColor });
       } else if (tile.terrain === 'mountain') {
         // A low cluster of rocks, not a tile-filling monolith — units (0.7
         // tall) should still dominate the silhouette.
-        s.mountainBase.push({ pos: [cx - 0.08, 0.16, cz + 0.06], scale: [0.55, 0.32, 0.55], rotY: jitter * 0.4 });
-        s.mountainBase.push({ pos: [cx + 0.24, 0.1, cz - 0.2], scale: [0.32, 0.2, 0.32], rotY: -jitter * 0.6 });
+        s.mountainBase.push({ pos: [cx - 0.18, 0.16, cz - 0.12], scale: [0.55, 0.32, 0.55], rotY: jitter * 0.4 });
+        s.mountainBase.push({ pos: [cx + 0.24, 0.1, cz - 0.24], scale: [0.32, 0.2, 0.32], rotY: -jitter * 0.6 });
         s.mountainPeak.push({
-          pos: [cx - 0.05 + jitter * 0.08, 0.4, cz + 0.04],
+          pos: [cx - 0.15 + jitter * 0.08, 0.4, cz - 0.14],
           scale: [0.3, 0.18, 0.3],
           rotY: jitter * 0.5,
         });
       } else if (tile.terrain === 'forest') {
         if (desert) {
           // Oasis scrub: a slim saguaro (trunk + two arms) and a small bush.
-          s.forestTrunk.push({ pos: [cx, 0.26, cz], scale: [0.14, 0.52, 0.14], rotY: jitter * 0.3 });
-          s.forestTrunk.push({ pos: [cx - 0.17, 0.34, cz], scale: [0.08, 0.2, 0.08] });
-          s.forestTrunk.push({ pos: [cx + 0.17, 0.28, cz], scale: [0.08, 0.16, 0.08] });
-          s.forestTrunk.push({ pos: [cx - 0.13, 0.26, cz], scale: [0.1, 0.07, 0.07] });
-          s.forestTrunk.push({ pos: [cx + 0.13, 0.22, cz], scale: [0.1, 0.07, 0.07] });
+          s.forestTrunk.push({ pos: [cx - 0.22, 0.26, cz - 0.18], scale: [0.14, 0.52, 0.14], rotY: jitter * 0.3 });
+          s.forestTrunk.push({ pos: [cx - 0.39, 0.34, cz - 0.18], scale: [0.08, 0.2, 0.08] });
+          s.forestTrunk.push({ pos: [cx - 0.05, 0.28, cz - 0.18], scale: [0.08, 0.16, 0.08] });
+          s.forestTrunk.push({ pos: [cx - 0.35, 0.26, cz - 0.18], scale: [0.1, 0.07, 0.07] });
+          s.forestTrunk.push({ pos: [cx - 0.09, 0.22, cz - 0.18], scale: [0.1, 0.07, 0.07] });
           s.forestCanopy.push({ pos: [cx + 0.26, 0.07, cz - 0.26], scale: [0.2, 0.14, 0.2], rotY: jitter });
         } else {
           // Two small trees + a bush per tile instead of one huge cube.
-          s.forestTrunk.push({ pos: [cx - 0.18, 0.09, cz + 0.12], scale: [0.07, 0.18, 0.07] });
+          s.forestTrunk.push({ pos: [cx - 0.24, 0.09, cz - 0.14], scale: [0.07, 0.18, 0.07] });
           s.forestCanopy.push({
-            pos: [cx - 0.18, 0.3 + jitter * 0.04, cz + 0.12],
+            pos: [cx - 0.24, 0.3 + jitter * 0.04, cz - 0.14],
             scale: [0.3, 0.26, 0.3],
             rotY: jitter,
           });
