@@ -142,7 +142,11 @@ export function UnitSheet() {
   // passives are opted-in via `conditions`; active abilities live in `abilities`.
   // Applied statuses (from play, e.g. corrosive_1 / infected) are always conditions.
   // Tech-granted passives (e.g. Adrenal Glands → dash_2/aoi_immune) are folded in so they show.
-  const granted = grantedConditions(visibleState.players[unit.owner], unit.typeId, registry);
+  // Under fog an enemy's PlayerState is `redacted` (no tech list), so an enemy sheet
+  // shows only the unit's baseline kit — what the viewer is actually entitled to know.
+  const ownerState = visibleState.players[unit.owner];
+  const techsKnown = !!ownerState && !ownerState.redacted;
+  const granted = techsKnown ? grantedConditions(ownerState, unit.typeId, registry) : [];
   const inherent = [...(unitType.conditions ?? []), ...granted.filter(g => !(unitType.conditions ?? []).includes(g))];
   const applied = unit.statuses ?? [];
   const conditionIds = [...inherent.filter(id => abilityDef(id).category === 'condition'), ...applied];
@@ -154,11 +158,12 @@ export function UnitSheet() {
   const isOwnActiveUnit = unit.owner === visibleState.currentPlayer && !unit.hasAttacked;
 
   // Locked upgrades — gated abilities this unit doesn't have yet (own units only).
-  const researched = new Set(visibleState.players[unit.owner]?.researchedTechs ?? []);
+  const researched = new Set(techsKnown ? ownerState.researchedTechs : []);
 
   // Tech-gated abilities (e.g. Medic's Slow needs Advanced Biomed) are hidden until
   // researched; superseded ones (e.g. Cure I once Advanced Biomed gives Cure II) are hidden
   // once their upgrade tech is in. Hidden ones appear under "Locked Upgrades" instead.
+  // With the owner's techs unknown (redacted enemy), show only the tech-free baseline.
   const abilities = (unitType.abilities ?? []).filter(a =>
     (!a.requiresTech || researched.has(a.requiresTech)) &&
     (!a.supersededByTech || !researched.has(a.supersededByTech)));

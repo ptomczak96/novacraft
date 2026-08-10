@@ -182,3 +182,17 @@ needs per-cell damage numbers.
 **How to wire:** if you add sprite-based unit rendering or new co-tile cases, keep using
 `unitsByPos` (stack) for drawing and `unitByPos` (top) for hover tooltips. The peek offset for
 burrowed co-tile units lives in the draw loop (posOverride `-0.32,-0.32`) — tune there.
+
+### 2026-08-07 — Patrick Tomczak → Visual/UI (`Inspector.tsx`) — Open
+**What:** The engine now redacts enemy ore/plasma/techs from `VisibleState` under fog and
+returns an empty `actionLog` (see DEVELOPMENT_RATIONALE 2026-08-07). `Inspector.tsx` is
+unaffected because it reads the full `gameState` — it still displays BOTH players' ore,
+plasma, income and the complete move log, toggleable in normal play (not dev-gated).
+**Why:** it's now the only remaining hidden-info surface in the UI. Fine as a debug x-ray,
+but once fog games vs the AI (or vs a friend over PeerJS) are the norm, it's a wallhack
+one click away.
+**How to wire:** either gate the opponent's column + move log behind `!config.fogOfWar`
+(perfect-info games keep the full inspector), or move the Inspector behind a dev flag.
+`GameSfx.tsx` and save/replay must KEEP reading `gameState.actionLog` — don't switch those
+to `visibleState`.
+**Module affected:** apps/web (Visual/UI).

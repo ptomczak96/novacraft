@@ -4068,3 +4068,128 @@ Real-time online 1v1 built on the deterministic engine: only ACTIONS are synced,
   the opponent's turn your legal-action set is empty). `receiveRemoteAction` applies inbound
   actions without echoing. Undo disabled in MP (would desync); fog is honour-system (agreed).
 Caveats/deferred: no reconnection re-sync; no authoritative anti-cheat (trusted testers only).
+
+### 2026-08-07 — Patrick Tomczak — Fog now hides enemy economy & tech (engine) + AI-opponent approach decided
+
+**Fog information leak sealed.** `getVisibleState` cloned the FULL `PlayerState` of every
+player (ore, plasma, researchedTechs) and the entire `actionLog` into `VisibleState` — even
+under fog. The type at `types.ts` already promised "own player full, others limited", so this
+is a contract fix, not a behaviour change:
+- Under fog, other players' entries are now **redacted**: id + factionId kept (public),
+  ore/plasma zeroed, researchedTechs emptied, `redacted: true` marker set. Array stays
+  index-addressable by PlayerId (bots do `players[me]`).
+- `actionLog` is now **empty under fog** — `Action` entries carry no acting-player field, so
+  the log can't be filtered per-viewer, and whole it reveals every enemy move made out of
+  sight. No consumer read `visibleState.actionLog` (web reads `gameState.actionLog`).
+- Fog **off** = perfect information: nothing redacted (sim benchmarks stay comparable).
+- `UnitSheet.tsx` was reading enemy `researchedTechs` off `visibleState` to show tech-granted
+  passives/abilities on ENEMY unit sheets — a real in-game leak. Now gated on the `redacted`
+  flag: enemy sheets show the unit's baseline kit only.
+- Sim gained `--fog` to run fog-honest games (default remains fog-off).
+- New regression tests in `fog.test.ts` (redaction, symmetry, empty log, no-mutation).
+
+**Why now:** it's the prerequisite for the AI-opponent work. The planned bot infers hidden
+enemy state (e.g. "titan by turn 8 ⟹ bounded income history ⟹ min city count") — pointless
+while the engine hands that state over, and untestable while the sim runs fog-off.
+
+**AI approach decision (partially supersedes AI_OPPONENT.md 2026-07-17):** build a
+**belief-constrained search bot** — (1) a belief module tracking hard constraints on enemy
+state (spend accounting from seen units/techs, map-gen invariants like "ruins never on edge /
+centres ≥3 apart", negative info from seen-empty tiles; testable via sim assertion "the truth
+is always inside the belief"); (2) a policy that samples feasible worlds from the belief and
+runs turn-level macro-action search (determinized search); (3) rented compute goes to
+**evolutionary/population self-play tuning of eval weights** (embarrassingly parallel), NOT
+deep RL first. AlphaZero-style NN remains an optional final rung — the old doc's "RL is
+overkill" is softened to "premature": rungs 1–3 build exactly the infra NN self-play needs.
+Sequencing: fog seal (done, this entry) → engine perf pass (clone cost dominates:
+JSON-stringify deep copies + O(n²) actionLog re-cloning; ~10-50× available) → belief module →
+search policy → tuning.
+
+### 2026-08-07 — Patrick Tomczak — AI pivot: self-play RL (tribes-rl template) — docs/OdysseusAI.md
+
+**Supersedes the same-day "belief-constrained search bot" decision above** (kept per
+append-only rule). After studying tribes-rl (tribes.binhph.am — open-source Polytopia
+rebuilt for RL: C engine at ~1.8M steps/sec on one consumer GPU, PufferLib self-play,
+10B steps ≈ 11M games in ~2h, recurrent 8.2M-param policy, WASM in-browser inference as
+a fully static site), the "RL is premature" pricing no longer holds — it was priced
+against our ~1 game/sec TS engine. For exactly our game class, the engineering goes into
+a fast native engine (golden-trace-verified port of the TS engine, Rust vs C undecided),
+after which strong RL costs single-digit dollars per run. The handcrafted belief module
+drops from core architecture to optional observation features (sample-efficiency lever);
+the fog seal (earlier entry today) remains the observation boundary. Full charter,
+mental models, self-play pitfalls (league play vs cycling; 50% self-play win rate is
+definitional; human-as-exploiter loop), and adaptability principles (stats-not-names
+observations, domain randomization, retrain-per-ruleset) recorded in
+**docs/OdysseusAI.md** — Patrick's entry in a two-AI competition with his brother, whose
+AI will be built separately. Alpha-beta pruning considered and rejected as a pipeline
+stage (doesn't fit fog + variable-length turn sequences; needs the hand-crafted eval
+this approach avoids).
+
+### 2026-08-07 — Patrick Tomczak — Odysseus "Round 2" decided: belief deductions as observation features
+Human-style fog inference ("titan by turn 8 ⟹ ≥2 bases ⟹ bounded remaining spend")
+will be built into training as **derived observation features** computed by a
+deterministic, VisibleState-only belief calculator (spend lower bound, min income
+sources, unspent-resources upper bound, feasible-base mask) — appended to the obs
+tensor, never as rules ("install a fuel gauge; the net stays the pilot"). Sequencing:
+Round 1 trains on raw observations, Round 2 adds instruments and A/Bs the difference.
+Rationale: the deductions are exact arithmetic under determinism (sim-assertable:
+truth must satisfy the bounds), fog-honest, ignorable by the net, and buy sample
+efficiency without dictating strategy. Recorded in docs/OdysseusAI.md §5.
+
+### 2026-08-07 — Patrick Tomczak — Odysseus edge plan: strategy mining, personality bots, play-time search
+Added OdysseusAI.md §7. Decisions: (1) strategy mining over sim traces — per-game
+behavior fingerprints, conditional win-rate queries (P(win | tech/unit milestones)),
+clustering as the definition of "distinct strategy", checkpoint-over-time clustering
+to chart the meta; (2) personality bots via checkpoint zoo / reward-flavored short
+runs / style-conditioned net, fed back into the training league (mine → distill →
+league → robustness); (3) ranked competition edges vs the brother's AI, #1 being
+play-time search (MCTS-style lookahead with the net over belief-sampled worlds — the
+AlphaZero component absent from the base tribes-rl recipe). Doubles as balance
+telemetry for the game itself.
+
+### 2026-08-10 — Patrick Tomczak — GEN 8 "3D Tileset" map-generation option: GLB tile board + real unit models
+Added a new Map Generation option, **GEN 8 - 3D Tileset** (`tileTheme:
+'gen8_tileset3d'`), that renders the board from the 3D tile GLBs in /assets and
+spawns each unit's real GLB model. Decisions and reasoning:
+
+- **Delivered as a mode of the voxel3d renderer, not a third renderer.** The
+  voxel3d pipeline already carries the whole gameplay contract (click plane →
+  tile coords, highlights, selection shells, fog clouds, combat FX, city/ruin/
+  resource props, camera). The tileset mode swaps only what the art changes:
+  `ModelTiles` replaces `Floor` (one InstancedMesh per tile kind: flat/forest/
+  mountain/water), and `UnitBody`/`GhostUnit` route kinds with a registered GLB
+  to `GlbUnitModel`. Everything else — base perimeters, recruit flow, fog,
+  economy props — is inherited unchanged, which is why the game plays normally
+  in the new mode. Selecting the option auto-switches MapView to the 3D
+  renderer (2D toggle still works and falls back to default sprites).
+- **Asset pipeline is mandatory, not optional.** The raw exports are ~40 MB per
+  GLB (834 MB total) — unshippable. `scripts/optimize-3d-assets.sh` bakes them
+  to ~0.3 MB each (5.9 MB total) with gltf-transform: meshopt compression
+  (drei's useGLTF decodes it natively — no extra decoder files), webp textures
+  at 1K, and mesh simplification. Tiles use a coarser simplify error (0.005 →
+  ~1–5 k tris) than units (0.001) because tiles are instanced ~400× per board.
+  Raw /assets is gitignored (same convention as imported_assets/); the
+  optimized copies in apps/web/public/voxel3d/models are what's committed.
+- **Normalization at load, not in the DCC files.** Tiles are auto-scaled so
+  their footprint is exactly 1×1 world unit with the FLAT tile's top at y=0
+  (the walkable plane every other system assumes); mountains rise above it,
+  water dips below. Units auto-scale to a per-kind target height in
+  `modelAssets.ts` — heights deliberately vary by class (scuttling 0.38 →
+  titan 1.1 / behemoth 1.15) so silhouettes read — with a hard footprint clamp
+  (≤0.85 tile) so every unit fits inside its own tile. This survives re-exports
+  at any scale without retuning.
+- **Ownership reads from an additive team-colour ring at the unit's feet**
+  (baked model textures are kept and shared between clones, never tinted);
+  ghost fades clone materials so a death fade can't dim living units sharing
+  the same GLB. Unit ids without a model (medic, engineer, archer, catapult,
+  reaper, ravener, ironclads, sylvans…) keep the box-voxel build, so modded or
+  not-yet-modelled units never break. `tank_assault`→tank and
+  `wyrm_burrowed`→wyrm reuse their base model.
+- **Terrain→tile mapping:** plains/sand/snow/resource→flat, forest→forest,
+  mountain→mountain, water/river/lava→water (no hole-cutting in this mode).
+  Instanced tiles carry no pointer handlers — clicks ride one invisible plane
+  at y=0 with Floor's exact coordinate math, so per-frame raycasts never touch
+  400 instanced geometries. Deterministic per-tile quarter-turns
+  (`(x*7+y*13)%4`) break up repetition, matching TerrainBlocks' jitter idiom.
+- Dev harness: `?tileset=1` forces the mode (pairs with `?unitGallery=1` to
+  review all models on the board).

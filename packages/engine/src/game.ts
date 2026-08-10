@@ -2151,6 +2151,18 @@ function withVisibleMarks(state: GameState, unit: Unit, viewerId: PlayerId, regi
   return c;
 }
 
+// Under fog, other players' hidden economy/tech is scrubbed from VisibleState: a viewer
+// keeps their own PlayerState in full; every other player is reduced to public identity
+// (id + factionId) with ore/plasma/researchedTechs zeroed and `redacted: true` set.
+// The array stays index-addressable by PlayerId (same length/order as GameState.players).
+function redactPlayers(state: GameState, viewerId: PlayerId): PlayerState[] {
+  return state.players.map(p =>
+    p.id === viewerId
+      ? clone(p)
+      : { id: p.id, factionId: p.factionId, ore: 0, plasma: 0, researchedTechs: [], redacted: true as const },
+  );
+}
+
 export function getVisibleState(state: GameState, playerId: PlayerId, registry: DataRegistry): VisibleState {
   if (!state.config.fogOfWar) {
     // No fog — everything visible EXCEPT cloaked enemy units (cloak ≠ fog).
@@ -2263,7 +2275,7 @@ export function getVisibleState(state: GameState, playerId: PlayerId, registry: 
     config: state.config,
     map: composedMap,
     units: visibleUnits.map(u => withVisibleMarks(state, u, playerId, registry)),
-    players: clone(state.players),
+    players: redactPlayers(state, playerId),
     cities,
     buildings,
     nodes,
@@ -2274,7 +2286,9 @@ export function getVisibleState(state: GameState, playerId: PlayerId, registry: 
     phase: state.phase,
     winner: state.winner,
     winConditionMet: state.winConditionMet,
-    actionLog: clone(state.actionLog),
+    // Actions carry no player attribution, so the log can't be per-viewer filtered;
+    // exposing it whole would leak every enemy move made in fog. See VisibleState type.
+    actionLog: [],
   };
 }
 

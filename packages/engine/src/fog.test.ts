@@ -101,3 +101,63 @@ describe('Fog of war — explored memory (cloud vs fog)', () => {
     expect(vis[probe.y][probe.x]).toBe('visible');
   });
 });
+
+describe('Fog of war — hidden information (economy / tech / action log)', () => {
+  it("redacts other players' ore, plasma and researched techs; keeps own in full", () => {
+    const registry = getRegistry();
+    const state = createGame(fogConfig(), registry, ['vanguard', 'hive'], 7);
+    state.players[0].ore = 123;
+    state.players[0].plasma = 45;
+    state.players[0].researchedTechs = ['forge'];
+    state.players[1].ore = 999;
+    state.players[1].plasma = 77;
+    state.players[1].researchedTechs = ['vindrace_tech', 'behemoth_tech'];
+
+    const vs = getVisibleState(state, 0, registry);
+    // Own seat: full and not redacted.
+    expect(vs.players[0].ore).toBe(123);
+    expect(vs.players[0].plasma).toBe(45);
+    expect(vs.players[0].researchedTechs).toEqual(['forge']);
+    expect(vs.players[0].redacted).toBeUndefined();
+    // Enemy seat: public identity only, index-addressable by PlayerId.
+    expect(vs.players).toHaveLength(2);
+    expect(vs.players[1].id).toBe(1);
+    expect(vs.players[1].factionId).toBe('hive');
+    expect(vs.players[1].ore).toBe(0);
+    expect(vs.players[1].plasma).toBe(0);
+    expect(vs.players[1].researchedTechs).toEqual([]);
+    expect(vs.players[1].redacted).toBe(true);
+    // And symmetrically for the other viewer.
+    expect(getVisibleState(state, 1, registry).players[0].redacted).toBe(true);
+  });
+
+  it('returns an empty action log under fog (unattributed, would leak enemy moves)', () => {
+    const registry = getRegistry();
+    const state = createGame(fogConfig(), registry, ['vanguard', 'hive'], 7);
+    state.actionLog.push({ type: 'endTurn' });
+    expect(getVisibleState(state, 0, registry).actionLog).toEqual([]);
+  });
+
+  it('with fog OFF (perfect information) nothing is redacted', () => {
+    const registry = getRegistry();
+    const state = createGame({ ...defaultConfig, fogOfWar: false }, registry, ['vanguard', 'hive'], 7);
+    state.players[1].ore = 999;
+    state.players[1].researchedTechs = ['vindrace_tech'];
+    state.actionLog.push({ type: 'endTurn' });
+
+    const vs = getVisibleState(state, 0, registry);
+    expect(vs.players[1].ore).toBe(999);
+    expect(vs.players[1].researchedTechs).toEqual(['vindrace_tech']);
+    expect(vs.players[1].redacted).toBeUndefined();
+    expect(vs.actionLog).toHaveLength(1);
+  });
+
+  it('redaction never mutates the true GameState', () => {
+    const registry = getRegistry();
+    const state = createGame(fogConfig(), registry, ['vanguard', 'hive'], 7);
+    state.players[1].ore = 500;
+    getVisibleState(state, 0, registry);
+    expect(state.players[1].ore).toBe(500);
+    expect(state.players[1].redacted).toBeUndefined();
+  });
+});

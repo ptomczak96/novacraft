@@ -23,6 +23,9 @@ const outDir = getArg('out', 'results/default');
 // (e.g. --faction-a vanguard --faction-b vanguard) to compare BOTS with faction neutralised.
 const factionAArg = getArg('faction-a', '');
 const factionBArg = getArg('faction-b', '');
+// --fog: run games with fog of war ON (bots see redacted VisibleState). Default stays
+// off — perfect-information games — so existing benchmarks remain comparable.
+const fogEnabled = args.includes('--fog');
 
 function createBot(type: string, seed: number): Bot {
   switch (type) {
@@ -144,13 +147,13 @@ function runSingleGame(
 // ── Main ──
 function main() {
   const registry = buildRegistry();
-  const config: GameConfig = { ...defaultConfig, fogOfWar: false };
+  const config: GameConfig = { ...defaultConfig, fogOfWar: fogEnabled };
   const factionIds = Object.keys(registry.factions);
   const f0 = factionAArg || factionIds[0] || 'vanguard';
   const f1 = factionBArg || factionIds[1] || 'hive';
 
   console.log(`\n=== TACTICA SIMULATION ===`);
-  console.log(`Games: ${numGames} | Bot A: ${botAType} | Bot B: ${botBType} | Seed: ${baseSeed}`);
+  console.log(`Games: ${numGames} | Bot A: ${botAType} | Bot B: ${botBType} | Seed: ${baseSeed} | Fog: ${fogEnabled ? 'ON' : 'off'}`);
   console.log(`Factions: ${f0} vs ${f1} (mirrored)\n`);
 
   const records: GameRecord[] = [];
