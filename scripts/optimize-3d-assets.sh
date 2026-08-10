@@ -21,11 +21,13 @@ opt() { # opt <in> <out> <simplify-error>
     --simplify-error "$3" 2>&1 | tail -1
 }
 
-# Tiles (instanced ~400x — aggressive simplify)
-opt "$SRC/Tile - Flat.glb"     "$OUT/tiles/flat.glb"     0.005
-opt "$SRC/Tile - Forest.glb"   "$OUT/tiles/forest.glb"   0.005
-opt "$SRC/Tile - Mountain.glb" "$OUT/tiles/mountain.glb" 0.005
-opt "$SRC/Tile - Water.glb"    "$OUT/tiles/water.glb"    0.005
+# Tiles (instanced ~400x — aggressive simplify). The "1" set is current.
+# Water1 shipped with a squashed z-axis; ModelTiles stretches footprints back
+# to exactly 1x1 at load, so no bake-time correction is needed.
+opt "$SRC/Tile - Flat1.glb"     "$OUT/tiles/flat.glb"     0.005
+opt "$SRC/Tile - Forest1.glb"   "$OUT/tiles/forest.glb"   0.005
+opt "$SRC/Tile - Mountain1.glb" "$OUT/tiles/mountain.glb" 0.005
+opt "$SRC/Tile - Water1.glb"    "$OUT/tiles/water.glb"    0.005
 
 # Units — output name = engine unit typeId
 opt "$SRC/Vanguard - Scout.glb"    "$OUT/units/scout.glb"      0.001
@@ -39,6 +41,7 @@ opt "$SRC/Vanguard - Titan.glb"    "$OUT/units/titan.glb"      0.001
 opt "$SRC/Vanguard - Sentinel.glb" "$OUT/units/sentinel.glb"   0.001
 opt "$SRC/Hive - Scuttling.glb"    "$OUT/units/scuttling.glb"  0.001
 opt "$SRC/Hive - Scout.glb"        "$OUT/units/hive_scout.glb" 0.001
+opt "$SRC/Hive - Reaper.glb"       "$OUT/units/reaper.glb"     0.001
 opt "$SRC/Hive - Scab.glb"         "$OUT/units/scab.glb"       0.001
 opt "$SRC/Hive - Vindrace.glb"     "$OUT/units/vindrace.glb"   0.001
 opt "$SRC/Hive - Seercaust.glb"    "$OUT/units/seercaust.glb"  0.001

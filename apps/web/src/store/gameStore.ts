@@ -41,6 +41,17 @@ export interface AoeDamageEvent {
   hits: { x: number; y: number; amount: number; killed: boolean }[];
 }
 
+/** Latest ability cast (incl. Wyrm strikes), for render-layer cast animations. */
+export interface AbilityEvent {
+  seq: number;
+  at: number;
+  abilityId: string;
+  unitId: number;
+  casterPos: { x: number; y: number };
+  /** Target tiles (empty for self-casts / morphs). */
+  targets: { x: number; y: number }[];
+}
+
 export type AppScreen = 'setup' | 'game' | 'mapEditor';
 export type BotSetting = 'human' | 'random' | 'greedy';
 
@@ -149,6 +160,8 @@ interface GameStore {
   lastCombatEvent: CombatEvent | null;
   // Latest multi-tile damage burst (Wyrm strike), for floating damage popups.
   lastAoeDamage: AoeDamageEvent | null;
+  // Latest ability cast, for render-layer cast animations (3D renderer).
+  lastAbilityEvent: AbilityEvent | null;
 
   // Board notation (UI-only): stable per-unit short codes (WA1, xVIN2…) keyed by unit id,
   // plus the running per-(owner,code) counter. Assigned once and never renumbered.
@@ -266,6 +279,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   lastCombatResult: null,
   lastCombatEvent: null,
   lastAoeDamage: null,
+  lastAbilityEvent: null,
   unitLabels: {},
   unitLabelSeq: {},
 
@@ -469,6 +483,25 @@ export const useGameStore = create<GameStore>((set, get) => ({
       }
     }
 
+    // Ability cast event (incl. Wyrm strikes) → render-layer cast animations.
+    let abilityEvent: AbilityEvent | null = null;
+    if (action.type === 'useAbility' || action.type === 'wyrmStrike') {
+      const caster = gameState.units.find(u => u.id === action.unitId);
+      if (caster) {
+        const targets = action.type === 'wyrmStrike'
+          ? action.tiles
+          : (action.tiles ?? action.targets ?? (action.target ? [action.target] : []));
+        abilityEvent = {
+          seq: (get().lastAbilityEvent?.seq ?? 0) + 1,
+          at: Date.now(),
+          abilityId: action.type === 'wyrmStrike' ? 'wyrm_strike' : action.abilityId,
+          unitId: caster.id,
+          casterPos: { ...caster.position },
+          targets: targets.map(t => ({ x: t.x, y: t.y })),
+        };
+      }
+    }
+
     const prevPlayer = gameState.currentPlayer;
     const newState = applyAction(gameState, action, registry);
     // Network game → always view/act as our own seat; local → the current player.
@@ -494,6 +527,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       lastCombatResult: combatLogEntry ?? get().lastCombatResult,
       lastCombatEvent: combatEvent ?? get().lastCombatEvent,
       lastAoeDamage: aoeDamage ?? get().lastAoeDamage,
+      lastAbilityEvent: abilityEvent ?? get().lastAbilityEvent,
       coachLog,
     });
     get().ensureUnitLabels(); // label any newly-spawned units (stable, never renumbered)
@@ -594,3 +628,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
     return JSON.stringify(mapEditorState.map, null, 2);
   },
 }));
+
+// Dev console access to the store (vite dev builds only) — lets you drive
+// actions directly while debugging: __game.getState().executeAction({...}).
+if (import.meta.env.DEV && typeof window !== 'undefined') {
+  (window as unknown as Record<string, unknown>).__game = useGameStore;
+}

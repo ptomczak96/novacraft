@@ -10,6 +10,8 @@ import { Lights } from './Lights.js';
 import { Floor } from './Floor.js';
 import { EdgeRim } from './EdgeRim.js';
 import { ModelTiles } from './models/ModelTiles.js';
+import { TilesetFX } from './models/TilesetFX.js';
+import { MOUNTAIN_UNIT_ELEVATION } from './models/modelAssets.js';
 import { TerrainBlocks } from './TerrainBlocks.js';
 import { Highlights } from './Highlights.js';
 import { Units } from './Units.js';
@@ -24,6 +26,7 @@ export function VoxelArena({
   visibility,
   floorTextures,
   combat,
+  ability,
   ghosts,
   tileset = false,
 }: VoxelArenaProps) {
@@ -60,12 +63,24 @@ export function VoxelArena({
   }, [map]);
 
   // Garrisoned units shift slightly toward the camera so they stand clear of
-  // their (centred) city tower.
+  // their (centred) city tower. In tileset mode, units on mountain tiles are
+  // lifted onto the rock top so they never merge into the tile's geometry.
   const adjustedUnits = React.useMemo(
-    () => units.map(u =>
-      map.tiles[u.gridPos.y]?.[u.gridPos.x]?.isCity ? { ...u, visualOffset: 0.18 } : u),
-    [units, map],
+    () => units.map(u => {
+      const tile = map.tiles[u.gridPos.y]?.[u.gridPos.x];
+      if (tile?.isCity) return { ...u, visualOffset: 0.18 };
+      if (tileset && tile?.terrain === 'mountain') return { ...u, elevation: MOUNTAIN_UNIT_ELEVATION };
+      return u;
+    }),
+    [units, map, tileset],
   );
+
+  // Tiles occupied by a unit — forest blocks swap to flat ground under them
+  // (Polytopia-style) so trees never clip through a unit's body.
+  const occupied = React.useMemo(() => {
+    if (!tileset) return undefined;
+    return new Set(units.map(u => `${u.gridPos.x},${u.gridPos.y}`));
+  }, [tileset, units]);
 
   // Impassable terrain renders as holes in the platform (SC1 space-platform
   // style): no floor tile, space visible through the gap.
@@ -90,17 +105,21 @@ export function VoxelArena({
       {/* Open space: near-black void, no atmospheric fog. */}
       <color attach="background" args={[BACKGROUND_COLOR]} />
       <CameraRig width={map.width} height={map.height} debugCam={debugCam} interaction={interaction} focus={focus} />
-      <Lights width={map.width} height={map.height} theme={theme} quality={quality} />
+      <Lights width={map.width} height={map.height} theme={theme} quality={quality} tileset={tileset} />
       <React.Suspense fallback={null}>
         {tileset ? (
           // GEN 8 — 3D Tileset: GLB tile blocks ARE the board (flat / forest /
           // mountain / water); no reflector floor, no hole-cutting.
-          <ModelTiles
-            map={map}
-            visibility={visibility}
-            onTileClick={onTileClick}
-            interaction={interaction}
-          />
+          <>
+            <ModelTiles
+              map={map}
+              visibility={visibility}
+              onTileClick={onTileClick}
+              interaction={interaction}
+              occupied={occupied}
+            />
+            <TilesetFX map={map} visibility={visibility} quality={quality} />
+          </>
         ) : (
           <Floor
             width={map.width}
@@ -114,10 +133,11 @@ export function VoxelArena({
           />
         )}
       </React.Suspense>
-      <EdgeRim width={map.width} height={map.height} theme={theme} />
+      {/* No platform frame in tileset mode — the GLB tiles ARE the island edge. */}
+      {!tileset && <EdgeRim width={map.width} height={map.height} theme={theme} />}
       <TerrainBlocks map={map} visibility={visibility} theme={theme} natureProps={!tileset} />
       <Highlights highlights={highlights} />
-      <Units units={adjustedUnits} ghosts={ghosts} combat={combat} onTileClick={onTileClick} interaction={interaction} useModels={tileset} />
+      <Units units={adjustedUnits} ghosts={ghosts} combat={combat} ability={ability} onTileClick={onTileClick} interaction={interaction} useModels={tileset} />
       <FogClouds map={map} visibility={visibility} theme={theme} />
       <SpaceStars width={map.width} height={map.height} quality={quality} />
       {quality === 'high' && (

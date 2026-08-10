@@ -28,8 +28,12 @@ interface NormalizedTile {
   material: THREE.Material;
   /** Local mesh→scene transform (gltf node transforms, if any). */
   world: THREE.Matrix4;
-  /** Uniform scale that makes the footprint span one tile. */
-  scale: number;
+  /** Per-axis scale making the footprint EXACTLY 1×1 (applied in model space,
+   *  before the quarter-turn, so rotated tiles keep the 1×1 footprint). A
+   *  malformed export with a squashed axis — Water1 shipped 1.9×1.6 — is
+   *  stretched back to a full square tile. Height uses the smaller footprint
+   *  factor, i.e. the export's intended uniform scale. */
+  scale: THREE.Vector3;
   /** Model-space bbox (scene space, before scaling). */
   box: THREE.Box3;
 }
@@ -44,23 +48,38 @@ function normalizeTile(scene: THREE.Group): NormalizedTile {
   const m = mesh as THREE.Mesh;
   const box = new THREE.Box3().setFromObject(scene);
   const size = box.getSize(new THREE.Vector3());
-  const scale = 1 / (Math.max(size.x, size.z) || 1);
+  const sx = 1 / (size.x || 1);
+  const sz = 1 / (size.z || 1);
   return {
     geometry: m.geometry,
     material: Array.isArray(m.material) ? m.material[0] : m.material,
     world: m.matrixWorld.clone(),
-    scale,
+    scale: new THREE.Vector3(sx, Math.min(sx, sz), sz),
     box,
   };
 }
 
 const TILE_KINDS = Object.keys(TILE_MODEL_URLS) as TileModelKind[];
 
-export function ModelTiles({ map, visibility, onTileClick, interaction }: {
+// Per-kind vertical trim on top of the shared base alignment, hand-tuned per
+// tile set (slab thickness isn't derivable from the bbox — it can't separate
+// slab from trees/peaks). Current set: the "1" exports, whose slabs align at
+// the base; water keeps the 20%-of-a-slab (~0.29) drop below ground level.
+const TILE_Y_OFFSET: Record<TileModelKind, number> = {
+  flat: 0,
+  forest: 0,
+  mountain: 0,
+  water: -0.2 * 0.29,
+};
+
+export function ModelTiles({ map, visibility, onTileClick, interaction, occupied }: {
   map: MapData;
   visibility?: TileVisibility[][];
   onTileClick?: (x: number, y: number) => void;
   interaction?: React.MutableRefObject<CameraInteraction>;
+  /** "x,y" keys of unit-occupied tiles: forest blocks swap to flat ground
+   *  there so trees never clip through a unit's body. */
+  occupied?: Set<string>;
 }) {
   // Fixed-order hooks over the static kind list.
   const flat = useGLTF(TILE_MODEL_URLS.flat);
@@ -79,8 +98,9 @@ export function ModelTiles({ map, visibility, onTileClick, interaction }: {
   // be for its top to land exactly at y=0.
   const baseY = React.useMemo(() => {
     const f = normalized.flat;
-    return -(f.box.max.y - f.box.min.y) * f.scale;
+    return -(f.box.max.y - f.box.min.y) * f.scale.y;
   }, [normalized]);
+
 
   // Grid cell → instance transforms, grouped by tile kind. Hidden (never seen)
   // tiles get no block at all — FogClouds covers them, and nothing can leak.
@@ -97,13 +117,14 @@ export function ModelTiles({ map, visibility, onTileClick, interaction }: {
     for (let y = 0; y < map.height; y++) {
       for (let x = 0; x < map.width; x++) {
         if (visibility && visibility[y]?.[x] === 'hidden') continue;
-        const kind = tileModelForTerrain(map.tiles[y][x].terrain);
+        let kind = tileModelForTerrain(map.tiles[y][x].terrain);
+        if (kind === 'forest' && occupied?.has(`${x},${y}`)) kind = 'flat';
         const n = normalized[kind];
         // Deterministic quarter-turn per tile so repeated blocks read varied.
         const rot = (((x * 7 + y * 13) % 4) * Math.PI) / 2;
-        pos.set(x + 0.5, baseY, y + 0.5);
+        pos.set(x + 0.5, baseY + TILE_Y_OFFSET[kind], y + 0.5);
         quat.setFromAxisAngle(up, rot);
-        scl.setScalar(n.scale);
+        scl.copy(n.scale);
         place.compose(pos, quat, scl);
         // Model-space: center x/z on origin, rest the bbox base on y=0.
         center.makeTranslation(
@@ -116,7 +137,7 @@ export function ModelTiles({ map, visibility, onTileClick, interaction }: {
       }
     }
     return out;
-  }, [map, visibility, normalized, baseY]);
+  }, [map, visibility, normalized, baseY, occupied]);
 
   const handleClick = React.useCallback((e: ThreeEvent<MouseEvent>) => {
     if (!onTileClick) return;

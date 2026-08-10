@@ -25,8 +25,14 @@ export interface UnitView {
   hostile?: boolean;
   /** Small world-space x/z shift so a garrisoned unit clears its city tower. */
   visualOffset?: number;
+  /** World-space y lift so a unit stands ON a raised tile feature (tileset
+   *  mode: mountain rock top) instead of merging into its geometry. */
+  elevation?: number;
   /** True for the currently selected unit (drives the outline effect). */
   selected?: boolean;
+  /** Current / max HP — drives the floating health bar on selection. */
+  hp?: number;
+  maxHp?: number;
 }
 
 /** One executed attack, for render-side lunge/flash effects (from the store's
@@ -43,6 +49,16 @@ export interface CombatFx {
 export interface UnitGhost {
   view: UnitView;
   ghostKey: string;
+}
+
+/** One executed ability cast, for render-side cast animations (from the
+ *  store's AbilityEvent — purely presentational). */
+export interface AbilityFx {
+  seq: number;
+  abilityId: string;
+  unitId: number;
+  casterPos: { x: number; y: number };
+  targets: { x: number; y: number }[];
 }
 
 export type HighlightKind = 'move' | 'threat' | 'select' | 'path';
@@ -75,6 +91,8 @@ export interface VoxelArenaProps {
   floorTextures?: FloorTextures;
   /** Latest attack (drives attacker lunge + defender hit flash). */
   combat?: CombatFx | null;
+  /** Latest ability cast (drives cast animations). */
+  ability?: AbilityFx | null;
   /** Recently killed units, rendered as fading ghosts. */
   ghosts?: UnitGhost[];
   /** GEN 8 — 3D Tileset mode: GLB tile blocks replace the floor plane and

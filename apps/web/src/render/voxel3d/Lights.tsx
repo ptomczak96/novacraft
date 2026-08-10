@@ -3,12 +3,16 @@ import React from 'react';
 import type { ArenaTheme } from './types.js';
 import { AMBIENT_COLOR, KEY_LIGHT_COLOR } from './palette.js';
 
-/** Lighting, kept simple: 1 cool ambient + 1 shadowed key directional. */
-export function Lights({ width, height, theme = 'city', quality = 'high' }: {
+/** Lighting, kept simple: 1 cool ambient + 1 shadowed key directional.
+ *  Tileset mode swaps in a golden-hour SUN: warm high-intensity key with
+ *  crisp long shadows + sky/ground hemisphere fill, so the hand-painted
+ *  tile textures read in full colour instead of the night-arena grade. */
+export function Lights({ width, height, theme = 'city', quality = 'high', tileset = false }: {
   width: number;
   height: number;
   theme?: ArenaTheme;
   quality?: 'high' | 'low';
+  tileset?: boolean;
 }) {
   const cx = width / 2;
   const cz = height / 2;
@@ -30,6 +34,29 @@ export function Lights({ width, height, theme = 'city', quality = 'high' }: {
     cam.far = 40;
     cam.updateProjectionMatrix();
   }, [cx, cz, ext]);
+
+  if (tileset) {
+    return (
+      <>
+        {/* Sky-blue bounce from above, warm earth bounce from below. */}
+        <hemisphereLight args={['#b8d4ff', '#8a6f4d', 0.55]} />
+        <ambientLight color="#fff2df" intensity={0.22} />
+        {/* Low warm sun raking across the board — long readable shadows. */}
+        <directionalLight
+          ref={dirRef}
+          color="#ffdfae"
+          intensity={3.4}
+          position={[cx - 9, 8.5, cz - 3.5]}
+          castShadow
+          shadow-mapSize={quality === 'high' ? [2048, 2048] : [1024, 1024]}
+          shadow-bias={-0.0003}
+          shadow-normalBias={0.03}
+        />
+        {/* Faint cool rim from the opposite side so shadow sides stay legible. */}
+        <directionalLight color="#7fa8ff" intensity={0.35} position={[cx + 8, 6, cz + 6]} />
+      </>
+    );
+  }
 
   return (
     <>

@@ -37,10 +37,17 @@ export interface UnitModelDef {
    * every unit stays within its own tile.
    */
   height: number;
+  /** Flying unit: body hovers this far above the tile (with a gentle bob);
+   *  the team ring stays on the ground like a landing marker. */
+  hover?: number;
 }
 
 /** Widest a unit may be after scaling — keeps every model inside one tile. */
 export const MAX_FOOTPRINT = 0.85;
+
+/** How far a unit standing on a mountain tile is lifted so it stands ON the
+ *  rock top instead of merging into it (tileset mode only). */
+export const MOUNTAIN_UNIT_ELEVATION = 0.34;
 
 const U = '/voxel3d/models/units';
 
@@ -52,12 +59,13 @@ export const UNIT_MODELS: Record<string, UnitModelDef> = {
   defender:   { url: `${U}/defender.glb`,   height: 0.78 }, // Bulwark
   wraith:     { url: `${U}/wraith.glb`,     height: 0.66 },
   stalker:    { url: `${U}/stalker.glb`,    height: 0.85 },
-  sentinel:   { url: `${U}/sentinel.glb`,   height: 0.8 },
+  sentinel:   { url: `${U}/sentinel.glb`,   height: 0.72, hover: 0.3 }, // flyer
   tank:       { url: `${U}/tank.glb`,       height: 0.55 }, // vehicle: low & wide
   titan:      { url: `${U}/titan.glb`,      height: 1.1 },
   // ── Hive ──
-  scuttling:  { url: `${U}/scuttling.glb`,  height: 0.38 },
+  scuttling:  { url: `${U}/scuttling.glb`,  height: 0.27 },
   hive_scout: { url: `${U}/hive_scout.glb`, height: 0.55 },
+  reaper:     { url: `${U}/reaper.glb`,     height: 0.55, hover: 0.25 }, // flyer
   scab:       { url: `${U}/scab.glb`,       height: 0.6 },
   burstling:  { url: `${U}/burstling.glb`,  height: 0.5 },
   vindrace:   { url: `${U}/vindrace.glb`,   height: 0.8 },

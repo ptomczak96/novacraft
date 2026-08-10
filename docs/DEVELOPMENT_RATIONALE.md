@@ -4193,3 +4193,162 @@ spawns each unit's real GLB model. Decisions and reasoning:
   (`(x*7+y*13)%4`) break up repetition, matching TerrainBlocks' jitter idiom.
 - Dev harness: `?tileset=1` forces the mode (pairs with `?unitGallery=1` to
   review all models on the board).
+
+### 2026-08-10 — Patrick Tomczak — GEN 8 visual/UX pass: sun lighting, FX, outline & click fixes
+Follow-up batch on the 3D Tileset mode, driven by Patrick's playtest notes:
+
+- **Golden-hour sun (tileset only).** The night-arena grade buried the
+  hand-painted tile textures. Tileset mode now gets its own light rig in
+  Lights.tsx: warm key at 3.4 intensity raking low across the board (long
+  readable shadows, 2K shadow maps on high), sky/ground hemisphere fill, and a
+  faint cool opposite rim so shadow sides stay legible. 2.1 intensity looked
+  identical to the old night grade under ACES tonemapping — 3.4 is the tuned
+  value; other renderer modes are untouched.
+- **TilesetFX layer** (models/TilesetFX.tsx): sunlit dust motes drifting over
+  the board (one additive point cloud, deterministic scatter, twinkle +
+  orbital drift in the vertex shader) and animated water caustics (one
+  instanced quad per water tile, two counter-scrolling interference bands,
+  edge-faded so ripples never touch the tile rim). One draw call each.
+- **Selection outline rebuilt.** The old shell scaled the whole clone group
+  1.06× about its origin — fine for boxy voxel units, but on organic glTF
+  bodies parts sit far from the origin so the shell smeared into a detached
+  green blob (bug report screenshot). The shell material now inflates each
+  vertex along its normal by a constant WORLD distance (modelMatrix scale read
+  in-shader), giving a uniform rim that hugs any silhouette. Same path for box
+  and GLB units.
+- **Units never merge into tile geometry.** Mountain tiles lift their occupant
+  onto the rock top (MOUNTAIN_UNIT_ELEVATION = 0.34, lerped along the move
+  glide); forest tiles swap to a flat tile while occupied (Polytopia-style)
+  because standing a unit on top of trees would look worse than hiding them.
+- **North-tile click fix.** A unit's invisible click collider (fixed 0.7×1.05
+  box) shadowed the tile behind it, so a selected unit could not be sent to
+  its northern move target. Colliders are now sized to the actual model
+  (height + hover), and while a unit IS selected its collider projects the
+  click ray through to the ground tile instead of eating it — move targets
+  win over "click self to deselect", which the ground plane still provides.
+- **Scuttling 30% smaller** (0.38 → 0.27) per playtest feel; **sentinel is a
+  flyer** — new `hover` field in the unit-model registry floats the body 0.3
+  above the tile with a phase-shifted idle bob; the team ring stays grounded
+  as a landing marker, and its ghost sinks from hover height.
+
+### 2026-08-10 — Patrick Tomczak — GEN 8 tile levelling (per-kind Y trim)
+The four tile GLBs were authored with different ground-slab thicknesses, so
+base-aligning them left forest tiles sitting proud of the ground plane. Added
+TILE_Y_OFFSET in ModelTiles (hand-tuned; not derivable from bboxes since they
+can't separate slab from trees/peaks): forest −0.09 so it sits level with flat
+(mountain already did), water a further 20% of a slab height (−0.062) below
+ground per Patrick's direction — reads as a recessed river bed with a stepped
+bank. Water ripple overlay follows the surface down.
+
+### 2026-08-10 — Patrick Tomczak — GEN 8: RIGBOUND_3js voxel deck as ground tiles + selection/centring/board-edge fixes
+Second follow-up batch on the 3D Tileset mode, from Patrick's playtest notes:
+
+- **Ground tiles are now the RIGBOUND_3js voxel deck.** Ported the ITB-style
+  procedural tile painter (~/RIGBOUND_3js/src/voxelTiles.js + voxels.js) into
+  models/deck/: 16×16-voxel plates with recessed groove rings, lit bevel
+  chamfers, plate-value patchwork, seams, grime walks, rivets, vents and rare
+  machinery lights — geometry cached per (type, variant) [2 types × 8
+  variants] and drawn as InstancedMeshes (~20–40 draw calls for any board).
+  Deck top sits exactly on the y=0 walkable plane. Zone/glow tile types were
+  NOT ported (GEN 8 has its own highlight system). Forest / mountain / water
+  keep their GLB tile models, reading as biome features on the deck.
+- **Selection outline is now a true screen-space silhouette** (postprocessing
+  OutlineEffect via drei, replacing the inverted-hull shell, which showed
+  backfaces through every crevice of organic glTF bodies). Selected unit's
+  meshes are handed to PostFX through a tiny outlineStore; the effect stays
+  mounted permanently and only its selection swaps. Root-caused a silent
+  failure: r3f leaves renderer.autoClear=true, so OutlineEffect's mask pass —
+  which clears its target WHITE for the R-channel edge detector and then
+  restores the previous clear color — got auto-cleared back to black by its
+  own scene render, producing an empty edge buffer. PostFX wraps the mask
+  pass's render with autoClear=false (see patchOutlineClear).
+- **Units centre on their FEET, not their bbox** — a long sword/tail dragged
+  the bbox centre sideways, so bodies stood visibly off-tile. GlbUnitModel now
+  computes the x/z centre from vertices in the bottom ~18% of the model.
+- **No platform frame in tileset mode** — EdgeRim (the black table-like rim)
+  is skipped; the board reads as a floating island of tiles, edges exposed.
+
+### 2026-08-10 — Patrick Tomczak — GEN 8: "1" tile set, Reaper model, attack FX, health bars
+- **Tile set swapped to the "1" exports** (Tile - Flat1/Forest1/Mountain1/
+  Water1). The RIGBOUND_3js voxel deck was removed again at Patrick's
+  direction (models/deck/ deleted; the port lives in git history). Water1
+  shipped with a squashed z-axis (1.9×1.6 footprint) — ModelTiles now applies
+  PER-AXIS footprint normalization in model space (before the quarter-turn),
+  so any export is stretched to an exact 1×1 tile; height uses the smaller
+  factor (the export's intended uniform scale). Per-kind Y trims reset to
+  zero for this set; water keeps the 20%-of-a-slab drop.
+- **Reaper GLB registered** (hive flyer: height 0.55, hover 0.25 — it reads
+  as a winged creature, so it flies like the sentinel).
+- **Attack animations matched to the unit's weapon** (units/attackStyles.ts):
+  melee kinds keep the lunge plus a new slash-arc crescent at the defender;
+  gun-holders (scout/lancer/wraith/stalker) fire tracer rounds with a muzzle
+  flash — even at range 1, a rifle is a rifle; artillery (tank/catapult/siege
+  tower) lobs arcing shells; titan/seercaust cast glowing bolts; hive ranged
+  (scab/ravener) spit arcing acid globs; archers loose arrows. Attackers turn
+  to face their target and ease back; ranged units recoil instead of lunging;
+  the defender's hit-flash is delayed until the projectile actually lands.
+  Also fixed: VoxelMapView computed combat/ghost events but never passed them
+  to VoxelArena, so NO attack/death FX had ever played in the 3D renderer.
+- **Floating health bar** above a unit when it's clicked/selected (any owner):
+  camera-facing billboard, green→amber→red by HP fraction, drawn depth-free so
+  terrain can't hide it. HP travels on UnitView (u.hp / registry maxHP).
+
+### 2026-08-10 — Patrick Tomczak — GEN 8: RIGBOUND_3js in-game HUD ported onto the game screen
+Ported the neon tactical overlay from RIGBOUND_3js (src/ui/hud.css + hud.js)
+into the web app as a GEN 8-only skin (components/gen8/): scan-line glass
+panels, corner-ticked cards, condensed uppercase type, cyan chrome with red
+threat accents. Mapped to RIGBOUND's systems rather than copied wholesale:
+
+- **New HUD elements** (Gen8Hud overlay over the map area): OBJECTIVES panel
+  top-left (live win-condition progress from config.winConditions), the
+  bracket-framed END TURN button + TURN tab top-centre (owns turn ending; the
+  plain top-bar button is hidden in this skin), the angled faction turn tag
+  bottom-left (cyan for Vanguard, red for Hive) with a unit tray beside it —
+  your units then sighted hostiles, each slot an icon with an HP underbar,
+  click-to-select, `+N` overflow — and a red HOSTILE INTEL card bottom-right
+  (HP pips, ATK/DEF/MOVE/RANGE, ability list) that replaces the standard
+  UnitSheet whenever the selected unit is an enemy.
+- **Existing UI re-chromed, not rebuilt**: the top bar, side panel and
+  city/tile cards get the ported glass chrome via `.gen8-skin` CSS overrides.
+  The UnitSheet deliberately KEEPS serving as the friendly unit card — it
+  already owns ability arming, tech gating, morphs and upgrades, and
+  duplicating that in a ported left-card would fork the logic.
+- Skin activates with the GEN 8 - 3D Tileset map style (or ?tileset=1); every
+  other theme is untouched.
+
+### 2026-08-10 — Patrick Tomczak — GEN 8: pip health bar, full ability pass (pickers, cast FX, site actions)
+- **Floating health bar restyled to the HUD's segmented pips** (per Patrick's
+  screenshot): up to 12 glowing segments on a dark plate, red for hostiles,
+  cyan for own units — the intel card's row, in-world.
+- **Ability audit — the 3D renderer now supports every active-ability flow.**
+  Root cause of most gaps: interactive flows lived only in IsoCanvas.
+  - Multi-tile pickers (Titan's Ballistic Volley 2×2, Wyrm strike pair,
+    Cure/Repair unit targets, city territory expansion) now work in 3D:
+    eligibility helpers hoisted to src/game/pickers.ts (shared by BOTH
+    renderers, deriving from engine helpers so UI and engine agree), with
+    VoxelMapView painting eligible/picked tiles as highlights and routing
+    clicks through the same tick/untick logic as iso.
+  - **Found City / Capture City / Build & Upgrade REB** were iso-only
+    on-canvas action boxes — the reason "can't settle ruins / build REBs" in
+    GEN 8. They're now HUD prompt buttons (bottom centre, neon chrome) shown
+    when the selected unit's tile has those actions, driven by legalActions +
+    canBuildLocation exactly like iso.
+  - **Cast animations**: new store event `lastAbilityEvent` (mirrors
+    lastCombatEvent; also fired for wyrmStrike) drives an AbilityFxLayer in
+    the arena. Every ability maps to two pooled primitives — an optional
+    projectile (straight bolt: infect/stun/tracer/plant-explosives; lobbed:
+    bile/percussive/volley) and a burst at the destination (expanding ring +
+    rising glow column; heals/repairs/shield rise tall and green/amber/cyan,
+    self-casts and morphs burst at the caster, self-destruct blasts big).
+    Multi-target casts stagger per target.
+  - **Bile-infected tiles now render in 3D** (pulsing violet wash, instanced)
+    — Spray Bile's persistent effect was previously invisible outside 2D.
+
+### 2026-08-10 — Patrick Tomczak — GEN 8 ability pass verified live + dev store hook
+Verified in the running app via the test-combat sandbox (startTestCombat spawns
+2 of every unit): segmented pip health bar over selected units (cyan friendly /
+red hostile), tray click-to-select, Titan Ballistic Volley end-to-end — arm
+from UnitSheet → eligible 2×2 band highlighted on the 3D board → tiles ticked/
+unticked by real board clicks → confirm → four staggered arcing shells with
+burst rings on impact. Added a dev-only console handle (`window.__game` →
+zustand store, vite dev builds only) for driving actions while debugging.

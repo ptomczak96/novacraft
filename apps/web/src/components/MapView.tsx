@@ -15,7 +15,7 @@ import { MarkRemovalBar } from './MarkRemovalBar.js';
 import { EvoRecruitPanel } from './evo/EvoRecruitPanel.js';
 import { CityEconomyLines } from './EconomyBreakdown.js';
 
-const UNIT_ICONS: Record<string, string> = {
+export const UNIT_ICONS: Record<string, string> = {
   scout: '🏃',
   warrior: '⚔️',
   lancer: '🪖',

@@ -1,5 +1,7 @@
 import React from 'react';
 import type { Action } from '@tactica/engine';
+import { getAbilityUnitTargets, isExpansionTileEligible } from '@tactica/engine';
+import { coherentSubset, volleyPicker, strikePicker } from '../../game/pickers.js';
 import { useGameStore } from '../../store/gameStore.js';
 import { VoxelArena } from './VoxelArena.js';
 import { VoxelErrorBoundary } from './VoxelErrorBoundary.js';
@@ -37,7 +39,9 @@ export function VoxelMapView() {
   const {
     visibleState, legalActions, selectedUnitId, abilityMode,
     selectUnit, executeAction, setSelectedCity, setInspectedTile,
-    registry, lastCombatEvent, tileTheme,
+    registry, lastCombatEvent, lastAbilityEvent, tileTheme, gameState,
+    volleySelect, setVolleySelect, strikeSelect, setStrikeSelect,
+    targetSelect, setTargetSelect, territorySelect, setTerritorySelect,
   } = useGameStore();
 
   // GEN 8 — 3D Tileset: the Map Generation option that renders the board from
@@ -81,9 +85,11 @@ export function VoxelMapView() {
         kind: u.typeId,
         hostile: u.owner !== visibleState.currentPlayer,
         selected: u.id === selectedUnitId,
+        hp: u.hp,
+        maxHp: registry.unitTypes[u.typeId]?.maxHP,
       };
     });
-  }, [visibleState, selectedUnitId]);
+  }, [visibleState, selectedUnitId, registry]);
 
   // Target tiles for the selected unit / armed ability, straight from the
   // engine's legal-action list (the engine has no separate "threat map").
@@ -112,12 +118,47 @@ export function VoxelMapView() {
     return t;
   }, [visibleState, legalActions, selectedUnitId, abilityMode]);
 
+  // Multi-tile pickers (Ballistic Volley 2×2 / Wyrm strike pair / Cure-Repair
+  // unit targets / city territory expansion): eligible tiles + current picks,
+  // from the same shared helpers the 2D renderer uses.
+  const picker = React.useMemo(() => {
+    if (!gameState) return null;
+    if (volleySelect) {
+      return { eligible: volleyPicker(gameState, registry, volleySelect).eligible, picks: volleySelect.picks, pickKind: 'threat' as const };
+    }
+    if (strikeSelect) {
+      return { eligible: strikePicker(gameState, registry, strikeSelect).eligible, picks: strikeSelect.picks, pickKind: 'threat' as const };
+    }
+    if (targetSelect) {
+      return { eligible: getAbilityUnitTargets(gameState, targetSelect.unitId, targetSelect.abilityId, registry), picks: targetSelect.picks, pickKind: 'select' as const };
+    }
+    if (territorySelect) {
+      const city = gameState.cities.find(c => c.id === territorySelect.cityId);
+      if (!city) return null;
+      const eligible: { x: number; y: number }[] = [];
+      for (let y = 0; y < gameState.map.height; y++) {
+        for (let x = 0; x < gameState.map.width; x++) {
+          if (isExpansionTileEligible(gameState, registry, city, { x, y }, territorySelect.picks)) {
+            eligible.push({ x, y });
+          }
+        }
+      }
+      return { eligible, picks: territorySelect.picks, pickKind: 'select' as const };
+    }
+    return null;
+  }, [gameState, registry, volleySelect, strikeSelect, targetSelect, territorySelect]);
+
   const highlights = React.useMemo<TileHighlight[]>(() => {
     const list: TileHighlight[] = [];
     const push = (key: string, kind: TileHighlight['kind']) => {
       const [x, y] = key.split(',').map(Number);
       list.push({ x, y, kind });
     };
+    if (picker) {
+      for (const c of picker.eligible) list.push({ x: c.x, y: c.y, kind: 'path' });
+      for (const c of picker.picks) list.push({ x: c.x, y: c.y, kind: picker.pickKind });
+      return list;
+    }
     for (const key of targets.move.keys()) push(key, 'move');
     for (const key of targets.attack.keys()) push(key, 'threat');
     for (const key of targets.slash.keys()) push(key, 'threat');
@@ -125,12 +166,56 @@ export function VoxelMapView() {
     const selected = visibleState?.units.find(u => u.id === selectedUnitId);
     if (selected) list.push({ x: selected.position.x, y: selected.position.y, kind: 'select' });
     return list;
-  }, [targets, visibleState, selectedUnitId]);
+  }, [targets, visibleState, selectedUnitId, picker]);
 
   // Same interaction contract as the 2D renderer's click priority:
-  // ability target → move → attack/slash → unit select → city → inspect.
+  // picker tick/untick → ability target → move → attack/slash → unit select
+  // → city → inspect.
   const onTileClick = React.useCallback((x: number, y: number) => {
     const key = `${x},${y}`;
+
+    // Multi-tile pickers consume ALL clicks while active (mirrors IsoCanvas).
+    if (gameState && (volleySelect || strikeSelect || targetSelect || territorySelect)) {
+      const t = { x, y };
+      if (volleySelect) {
+        const picks = volleySelect.picks;
+        const idx = picks.findIndex(p => p.x === x && p.y === y);
+        if (idx >= 0) setVolleySelect({ ...volleySelect, picks: picks.filter((_, i) => i !== idx) });
+        else if (picks.length < 4 && volleyPicker(gameState, registry, volleySelect).eligible.some(c => c.x === x && c.y === y)) {
+          setVolleySelect({ ...volleySelect, picks: [...picks, t] });
+        }
+      } else if (strikeSelect) {
+        const picks = strikeSelect.picks;
+        const idx = picks.findIndex(p => p.x === x && p.y === y);
+        if (idx >= 0) setStrikeSelect({ ...strikeSelect, picks: idx === 0 ? [] : picks.slice(0, 1) });
+        else if (picks.length < 2 && strikePicker(gameState, registry, strikeSelect).eligible.some(c => c.x === x && c.y === y)) {
+          setStrikeSelect({ ...strikeSelect, picks: [...picks, t] });
+        }
+      } else if (targetSelect) {
+        const picks = targetSelect.picks;
+        const idx = picks.findIndex(p => p.x === x && p.y === y);
+        if (idx >= 0) setTargetSelect({ ...targetSelect, picks: picks.filter((_, i) => i !== idx) });
+        else if (
+          picks.length < targetSelect.maxTargets &&
+          getAbilityUnitTargets(gameState, targetSelect.unitId, targetSelect.abilityId, registry).some(c => c.x === x && c.y === y)
+        ) {
+          setTargetSelect({ ...targetSelect, picks: [...picks, t] });
+        }
+      } else if (territorySelect) {
+        const city = gameState.cities.find(c => c.id === territorySelect.cityId);
+        if (city) {
+          const picks = territorySelect.picks;
+          const idx = picks.findIndex(p => p.x === x && p.y === y);
+          if (idx >= 0) {
+            const remaining = picks.filter((_, i) => i !== idx);
+            setTerritorySelect({ cityId: city.id, picks: coherentSubset(gameState, registry, city, remaining) });
+          } else if (picks.length < 3 && isExpansionTileEligible(gameState, registry, city, t, picks)) {
+            setTerritorySelect({ cityId: city.id, picks: [...picks, t] });
+          }
+        }
+      }
+      return;
+    }
     const act = targets.ability.get(key) ?? targets.move.get(key)
       ?? targets.attack.get(key) ?? targets.slash.get(key);
     if (act) {
@@ -149,7 +234,11 @@ export function VoxelMapView() {
     }
     selectUnit(null);
     setInspectedTile({ x, y });
-  }, [targets, visibleState, selectedUnitId, executeAction, selectUnit, setSelectedCity, setInspectedTile]);
+  }, [
+    targets, visibleState, selectedUnitId, executeAction, selectUnit, setSelectedCity, setInspectedTile,
+    gameState, registry, volleySelect, setVolleySelect, strikeSelect, setStrikeSelect,
+    targetSelect, setTargetSelect, territorySelect, setTerritorySelect,
+  ]);
 
   const galleryUnits = React.useMemo<UnitView[]>(() => {
     if (!gallery || !visibleState) return [];
@@ -204,6 +293,21 @@ export function VoxelMapView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [combatSeq]);
 
+  // Ability casts → render-side cast animations (heals, bolts, barrages…).
+  const abilitySeq = lastAbilityEvent?.seq;
+  const abilityFx = React.useMemo(() => {
+    const ev = lastAbilityEvent;
+    if (!ev) return null;
+    return {
+      seq: ev.seq,
+      abilityId: ev.abilityId,
+      unitId: ev.unitId,
+      casterPos: ev.casterPos,
+      targets: ev.targets,
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [abilitySeq]);
+
   if (!visibleState) return null;
 
   return (
@@ -227,6 +331,9 @@ export function VoxelMapView() {
           onTileClick={onTileClick}
           visibility={gallery ? undefined : visibleState.visibility}
           tileset={tileset}
+          combat={combat}
+          ability={abilityFx}
+          ghosts={ghosts}
         />
       </VoxelErrorBoundary>
     </div>
