@@ -9,6 +9,7 @@ import { CameraRig, type CameraInteraction } from './CameraRig.js';
 import { Lights } from './Lights.js';
 import { Floor } from './Floor.js';
 import { EdgeRim } from './EdgeRim.js';
+import { ModelTiles } from './models/ModelTiles.js';
 import { TerrainBlocks } from './TerrainBlocks.js';
 import { Highlights } from './Highlights.js';
 import { Units } from './Units.js';
@@ -24,6 +25,7 @@ export function VoxelArena({
   floorTextures,
   combat,
   ghosts,
+  tileset = false,
 }: VoxelArenaProps) {
   const debugCam = React.useMemo(
     () => new URLSearchParams(window.location.search).get('debugCam') === '1',
@@ -90,21 +92,32 @@ export function VoxelArena({
       <CameraRig width={map.width} height={map.height} debugCam={debugCam} interaction={interaction} focus={focus} />
       <Lights width={map.width} height={map.height} theme={theme} quality={quality} />
       <React.Suspense fallback={null}>
-        <Floor
-          width={map.width}
-          height={map.height}
-          quality={quality}
-          floorTextures={floorTextures}
-          onTileClick={onTileClick}
-          interaction={interaction}
-          theme={theme}
-          holes={holes}
-        />
+        {tileset ? (
+          // GEN 8 — 3D Tileset: GLB tile blocks ARE the board (flat / forest /
+          // mountain / water); no reflector floor, no hole-cutting.
+          <ModelTiles
+            map={map}
+            visibility={visibility}
+            onTileClick={onTileClick}
+            interaction={interaction}
+          />
+        ) : (
+          <Floor
+            width={map.width}
+            height={map.height}
+            quality={quality}
+            floorTextures={floorTextures}
+            onTileClick={onTileClick}
+            interaction={interaction}
+            theme={theme}
+            holes={holes}
+          />
+        )}
       </React.Suspense>
       <EdgeRim width={map.width} height={map.height} theme={theme} />
-      <TerrainBlocks map={map} visibility={visibility} theme={theme} />
+      <TerrainBlocks map={map} visibility={visibility} theme={theme} natureProps={!tileset} />
       <Highlights highlights={highlights} />
-      <Units units={adjustedUnits} ghosts={ghosts} combat={combat} onTileClick={onTileClick} interaction={interaction} />
+      <Units units={adjustedUnits} ghosts={ghosts} combat={combat} onTileClick={onTileClick} interaction={interaction} useModels={tileset} />
       <FogClouds map={map} visibility={visibility} theme={theme} />
       <SpaceStars width={map.width} height={map.height} quality={quality} />
       {quality === 'high' && (

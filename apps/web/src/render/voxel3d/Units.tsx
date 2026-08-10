@@ -6,6 +6,8 @@ import type { CameraInteraction } from './CameraRig.js';
 import { defForKind, isHeavyKind } from './units/unitDefs.js';
 import { buildUnit, disposeUnit } from './units/buildUnit.js';
 import { StalkerModel } from './units/StalkerModel.js';
+import { GlbUnitModel, GlbGhostModel } from './units/GlbUnitModel.js';
+import { unitModelForKind } from './models/modelAssets.js';
 
 /** Models are built facing +Z; rotate to the unit's grid facing. */
 const FACING_ROT_Y: Record<Facing, number> = {
@@ -55,8 +57,17 @@ function BoxUnit({ unit }: { unit: UnitView }) {
 }
 
 /** Unit body router: kinds with real 3D models use them (box fallback while
- *  the asset streams in); everyone else keeps the box-voxel build. */
-function UnitBody({ unit }: { unit: UnitView }) {
+ *  the asset streams in); everyone else keeps the box-voxel build. In tileset
+ *  mode (`useModels`) every kind with a GLB in models/modelAssets.ts renders
+ *  its real model; unmodeled kinds keep the box-voxel build. */
+function UnitBody({ unit, useModels }: { unit: UnitView; useModels?: boolean }) {
+  if (useModels && unitModelForKind(unit.kind)) {
+    return (
+      <React.Suspense fallback={<BoxUnit unit={unit} />}>
+        <GlbUnitModel kind={unit.kind} teamColor={unit.teamColor} />
+      </React.Suspense>
+    );
+  }
   if (unit.kind === 'stalker') {
     return (
       <React.Suspense fallback={<BoxUnit unit={unit} />}>
@@ -118,11 +129,12 @@ const MOVE_DURATION = 0.3;
 const LUNGE_DURATION = 0.22;
 const FLASH_DURATION = 0.3;
 
-function UnitMesh({ unit, onTileClick, interaction, combat }: {
+function UnitMesh({ unit, onTileClick, interaction, combat, useModels }: {
   unit: UnitView;
   onTileClick?: (x: number, y: number) => void;
   interaction?: React.MutableRefObject<CameraInteraction>;
   combat?: CombatFx | null;
+  useModels?: boolean;
 }) {
   const rootRef = React.useRef<THREE.Group>(null);
   const bodyRef = React.useRef<THREE.Group>(null);
@@ -225,7 +237,7 @@ function UnitMesh({ unit, onTileClick, interaction, combat }: {
       </mesh>
       <group position-y={0.015} ref={bodyRef}>
         {unit.selected && <SelectionShell body={bodyRef} />}
-        <UnitBody unit={unit} />
+        <UnitBody unit={unit} useModels={useModels} />
         {/* Invisible collider: clicking a unit's body must resolve to ITS tile,
             not the tile the ray would hit on the floor behind it. */}
         {onTileClick && (
@@ -248,21 +260,12 @@ function UnitMesh({ unit, onTileClick, interaction, combat }: {
 
 const GHOST_DURATION = 0.6;
 
-/** A killed unit's last body, fading out and sinking. No shadows, no clicks. */
-function GhostUnit({ view }: { view: UnitView }) {
-  const model = React.useMemo(() => {
-    const m = buildUnit(defForKind(view.kind), view.teamColor);
-    m.traverse(o => {
-      if (o instanceof THREE.Mesh) {
-        o.castShadow = false;
-        (o.material as THREE.Material).transparent = true;
-      }
-    });
-    return m;
-  }, [view]);
-  React.useEffect(() => () => disposeUnit(model), [model]);
-
-  const ref = React.useRef<THREE.Group>(null);
+/** Sink-and-fade animation shared by both ghost bodies. Reads the current
+ *  model from a ref so glTF bodies that stream in late still fade. */
+function useGhostFade(
+  ref: React.RefObject<THREE.Group | null>,
+  modelRef: React.MutableRefObject<THREE.Group | null>,
+) {
   const startRef = React.useRef(-1);
   useFrame(({ clock }) => {
     if (startRef.current < 0) startRef.current = clock.elapsedTime;
@@ -272,10 +275,36 @@ function GhostUnit({ view }: { view: UnitView }) {
     g.visible = t < 1;
     g.position.y = 0.015 - t * 0.12;
     const fade = 0.9 * (1 - t);
-    model.traverse(o => {
+    modelRef.current?.traverse(o => {
       if (o instanceof THREE.Mesh) (o.material as THREE.Material).opacity = fade;
     });
   });
+}
+
+/** A killed unit's last body, fading out and sinking. No shadows, no clicks. */
+function GhostUnit({ view, useModels }: { view: UnitView; useModels?: boolean }) {
+  const glb = useModels && unitModelForKind(view.kind) != null;
+
+  const boxModel = React.useMemo(() => {
+    if (glb) return null;
+    const m = buildUnit(defForKind(view.kind), view.teamColor);
+    m.traverse(o => {
+      if (o instanceof THREE.Mesh) {
+        o.castShadow = false;
+        (o.material as THREE.Material).transparent = true;
+      }
+    });
+    return m;
+  }, [view, glb]);
+  React.useEffect(() => () => { if (boxModel) disposeUnit(boxModel); }, [boxModel]);
+
+  const ref = React.useRef<THREE.Group>(null);
+  // The faded model: the box build immediately, or the GLB once it streams in
+  // (GlbGhostModel clones its materials, so fading never dims living units).
+  const modelRef = React.useRef<THREE.Group | null>(null);
+  modelRef.current = boxModel ?? modelRef.current;
+  const onGlbModel = React.useCallback((m: THREE.Group) => { modelRef.current = m; }, []);
+  useGhostFade(ref, modelRef);
 
   return (
     <group
@@ -283,25 +312,33 @@ function GhostUnit({ view }: { view: UnitView }) {
       rotation-y={FACING_ROT_Y[view.facing]}
     >
       <group ref={ref}>
-        <primitive object={model} />
+        {glb ? (
+          <React.Suspense fallback={null}>
+            <GlbGhostModel kind={view.kind} onModel={onGlbModel} />
+          </React.Suspense>
+        ) : (
+          boxModel && <primitive object={boxModel} />
+        )}
       </group>
     </group>
   );
 }
 
-export function Units({ units, ghosts, combat, onTileClick, interaction }: {
+export function Units({ units, ghosts, combat, onTileClick, interaction, useModels }: {
   units: UnitView[];
   ghosts?: UnitGhost[];
   combat?: CombatFx | null;
   onTileClick?: (x: number, y: number) => void;
   interaction?: React.MutableRefObject<CameraInteraction>;
+  /** GEN 8 tileset mode: render real GLB unit models where available. */
+  useModels?: boolean;
 }) {
   return (
     <>
       {units.map(u => (
-        <UnitMesh key={u.id} unit={u} onTileClick={onTileClick} interaction={interaction} combat={combat} />
+        <UnitMesh key={u.id} unit={u} onTileClick={onTileClick} interaction={interaction} combat={combat} useModels={useModels} />
       ))}
-      {ghosts?.map(g => <GhostUnit key={g.ghostKey} view={g.view} />)}
+      {ghosts?.map(g => <GhostUnit key={g.ghostKey} view={g.view} useModels={useModels} />)}
     </>
   );
 }

@@ -77,4 +77,7 @@ export interface VoxelArenaProps {
   combat?: CombatFx | null;
   /** Recently killed units, rendered as fading ghosts. */
   ghosts?: UnitGhost[];
+  /** GEN 8 — 3D Tileset mode: GLB tile blocks replace the floor plane and
+   *  units with real models render them (see models/modelAssets.ts). */
+  tileset?: boolean;
 }

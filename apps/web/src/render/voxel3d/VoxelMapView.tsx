@@ -37,8 +37,14 @@ export function VoxelMapView() {
   const {
     visibleState, legalActions, selectedUnitId, abilityMode,
     selectUnit, executeAction, setSelectedCity, setInspectedTile,
-    registry, lastCombatEvent,
+    registry, lastCombatEvent, tileTheme,
   } = useGameStore();
+
+  // GEN 8 — 3D Tileset: the Map Generation option that renders the board from
+  // GLB tile blocks and spawns real GLB unit models. `?tileset=1` forces it
+  // (dev harness, pairs with ?unitGallery=1 for reviewing the models).
+  const tileset = tileTheme === 'gen8_tileset3d' ||
+    new URLSearchParams(window.location.search).get('tileset') === '1';
 
   // Dev harness: ?unitGallery=1 lays out one of every unit kind on the board
   // (alternating teams) for reviewing the voxel models.
@@ -220,6 +226,7 @@ export function VoxelMapView() {
           quality={quality}
           onTileClick={onTileClick}
           visibility={gallery ? undefined : visibleState.visibility}
+          tileset={tileset}
         />
       </VoxelErrorBoundary>
     </div>
