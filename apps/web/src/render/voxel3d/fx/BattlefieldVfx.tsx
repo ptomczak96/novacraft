@@ -292,6 +292,7 @@ export function BattlefieldVfx({ map, units, combat, ability }: {
   ability?: AbilityFx | null;
 }) {
   const systems = React.useMemo(createSystems, []);
+  const systemsList = React.useMemo(() => Object.values(systems), [systems]);
   const queue = React.useRef<ScheduledLayer[]>([]);
   const lastTime = React.useRef(0);
   const lastCombatSeq = React.useRef(-1);
@@ -310,9 +311,9 @@ export function BattlefieldVfx({ map, units, combat, ability }: {
     })), []);
 
   React.useEffect(() => () => {
-    Object.values(systems).forEach(system => system.dispose());
+    systemsList.forEach(system => system.dispose());
     ringMaterials.forEach(material => material.dispose());
-  }, [ringMaterials, systems]);
+  }, [ringMaterials, systemsList]);
 
   const schedule = React.useCallback((
     id: string,
@@ -455,7 +456,7 @@ export function BattlefieldVfx({ map, units, combat, ability }: {
   useFrame(({ clock }, delta) => {
     const time = clock.elapsedTime;
     lastTime.current = time;
-    for (const system of Object.values(systems)) system.uniforms.uTime.value = time;
+    for (const system of systemsList) system.uniforms.uTime.value = time;
 
     for (let i = queue.current.length - 1; i >= 0; i--) {
       const entry = queue.current[i];
@@ -484,12 +485,12 @@ export function BattlefieldVfx({ map, units, combat, ability }: {
 
     // Ensure a background tab cannot create an oversized one-frame emission.
     void delta;
-    Object.values(systems).forEach(system => system.flush());
+    systemsList.forEach(system => system.flush());
   });
 
   return (
     <>
-      {Object.values(systems).map(system => <primitive key={system.name} object={system.mesh} />)}
+      {systemsList.map(system => <primitive key={system.name} object={system.mesh} />)}
       {Array.from({ length: MAX_RINGS }, (_, index) => (
         <mesh
           key={index}

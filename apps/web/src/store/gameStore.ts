@@ -428,6 +428,15 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const { gameState, registry, config } = get();
     if (!gameState) return;
 
+    // Presentation events must never be derived from information the local
+    // viewer could not see before the action. The deterministic client keeps
+    // the full state for lockstep simulation, but VFX, damage popups, and
+    // combat logs are public-output surfaces and must respect fog/cloak.
+    const viewerBefore = get().mySeat ?? gameState.currentPlayer;
+    const publicUnitIdsBefore = new Set(
+      getVisibleState(gameState, viewerBefore, registry).units.map(unit => unit.id),
+    );
+
     // Coaching loop: record every move (with its human-readable description + any AI
     // candidate scores) BEFORE applying, so descriptions use pre-action positions.
     let coachLog = get().coachLog;
@@ -450,7 +459,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
     if (action.type === 'attack') {
       const attacker = gameState.units.find(u => u.id === action.unitId);
       const defender = gameState.units.find(u => u.id === action.targetId);
-      if (attacker && defender) {
+      if (
+        attacker && defender &&
+        publicUnitIdsBefore.has(attacker.id) && publicUnitIdsBefore.has(defender.id)
+      ) {
         const attackerType = registry.unitTypes[attacker.typeId];
         const defenderType = registry.unitTypes[defender.typeId];
         if (attackerType && defenderType) {
@@ -496,8 +508,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
       }
     }
 
-    // Wyrm strike: floating damage numbers on the two struck cells (primary 100%,
-    // secondary 50%). Computed from the true state so it works even into fog.
+    // Wyrm strike: floating damage numbers on the two struck cells (primary
+    // 100%, secondary 50%). Hidden victims still resolve in the simulation,
+    // but do not disclose themselves through presentation-only damage text.
     let aoeDamage: AoeDamageEvent | null = null;
     if (action.type === 'wyrmStrike' && action.tiles.length === 2) {
       const attacker = gameState.units.find(u => u.id === action.unitId);
@@ -507,7 +520,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         const hits = action.tiles.map((c, i) => {
           const victim = gameState.units.find(u => u.id !== attacker.id && u.position.x === c.x && u.position.y === c.y);
           const vt = victim && registry.unitTypes[victim.typeId];
-          if (!victim || !vt) return null;
+          if (!victim || !vt || !publicUnitIdsBefore.has(victim.id)) return null;
           const result = previewCombat(attacker, attackerType, victim, vt, gameState.map, registry, gameState.config.combatConfig);
           const amount = i === 0 ? result.attackerDamage : Math.max(minDmg, Math.round(result.attackerDamage * 0.5));
           return { x: c.x, y: c.y, amount, killed: victim.hp - amount <= 0 };
@@ -520,7 +533,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     let abilityEvent: AbilityEvent | null = null;
     if (action.type === 'useAbility' || action.type === 'wyrmStrike') {
       const caster = gameState.units.find(u => u.id === action.unitId);
-      if (caster) {
+      if (caster && publicUnitIdsBefore.has(caster.id)) {
         const targets = action.type === 'wyrmStrike'
           ? action.tiles
           : (action.tiles ?? action.targets ?? (action.target ? [action.target] : []));
@@ -542,7 +555,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     // until the cast's projectile/impact actually arrives.
     if (abilityEvent) {
       abilityEvent.killed = gameState.units
-        .filter(u => !newState.units.some(n => n.id === u.id))
+        .filter(u => publicUnitIdsBefore.has(u.id) && !newState.units.some(n => n.id === u.id))
         .map(u => ({ id: u.id, pos: { x: u.position.x, y: u.position.y } }));
     }
     // Network game → always view/act as our own seat; local → the current player.

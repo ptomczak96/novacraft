@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { buildRegistry, defaultConfig } from '@tactica/data';
-import { createGame } from '@tactica/engine';
+import { createGame, getVisibleState, resolvePush } from '@tactica/engine';
 import type { GameState, Unit } from '@tactica/engine';
 import { PREVIEW_COLLIDE_DAMAGE, predictPush, previewPercussive, previewRam } from './attackPreview.js';
 
@@ -147,6 +147,20 @@ describe('attack outcome previews', () => {
     });
   });
 
+  it('cannot reveal a fog-hidden unit through a Percussive Shells preview', () => {
+    const state = battlefield();
+    state.config.fogOfWar = true;
+    state.cities = [];
+    const titan = unit(1, 'titan', 0, 3, 3);
+    const hiddenNeighbor = unit(2, 'scout', 1, 6, 5);
+    state.units = [titan, hiddenNeighbor];
+    const visible = getVisibleState(state, titan.owner, registry);
+    expect(visible.units.some(candidate => candidate.id === hiddenNeighbor.id)).toBe(false);
+
+    const preview = previewPercussive(visible, registry, titan, { x: 5, y: 5 });
+    expect(preview.pushes.some(push => push.unitId === hiddenNeighbor.id)).toBe(false);
+  });
+
   it('previews Ram away from the caster and ignores empty/friendly targets', () => {
     const state = battlefield();
     const vindrace = unit(1, 'vindrace', 0, 3, 3);
@@ -159,5 +173,53 @@ describe('attack outcome previews', () => {
     });
     expect(previewRam(state, registry, vindrace, ally.position)).toBeNull();
     expect(previewRam(state, registry, vindrace, { x: 2, y: 2 })).toBeNull();
+  });
+
+  it.each([
+    ['clear', (state: GameState) => state],
+    ['edge', (state: GameState) => {
+      state.units[0].position = { x: 0, y: 4 };
+      return state;
+    }],
+    ['water', (state: GameState) => {
+      state.map.tiles[4][5].terrain = 'water';
+      return state;
+    }],
+    ['mountain', (state: GameState) => {
+      state.map.tiles[4][5].terrain = 'mountain';
+      return state;
+    }],
+    ['light unit', (state: GameState) => {
+      state.units.push(unit(2, 'warrior', 0, 5, 4));
+      return state;
+    }],
+    ['heavy unit', (state: GameState) => {
+      state.units.push(unit(2, 'tank', 0, 5, 4));
+      return state;
+    }],
+  ])('matches resolvePush for a %s destination', (_name, arrange) => {
+    const state = battlefield();
+    state.units = [unit(1, 'scout', 1, 4, 4)];
+    arrange(state);
+    const victim = state.units[0];
+    const dx = victim.position.x === 0 ? -1 : 1;
+    const preview = predictPush(state, registry, victim, dx, 0);
+    const resolved = structuredClone(state);
+    resolvePush(resolved, resolved.units[0], dx, 0, registry);
+    const resolvedVictim = resolved.units[0];
+
+    if (preview.outcome === 'void') {
+      expect(resolvedVictim.hp).toBe(0);
+    } else {
+      expect(resolvedVictim.position).toEqual(
+        preview.outcome === 'slide' ? preview.dest : preview.from,
+      );
+      expect(victim.hp - resolvedVictim.hp).toBe(preview.damage);
+    }
+    if (preview.obstacle) {
+      const obstacle = resolved.units.find(candidate => candidate.id === preview.obstacle!.unitId)!;
+      expect(state.units.find(candidate => candidate.id === obstacle.id)!.hp - obstacle.hp)
+        .toBe(preview.obstacle.damage);
+    }
   });
 });

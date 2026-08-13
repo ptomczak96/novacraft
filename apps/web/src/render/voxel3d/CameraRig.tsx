@@ -87,7 +87,9 @@ export function CameraRig({ width, height, debugCam, interaction, focus }: {
   React.useEffect(() => subscribeCameraShake(({ magnitude, duration }) => {
     const shake = shakeRef.current;
     shake.remaining = Math.max(shake.remaining, duration);
-    shake.duration = Math.max(duration, 0.001);
+    // Keep the envelope numerator/denominator paired. A short impulse that
+    // arrives during a longer one must not make remaining / duration exceed 1.
+    shake.duration = Math.max(shake.remaining, 0.001);
     shake.magnitude = Math.max(shake.magnitude, magnitude);
     shake.phase += 1.73;
     shake.active = true;
@@ -104,7 +106,7 @@ export function CameraRig({ width, height, debugCam, interaction, focus }: {
       return;
     }
     shake.remaining = Math.max(0, shake.remaining - delta);
-    const envelope = shake.remaining / shake.duration;
+    const envelope = Math.min(1, shake.remaining / shake.duration);
     const right = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0);
     const up = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 1);
     const t = performance.now() * 0.001;

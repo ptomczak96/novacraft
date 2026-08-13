@@ -350,9 +350,10 @@ export function VoxelMapView() {
   }, [setHoveredTile]);
 
   // Into-the-Breach outcome telegraph for the hovered attack / push-ability
-  // target — numbers straight from the engine's preview helpers.
+  // target — numbers straight from the engine's preview helpers. Ability
+  // pushes are forecast from VisibleState so hidden units never gain arrows.
   const preview = React.useMemo<AttackPreviewData | null>(() => {
-    if (!gameState || !hoveredTile) return null;
+    if (!gameState || !visibleState || !hoveredTile) return null;
     const key = `${hoveredTile.x},${hoveredTile.y}`;
     const atk = targets.attack.get(key);
     if (atk && atk.type === 'attack') {
@@ -377,9 +378,9 @@ export function VoxelMapView() {
     }
     const cast = targets.ability.get(key);
     if (cast && cast.type === 'useAbility') {
-      const caster = gameState.units.find(u => u.id === cast.unitId);
+      const caster = visibleState.units.find(u => u.id === cast.unitId);
       if (caster && cast.abilityId === 'percussive_shells') {
-        const p = previewPercussive(gameState, registry, caster, hoveredTile);
+        const p = previewPercussive(visibleState, registry, caster, hoveredTile);
         return {
           kind: 'percussive',
           attacker: { ...caster.position },
@@ -390,7 +391,7 @@ export function VoxelMapView() {
         };
       }
       if (caster && cast.abilityId === 'ram') {
-        const p = previewRam(gameState, registry, caster, hoveredTile);
+        const p = previewRam(visibleState, registry, caster, hoveredTile);
         if (p) {
           return {
             kind: 'ram',
@@ -403,7 +404,7 @@ export function VoxelMapView() {
       }
     }
     return null;
-  }, [gameState, hoveredTile, targets, registry]);
+  }, [gameState, visibleState, hoveredTile, targets, registry]);
 
   if (!visibleState) return null;
 

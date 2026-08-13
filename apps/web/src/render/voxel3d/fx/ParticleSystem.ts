@@ -31,6 +31,11 @@ const FLOATS: Record<string, number> = {
   start: 3,
   velocity: 3,
   color: 3,
+  gravity: 3,
+  color0: 3,
+  color1: 3,
+  color2: 3,
+  color3: 3,
   spawn: 1,
   life: 1,
   size: 1,
@@ -181,6 +186,10 @@ export class ParticleSystem {
     } = p;
 
     const d = this.data;
+    const gravity = this.uniforms.uGravity.value as THREE.Vector3;
+    const colors = [0, 1, 2, 3].map(index =>
+      this.uniforms[`uColor${index}`].value as THREE.Color,
+    );
 
     for (let n = 0; n < count; n++) {
       const i = this.cursor;
@@ -215,6 +224,15 @@ export class ParticleSystem {
       d.velocity[i3 + 0] = _tmpVec.x;
       d.velocity[i3 + 1] = _tmpVec.y;
       d.velocity[i3 + 2] = _tmpVec.z;
+      d.gravity[i3 + 0] = gravity.x;
+      d.gravity[i3 + 1] = gravity.y;
+      d.gravity[i3 + 2] = gravity.z;
+      for (let stop = 0; stop < colors.length; stop++) {
+        const color = colors[stop];
+        d[`color${stop}`][i3 + 0] = color.r;
+        d[`color${stop}`][i3 + 1] = color.g;
+        d[`color${stop}`][i3 + 2] = color.b;
+      }
 
       d.spawn[i] = time;
       d.life[i] = Math.max(0.05, life * (1 + (Math.random() - 0.5) * 2 * lifeVariance));
@@ -301,7 +319,6 @@ export class RateEmitter {
 
 const PARTICLE_VERTEX = /* glsl */ `
   uniform float uTime;
-  uniform vec3  uGravity;
   uniform float uDrag;
   uniform float uTurbulence;
   uniform float uTurbFrequency;
@@ -313,6 +330,11 @@ const PARTICLE_VERTEX = /* glsl */ `
   attribute vec3  aStart;
   attribute vec3  aVelocity;
   attribute vec3  aColor;
+  attribute vec3  aGravity;
+  attribute vec3  aColor0;
+  attribute vec3  aColor1;
+  attribute vec3  aColor2;
+  attribute vec3  aColor3;
   attribute float aSpawn;
   attribute float aLife;
   attribute float aSize;
@@ -323,6 +345,10 @@ const PARTICLE_VERTEX = /* glsl */ `
   varying float vT;
   varying float vSeed;
   varying vec3  vTint;
+  varying vec3  vColor0;
+  varying vec3  vColor1;
+  varying vec3  vColor2;
+  varying vec3  vColor3;
 
   ${noiseGLSL}
 
@@ -330,6 +356,10 @@ const PARTICLE_VERTEX = /* glsl */ `
     vUv = uv;
     vSeed = aSeed;
     vTint = aColor;
+    vColor0 = aColor0;
+    vColor1 = aColor1;
+    vColor2 = aColor2;
+    vColor3 = aColor3;
 
     float age = uTime - aSpawn;
     float t = age / max(aLife, 1e-4);
@@ -345,7 +375,7 @@ const PARTICLE_VERTEX = /* glsl */ `
     // Analytic exponential drag — exact, and independent of frame rate.
     float k = max(uDrag, 1e-3);
     float travel = (1.0 - exp(-k * age)) / k;
-    vec3 pos = aStart + aVelocity * travel + 0.5 * uGravity * age * age;
+    vec3 pos = aStart + aVelocity * travel + 0.5 * aGravity * age * age;
 
     #ifdef USE_CURL
       pos += curlNoise(aStart * uTurbFrequency + vec3(0.0, uTime * uTurbSpeed, 0.0) + aSeed * 4.0)
@@ -389,15 +419,15 @@ const PARTICLE_FRAGMENT = /* glsl */ `
   uniform float uGlow;
   uniform float uFadeIn;
   uniform float uFadeOut;
-  uniform vec3  uColor0;
-  uniform vec3  uColor1;
-  uniform vec3  uColor2;
-  uniform vec3  uColor3;
 
   varying vec2  vUv;
   varying float vT;
   varying float vSeed;
   varying vec3  vTint;
+  varying vec3  vColor0;
+  varying vec3  vColor1;
+  varying vec3  vColor2;
+  varying vec3  vColor3;
 
   ${noiseGLSL}
   ${commonGLSL}
@@ -440,7 +470,7 @@ const PARTICLE_FRAGMENT = /* glsl */ `
     float alpha = mask * fade * uOpacity;
     if (alpha < 0.004) discard;
 
-    vec3 color = gradient4(uColor0, uColor1, uColor2, uColor3, vT) * vTint;
+    vec3 color = gradient4(vColor0, vColor1, vColor2, vColor3, vT) * vTint;
     color *= uGlow;
 
     gl_FragColor = vec4(color, alpha);

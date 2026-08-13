@@ -3,7 +3,7 @@ export { createGame, createTestCombatGame, getLegalActions, getRecruitOptions, a
 export { resolveCombat, previewCombat, calculateDamage, computeForces, getDefenseMultiplier, effectiveAttackRange } from './combat.js';
 export type { CombatResult, CombatBreakdown, CombatMod } from './combat.js';
 export { getReachableTiles, distance, inRange } from './pathfinding.js';
-export { pushDir, COLLIDE_DAMAGE } from './push.js';
+export { pushDir, resolvePush, COLLIDE_DAMAGE } from './push.js';
 export { getSlashArc, slashHitDamage } from './slash.js';
 export { computeVisibility } from './fog.js';
 export { getModifier, grantedConditions, ownedCityCount, techCost, techCostForPlayer, techPlasmaCostForPlayer, isTechAvailable, isUnitUnlocked } from './tech.js';

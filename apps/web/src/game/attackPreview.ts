@@ -1,5 +1,10 @@
-import { previewCombat, pushDir } from '@tactica/engine';
+import { COLLIDE_DAMAGE, previewCombat, pushDir } from '@tactica/engine';
 import type { Coord, DataRegistry, GameState, Unit } from '@tactica/engine';
+
+/** Only public board data is needed for outcome forecasting. Accepting this
+ *  narrower shape lets renderers pass VisibleState directly, so a hover
+ *  preview cannot inspect units or obstacles hidden by fog of war. */
+type PushPreviewState = Pick<GameState, 'map' | 'units' | 'buildings' | 'config'>;
 
 /**
  * Into-the-Breach-style outcome telegraphing (render-side, READ-ONLY).
@@ -9,7 +14,7 @@ import type { Coord, DataRegistry, GameState, Unit } from '@tactica/engine';
  * pushed into impassable void terrain they die; heavies don't move.
  */
 
-export const PREVIEW_COLLIDE_DAMAGE = 2;
+export const PREVIEW_COLLIDE_DAMAGE = COLLIDE_DAMAGE;
 
 export interface PushPreview {
   unitId: number;
@@ -25,7 +30,7 @@ export interface PushPreview {
 }
 
 export function predictPush(
-  state: GameState, registry: DataRegistry, victim: Unit, dx: number, dy: number,
+  state: PushPreviewState, registry: DataRegistry, victim: Unit, dx: number, dy: number,
 ): PushPreview {
   const base: Omit<PushPreview, 'outcome' | 'dest' | 'damage'> = {
     unitId: victim.id, from: { ...victim.position }, dir: { dx, dy },
@@ -65,7 +70,7 @@ const NEIGHBORS8: ReadonlyArray<readonly [number, number]> = [
 /** Percussive Shells preview: combat damage to a LIGHT unit on the impact
  *  tile, plus every neighbouring unit shoved outward from the blast. */
 export function previewPercussive(
-  state: GameState, registry: DataRegistry, titan: Unit, impact: Coord,
+  state: PushPreviewState, registry: DataRegistry, titan: Unit, impact: Coord,
 ): { centerDamage: number | null; centerUnitId: number | null; pushes: PushPreview[] } {
   const titanType = registry.unitTypes[titan.typeId];
   let centerDamage: number | null = null;
@@ -89,7 +94,7 @@ export function previewPercussive(
 
 /** Ram preview: the adjacent enemy shoved one tile away from the Vindrace. */
 export function previewRam(
-  state: GameState, registry: DataRegistry, vindrace: Unit, target: Coord,
+  state: PushPreviewState, registry: DataRegistry, vindrace: Unit, target: Coord,
 ): PushPreview | null {
   const victim = state.units.find(
     u => u.owner !== vindrace.owner && u.position.x === target.x && u.position.y === target.y,

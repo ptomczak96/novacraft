@@ -4923,3 +4923,16 @@ named bot entries. For building economy data, David's new single-level
 refinery/purifier rules, tech gates, supply-per-adjacency schema, and revised
 mine/extractor progression win in full because the accompanying engine, schema,
 tech-tree, documentation, and tests were designed as one coordinated change.
+
+### 2026-08-13 — Patrick Tomczak — Overlap-safe particles and fog-safe combat feedback
+
+Particle gradient and gravity values are copied into each pooled particle at
+spawn time. A later layer can therefore reuse the pool without recolouring or
+redirecting particles that are still alive from an earlier effect.
+
+Outcome previews, damage popups, combat events, and ability-death bursts are
+derived only from the local player's pre-action visible units. The lockstep
+client still simulates full state, but presentation code cannot disclose
+cloaked or fog-hidden units. Unit turning now uses a delta-time exponential
+response, and overlapping camera-shake impulses keep a bounded decay envelope,
+so both effects remain stable across frame rates and effect overlap.

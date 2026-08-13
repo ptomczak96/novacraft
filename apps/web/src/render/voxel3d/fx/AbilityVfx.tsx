@@ -596,7 +596,8 @@ export function AbilityVfx({ ability: abilityProp, units }: { ability?: AbilityF
 
     return { sparks, embers, smoke, debris, motes, flash };
   }, []);
-  React.useEffect(() => () => Object.values(systems).forEach(s => s.dispose()), [systems]);
+  const systemsList = React.useMemo(() => Object.values(systems), [systems]);
+  React.useEffect(() => () => systemsList.forEach(s => s.dispose()), [systemsList]);
 
   /* ---------------- lightning bolt (two passes, one geometry) ---------------- */
   const boltGeom = React.useMemo(() => createBoltRibbonGeometry(), []);
@@ -866,7 +867,7 @@ export function AbilityVfx({ ability: abilityProp, units }: { ability?: AbilityF
   /* ---------------- frame drive ---------------- */
   useFrame(({ clock }, dt) => {
     const time = clock.elapsedTime;
-    for (const sys of Object.values(systems)) sys.uniforms.uTime.value = time;
+    for (const sys of systemsList) sys.uniforms.uTime.value = time;
     for (const m of boltMats) m.uniforms.uTime.value = time;
 
     const recipe = s.recipe;
@@ -1063,12 +1064,12 @@ export function AbilityVfx({ ability: abilityProp, units }: { ability?: AbilityF
       }
     }
 
-    for (const sys of Object.values(systems)) sys.flush();
+    for (const sys of systemsList) sys.flush();
   });
 
   return (
     <>
-      {Object.values(systems).map(sys => (
+      {systemsList.map(sys => (
         <primitive key={sys.name} object={sys.mesh} />
       ))}
       {boltMats.map((mat, i) => (

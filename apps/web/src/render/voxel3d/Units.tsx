@@ -322,7 +322,7 @@ function UnitMesh({ unit, onTileClick, onTileHover, interaction, combat, ability
     }
   }
 
-  useFrame(({ clock }) => {
+  useFrame(({ clock }, delta) => {
     const g = rootRef.current;
     if (!g) return;
     if (a.segStart === -2) a.segStart = clock.elapsedTime;
@@ -369,7 +369,8 @@ function UnitMesh({ unit, onTileClick, onTileHover, interaction, combat, ability
     } else {
       const moving = a.segStart >= 0;
       const desired = moving ? a.moveYaw : baseYaw;
-      const rate = moving ? 0.35 : 0.18;
+      const turnSpeed = moving ? 26 : 12;
+      const rate = 1 - Math.exp(-turnSpeed * delta);
       let d = desired - g.rotation.y;
       d = Math.atan2(Math.sin(d), Math.cos(d));
       g.rotation.y = Math.abs(d) < 0.03 ? desired : g.rotation.y + d * rate;
