@@ -81,6 +81,8 @@ export interface TechDef {
   branch: string; // tech branch, e.g. 'refinement'
   level: number; // 1..maxLevel
   effects: TechEffect[];
+  plasmaCost?: number; // plasma cost at 1 city (0/absent = ore-only research)
+  plasmaCostPerCity?: number; // +plasma per additional city (linear scaling)
   prerequisites?: string[]; // optional explicit prereqs (ALL required), in addition to the branch-unlock rule
   prerequisitesAny?: string[]; // optional OR-prereqs (at least ONE required), e.g. Crucible OR Mech Bay
   excludes?: string[]; // mutually-exclusive techs: if any is researched, this one can't be (e.g. Wyrm's Tunneling Network ⊕ Aftershock)

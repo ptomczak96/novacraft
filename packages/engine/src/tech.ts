@@ -67,6 +67,19 @@ export function techCostForPlayer(state: GameState, playerId: PlayerId, tech: Te
 }
 
 /**
+ * Plasma cost of a tech for `playerId`, scaling linearly with owned cities:
+ *   base + perCity × (cities − 1).
+ * Most techs have no plasma cost (returns 0). Plasma is a hard, undiscounted
+ * cost — R&D's researchCostReduction applies to ore only.
+ */
+export function techPlasmaCostForPlayer(state: GameState, playerId: PlayerId, tech: TechDef, registry: DataRegistry): number {
+  const base = tech.plasmaCost ?? 0;
+  if (base <= 0) return 0;
+  const perCity = tech.plasmaCostPerCity ?? 0;
+  return base + perCity * Math.max(0, ownedCityCount(state, playerId) - 1);
+}
+
+/**
  * Whether `playerId` may research `tech` right now (ignoring affordability).
  * Branch-unlock rule: a level-1 tech is always available; a level-n tech needs
  * at least one researched tech in the SAME branch at level n-1. Any explicit

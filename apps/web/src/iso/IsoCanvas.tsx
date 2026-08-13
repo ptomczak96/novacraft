@@ -885,10 +885,10 @@ export function IsoCanvas({ mode, onPaint, pan, onPanChange }: IsoCanvasProps) {
             const ore = def.costByLevel?.[nextLevel - 1] ?? 0;
             const plasma = def.plasmaCostByLevel?.[nextLevel - 1] ?? 0;
             const label = techMet ? `Upgrade → L${nextLevel}` : `Locked: ${registry.techs[techReq!]?.name ?? techReq}`;
-            const cost = techMet ? `${ore}◈${plasma > 0 ? ` ${plasma}✦` : ''}` : '';
+            const cost = techMet ? `${ore}◈${plasma > 0 ? ` ${plasma}` : ''}` : '';
             const action: Action = { type: 'upgradeBuilding', position: { x, y } };
             boxes.push({
-              rect: drawActionBox(ctx, x, y, map.height, label, cost, !hasAction),
+              rect: drawActionBox(ctx, x, y, map.height, label, cost, !hasAction, techMet && plasma > 0),
               action,
               disabled: !hasAction,
             });
@@ -902,10 +902,10 @@ export function IsoCanvas({ mode, onPaint, pan, onPanChange }: IsoCanvasProps) {
             const player = gameState.players[currentPlayer];
             const affordable = player.ore >= ore && player.plasma >= plasma;
             const label = BUILD_LABELS[kind] ?? 'Build?';
-            const cost = `${ore}◈${plasma > 0 ? ` ${plasma}✦` : ''}`;
+            const cost = `${ore}◈${plasma > 0 ? ` ${plasma}` : ''}`;
             const action: Action = { type: 'build', kind, position: { x, y } };
             boxes.push({
-              rect: drawActionBox(ctx, x, y, map.height, label, cost, !affordable),
+              rect: drawActionBox(ctx, x, y, map.height, label, cost, !affordable, plasma > 0),
               action,
               disabled: !affordable,
             });

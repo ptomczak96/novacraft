@@ -28,18 +28,20 @@ function foundAt(s: GameState) {
 }
 
 describe('New economy techs', () => {
-  it('R&D reduces future research cost by 10%', () => {
+  it('R&D is cut (locked) — cannot be researched', () => {
     let s = createGame(cfg(), registry, ['vanguard','hive'], 7);
     s.players[0].ore = 5000;
-    s = research(s, 'prospecting'); s = research(s, 'cross_border'); s = research(s, 'rnd');
-    expect(techCostForPlayer(s, 0, registry.techs['mine_2'], registry)).toBe(Math.round(50 * 0.9));
+    s = research(s, 'rnd'); // locked → no-op
+    expect(s.players[0].researchedTechs).not.toContain('rnd');
+    // research cost stays full (no R&D discount available)
+    expect(techCostForPlayer(s, 0, registry.techs['prospecting'], registry)).toBe(50);
   });
 
   it('Colonial Charter → founded cities start at level 2 (else level 1)', () => {
     expect(foundAt(createGame(cfg(), registry, ['vanguard','hive'], 7))?.level).toBe(1);
     let s = createGame(cfg(), registry, ['vanguard','hive'], 7);
     s.players[0].ore = 5000;
-    s = research(s, 'plasma_1'); s = research(s, 'plasma_2'); s = research(s, 'colonial_charter');
+    s = research(s, 'colonial_charter'); // now an L1 root
     expect(foundAt(s)?.level).toBe(2);
   });
 
@@ -48,7 +50,7 @@ describe('New economy techs', () => {
     const cap = capOf(s);
     const before = cityPop(cap, registry, s);
     s.players[0].ore = 5000;
-    s = research(s, 'prospecting'); s = research(s, 'cross_border'); s = research(s, 'habitation_domes');
+    s = research(s, 'prospecting'); s = research(s, 'refinery_1'); s = research(s, 'habitation_domes');
     expect(cityPop(cap, registry, s)).toBe(before + 1);
   });
 });

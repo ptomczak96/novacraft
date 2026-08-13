@@ -11,7 +11,9 @@ const clear = (s:GameState) => { for (let y=0;y<s.map.height;y++) for (let x=0;x
 describe('Tech → unit grant system', () => {
   it('grantedConditions reads grantCondition effects for the player', () => {
     const s = createGame(cfg({ techTreeEnabled: false }), registry, ['hive','vanguard'], 7); // all techs
+    // dash_2 from Adrenal Glands (L2); aoi_immune/Creep from Berserker Glands (L3).
     expect(grantedConditions(s.players[0], 'reaper', registry).sort()).toEqual(['aoi_immune','dash_2']);
+    expect(grantedConditions(s.players[0], 'scuttling', registry)).toContain('fleet_1'); // Adrenal Glands
     expect(grantedConditions(s.players[0], 'stalker', registry)).toContain('mountain_shooter_2');
     // a fresh player (tech tree ON, nothing researched) gets nothing.
     const s2 = createGame(cfg(), registry, ['hive','vanguard'], 7);
@@ -34,7 +36,23 @@ describe('Tech → unit grant system', () => {
     expect(dashAfterAttack(false)).toBe(2); // Adrenal Glands (pre-researched) → dash_2
   });
 
-  it('Adrenal Glands → Reaper gains Creep (ignores enemy AOI when moving)', () => {
+  it('Adrenal Glands → Scuttling gains +1 movement (fleet_1)', () => {
+    // Scuttling base movement is 1; Adrenal Glands (fleet_1) makes it 2.
+    const reach = (techOn: boolean) => {
+      const s = createGame(cfg({ techTreeEnabled: techOn ? undefined : false }), registry, ['hive','vanguard'], 7);
+      s.units = []; s.unitHomeCity = {}; s.currentPlayer = 0; clear(s);
+      s.units.push(mk(1,'scuttling',0,5,5));
+      // Straight-line east: the farthest reachable move tile on row 5 tells us the range.
+      const xs = getLegalActions(s, registry, 0)
+        .filter((a:any) => a.type==='move' && a.unitId===1 && a.to.y===5)
+        .map((a:any) => a.to.x - 5);
+      return Math.max(...xs);
+    };
+    expect(reach(true)).toBe(1);  // base movement 1
+    expect(reach(false)).toBe(2); // Adrenal Glands (fleet_1) → 2
+  });
+
+  it('Berserker Glands → Reaper gains Creep (ignores enemy AOI when moving)', () => {
     // Enemy warrior at (4,3); its AOI tile (4,4) would normally stop a mover transiting it.
     const canTransit = (techOn: boolean) => {
       const s = createGame(cfg({ techTreeEnabled: techOn ? undefined : false }), registry, ['hive','vanguard'], 7);

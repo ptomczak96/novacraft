@@ -16,6 +16,8 @@ export interface TechNode {
   desc: string;
   tentative?: boolean;
   root?: boolean;        // always-available Lvl-0 base node (not a real engine tech)
+  cut?: boolean;         // un-researchable "cut/unused" tech, shown greyed for reference
+  heading?: boolean;     // renders as a plain text label (a cluster header), not a card
   col?: number;          // horizontal slot within its tier row (for the DAG layout)
   prereqs?: string[];    // ALL required (draws a connector line from each)
   prereqsAny?: string[]; // at least ONE required (dashed connectors)
@@ -46,33 +48,31 @@ export interface TechTreeDef {
 // (centre), plasma branch (right).
 const refinement: TechTreeDef = {
   id: 'refinement',
-  name: 'Refinement',
+  name: 'Resources',
   icon: 'Skillicon7_12.png',
   nodes: [
-    // ── Root (Lvl 0, always available) ──
-    { id: 'mine_1', tier: 0, col: 4, root: true, name: 'Mine Lvl 1', icon: 'Skillicon7_12.png', desc: 'Enables the Mine (Lvl 1). Available from the start.', unlockUpgrades: ['Build Mine (Lvl 1)'] },
+    // ── L1 roots ──
+    { id: 'prospecting',      tier: 1, col: 1, name: 'Prospecting',      icon: 'Skillicon7_01.png', desc: 'Reveals resource tiles within a 9×9 of any friendly city through the clouds. Opens the Extractor & Refinery.', unlockUpgrades: ['Reveal resources within 9×9 of your cities'] },
+    { id: 'colonial_charter', tier: 1, col: 2, name: 'Colonial Charter', icon: 'Skillicon7_16.png', desc: 'Newly founded cities start at Level 2. Also opens the Extractor & Refinery.', unlockUpgrades: ['Founded cities start at Level 2'] },
 
-    // ── Mine spine (centre) ──
-    { id: 'mine_2',          tier: 1, col: 4, prereqs: ['mine_1'],         name: 'Mine Lvl 2',       icon: 'Skillicon7_02.png', desc: 'Unlocks Mine Level 2.', unlockUpgrades: ['Mine → Level 2'] },
-    { id: 'reinforced_rebs', tier: 2, col: 4, prereqs: ['mine_2'],         name: 'Reinforced REBs',  icon: 'Skillicon7_06.png', desc: 'REBs gain +1 HP. (Building-HP system pending.)', unlockUpgrades: ['REBs +1 HP — pending'] },
-    { id: 'mine_3',          tier: 3, col: 4, prereqs: ['reinforced_rebs'], name: 'Mine Lvl 3',      icon: 'Skillicon7_05.png', desc: 'Unlocks Mine Level 3.', unlockUpgrades: ['Mine → Level 3'] },
+    // ── L2 ──
+    { id: 'borderless', tier: 2, col: 0, prereqs: ['extractor'], name: 'Sprawling Borders', icon: 'Skillicon7_15.png', desc: 'Buy unclaimed resource tiles adjacent (3×3) to a REB2 and outside any city territory. (Purchase UI pending.)', unlockUpgrades: ['Buy adjacent unclaimed resource tiles — pending'] },
+    { id: 'extractor',  tier: 2, col: 1, prereqsAny: ['prospecting', 'colonial_charter'], name: 'Extractor', icon: 'Skillicon7_15.png', desc: 'Unlocks the Plasma Extractor (all levels) — build on any plasma vent in your territory.', unlockUpgrades: ['Build Plasma Extractor (L1–L3)'] },
+    { id: 'refinery_1', tier: 2, col: 2, prereqsAny: ['prospecting', 'colonial_charter'], name: 'Refinery',  icon: 'Skillicon7_12.png', desc: 'Unlocks the Refinery — sits next to your Mines: +20 ore and +1 supply per adjacent same-city Mine.', unlockUpgrades: ['Build Refinery'] },
+    { id: 'slag_wash',  tier: 2, col: 3, prereqs: ['refinery_1'], name: 'Slag Wash', icon: 'Skillicon7_04.png', desc: 'Increases all mine output by 10%.', unlockUpgrades: ['Mine output +10%'] },
 
-    // ── Economy branch (left; main line one column left of the mine spine) ──
-    { id: 'prospecting',   tier: 1, col: 3, prereqs: ['mine_1'],      name: 'Prospecting',        icon: 'Skillicon7_01.png', desc: 'Reveals resource tiles within a 9×9 of any friendly city through the clouds (resource only — not any REB on it).', unlockUpgrades: ['Reveal resources within 9×9 of your cities'] },
-    { id: 'slag_wash',     tier: 1, col: 2, prereqs: ['prospecting'], name: 'Slag Wash',          icon: 'Skillicon7_04.png', desc: 'Increases all mine output by 10%.', unlockUpgrades: ['Mine output +10%'] },
-    { id: 'cross_border',  tier: 2, col: 3, prereqs: ['prospecting'], name: 'Cross Border Economy', icon: 'Skillicon7_09.png', desc: 'REB2s benefit from adjacent REB1s (within their 3×3) in the territory of OTHER friendly cities.', unlockUpgrades: ['REB2s use adjacent REB1s across your cities'] },
-    { id: 'rnd',           tier: 2, col: 2, prereqs: ['cross_border'], name: 'R&D',               icon: 'Skillicon7_07.png', desc: 'All future tech research costs 10% less ore.', unlockUpgrades: ['Research cost −10%'] },
-    { id: 'borderless',    tier: 3, col: 3, prereqs: ['cross_border'], name: 'Borderless Economy', icon: 'Skillicon7_15.png', desc: 'Buy unclaimed resource tiles adjacent (3×3) to a REB2 and outside any city territory: 100◈ (ore) / 200✦ (plasma). Tick tiles, then confirm. (Purchase UI pending.)', unlockUpgrades: ['Buy adjacent unclaimed resource tiles — pending'] },
-    { id: 'roads',         tier: 3, col: 2, prereqs: ['cross_border'], name: 'Roads',             icon: 'Skillicon7_08.png', desc: 'Roads. (Effect pending — coming soon.)', unlockUpgrades: ['(coming soon)'] },
-    { id: 'habitation_domes', tier: 3, col: 1, prereqs: ['cross_border'], name: 'Habitation Domes', icon: 'Skillicon7_10.png', desc: 'All cities gain +1 population capacity.', unlockUpgrades: ['All cities +1 population'] },
+    // ── L3 ──
+    { id: 'roads',            tier: 3, col: 0, prereqs: ['extractor'],  name: 'Roads', icon: 'Skillicon7_08.png', desc: 'Roads. (Effect pending — coming soon.)', unlockUpgrades: ['(coming soon)'] },
+    { id: 'purifier_1',       tier: 3, col: 1, prereqs: ['extractor'],  name: 'Purifier', icon: 'Skillicon7_15.png', desc: 'Unlocks the Purifier — sits next to your Extractors: +5 plasma and +1 supply per adjacent same-city Extractor.', unlockUpgrades: ['Build Purifier'] },
+    { id: 'habitation_domes', tier: 3, col: 2, prereqs: ['refinery_1'], name: 'Habitation Domes', icon: 'Skillicon7_10.png', desc: 'All cities gain +1 population capacity.', unlockUpgrades: ['All cities +1 population'] },
+    { id: 'cross_border',     tier: 3, col: 3, prereqs: ['refinery_1'], name: 'Cross Border Resources', icon: 'Skillicon7_09.png', desc: 'REB2s benefit from adjacent REB1s (within their 3×3) in the territory of OTHER friendly cities.', unlockUpgrades: ['REB2s use adjacent REB1s across your cities'] },
 
-    // ── Plasma branch (right) ──
-    { id: 'plasma_1',      tier: 1, col: 5, prereqs: ['mine_1'],   name: 'Plasma Lvl 1',       icon: 'Skillicon7_15.png', desc: 'Unlocks the Plasma Extractor (Lvl 1).', unlockUpgrades: ['Build Plasma Extractor (Lvl 1)'] },
-    { id: 'plasma_2',      tier: 2, col: 5, prereqs: ['plasma_1'], name: 'Plasma Lvl 2',       icon: 'Skillicon7_15.png', desc: 'Unlocks Plasma Extractor Level 2.', unlockUpgrades: ['Plasma Extractor → Level 2'] },
-    { id: 'plasma_3',      tier: 3, col: 5, prereqs: ['plasma_2'], name: 'Plasma Lvl 3',       icon: 'Skillicon7_15.png', desc: 'Unlocks Plasma Extractor Level 3.', unlockUpgrades: ['Plasma Extractor → Level 3'] },
-    { id: 'automated_extraction', tier: 1, col: 6, prereqs: ['plasma_1'], name: 'Automated Extraction', icon: 'Skillicon7_18.png', desc: 'Enemies standing on your REBs no longer block their output.', unlockUpgrades: ['REBs ignore enemy output-blocking'] },
-    { id: 'colonial_charter',     tier: 2, col: 6, prereqs: ['plasma_2'], name: 'Colonial Charter',     icon: 'Skillicon7_16.png', desc: 'Newly founded cities start at Level 2.', unlockUpgrades: ['Founded cities start at Level 2'] },
-    { id: 'transmutation',        tier: 3, col: 6, prereqs: ['plasma_2'], name: 'Transmutation',        icon: 'Skillicon7_03.png', desc: 'Convert 5 ore → 1 plasma. (Conversion UI pending.)', unlockUpgrades: ['5 ore → 1 plasma — pending'] },
+    // ── Unused / cut tech (reference only — NOT researchable) ──
+    { id: 'cut_label',            tier: 1, col: 5.5, heading: true, name: 'Unused / Cut Tech', icon: '', desc: 'Cut for now; kept for reference in case they return.' },
+    { id: 'rnd',                  tier: 2, col: 5, cut: true, name: 'R&D',                  icon: 'Skillicon7_07.png', desc: 'CUT — would make all future research cost 10% less ore.' },
+    { id: 'reinforced_rebs',      tier: 2, col: 6, cut: true, name: 'Reinforced REBs',      icon: 'Skillicon7_06.png', desc: 'CUT — would give REBs +1 HP (building-HP system pending).' },
+    { id: 'automated_extraction', tier: 3, col: 5, cut: true, name: 'Automated Extraction', icon: 'Skillicon7_18.png', desc: 'CUT — would stop enemies on your REBs from blocking their output.' },
+    { id: 'transmutation',        tier: 3, col: 6, cut: true, name: 'Transmutation',        icon: 'Skillicon7_03.png', desc: 'CUT — would convert 5 ore → 1 plasma.' },
   ],
 };
 
@@ -119,17 +119,17 @@ const armoryHive: TechTreeDef = {
   icon: 'Skillicon7_13.png',
   nodes: [
     // ── Level 1 ──
-    { id: 'adrenal_glands', tier: 1, col: 0, prereqs: ['reaper_tech'], name: 'Adrenal Glands', icon: 'Skillicon7_07.png', desc: 'Gives the Reaper Dash II and Creep (ignores enemy AOI).', unlockUpgrades: ['Reaper — Dash II (2 move after attacking)', 'Reaper — Creep: ignores enemy AOI'] },
     { id: 'reaper_tech',    tier: 1, col: 1, name: 'Reaper', icon: 'Skillicon7_10.png', desc: 'Unlocks the Reaper.', unlockUnits: ['reaper'] },
     { id: 'scab_tech',      tier: 1, col: 3.5, name: 'Scab',   icon: 'Skillicon7_16.png', desc: 'Unlocks the Scab.', unlockUnits: ['scab'] },
     // ── Level 2 ──
-    { id: 'burstling_tech', tier: 2, col: 0, prereqs: ['vindrace_tech'], name: 'Burstling', icon: 'Skillicon7_05.png', desc: 'Unlocks the Burstling. (Stats TBD.)', unlockUnits: ['burstling'] },
+    { id: 'burstling_tech', tier: 2, col: 0, prereqs: ['reaper_tech'], name: 'Burstling', icon: 'Skillicon7_05.png', desc: 'Unlocks the Burstling. (Stats TBD.)', unlockUnits: ['burstling'] },
     { id: 'vindrace_tech',  tier: 2, col: 1, prereqs: ['reaper_tech'],   name: 'Vindrace',  icon: 'Skillicon7_17.png', desc: 'Unlocks the Vindrace.', unlockUnits: ['vindrace'] },
+    { id: 'adrenal_glands', tier: 2, col: 2, prereqs: ['reaper_tech'], name: 'Adrenal Glands', icon: 'Skillicon7_07.png', desc: 'Gives the Reaper Dash II and Scuttlings +1 movement.', unlockUpgrades: ['Reaper — Dash II (2 move after attacking)', 'Scuttling — +1 movement'] },
     { id: 'seercaust_tech', tier: 2, col: 3.5, prereqs: ['scab_tech'],     name: 'Seercaust', icon: 'Skillicon7_11.png', desc: 'Unlocks the Seercaust.', unlockUnits: ['seercaust'] },
     { id: 'ravener_tech',   tier: 2, col: 4.5, prereqs: ['seercaust_tech'], name: 'Ravener',  icon: 'Skillicon7_01.png', desc: 'Unlocks the Ravener. (Stats TBD.)', unlockUnits: ['ravener'] },
     // ── Level 3 ──
-    { id: 'hardened_carapace', tier: 3, col: 0,   prereqs: ['vindrace_tech'], name: 'Hardened Carapace', icon: 'Skillicon7_03.png', desc: 'The Reaper survives any hit at 1 HP (a blow that would kill it leaves it on 1).', unlockUpgrades: ['Reaper — survives any single hit at 1 HP'] },
-    { id: 'berserker_glands',  tier: 3, col: 1,   prereqs: ['behemoth_tech'], name: 'Berserker Glands',  icon: 'Skillicon7_04.png', desc: 'Below 50% HP the Behemoth gains +1 movement and +20% attack.', unlockUpgrades: ['Behemoth — below 50% HP: +1 move & +20% attack'] },
+    { id: 'hardened_carapace', tier: 3, col: 0,   prereqs: ['vindrace_tech'], name: 'Hardened Carapace', icon: 'Skillicon7_03.png', desc: 'The Vindrace survives any hit at 1 HP (a blow that would kill it leaves it on 1). (Effect pending.)', unlockUpgrades: ['Vindrace — survives any single hit at 1 HP (pending)'] },
+    { id: 'berserker_glands',  tier: 3, col: 1,   prereqs: ['behemoth_tech'], name: 'Berserker Glands',  icon: 'Skillicon7_04.png', desc: 'Gives the Reaper Creep (ignores enemy AOI). Behemoth below 50% HP: +1 move & +20% attack (pending).', unlockUpgrades: ['Reaper — Creep: ignores enemy AOI', 'Behemoth — below 50% HP: +1 move & +20% attack (pending)'] },
     { id: 'behemoth_tech',     tier: 3, col: 2,   prereqs: ['vindrace_tech'], name: 'Behemoth',          icon: 'Skillicon7_12.png', desc: 'Unlocks the Behemoth. (Stats TBD.)', unlockUnits: ['behemoth'] },
     { id: 'wyrm_tech',         tier: 3, col: 3.5, prereqsAny: ['vindrace_tech', 'seercaust_tech'], name: 'Wyrm', icon: 'Skillicon7_09.png', desc: 'Unlocks the Wyrm. Reachable from Vindrace OR Seercaust.', unlockUnits: ['wyrm'] },
     { id: 'tunneling_network', tier: 3, col: 4.5, prereqs: ['wyrm_tech'], excludes: ['aftershock'],       excludeNote: 'Can only select 1 upgrade for Wyrm', name: 'Tunneling Network', icon: 'Skillicon7_05.png', desc: 'Wyrm burrows without spending a movement point (so it can burrow then move).', unlockUpgrades: ['Wyrm — burrow costs no movement'] },
@@ -235,8 +235,9 @@ export function layoutTree(tree: TechTreeDef): TreeLayout {
 }
 
 /** Card state from per-node prereqs (falls back to tier-gating when a node has no prereq data). */
-export function nodeState(node: TechNode, tree: TechTreeDef, researched: Set<string>): 'researched' | 'available' | 'locked' | 'excluded' | 'root' {
+export function nodeState(node: TechNode, tree: TechTreeDef, researched: Set<string>): 'researched' | 'available' | 'locked' | 'excluded' | 'root' | 'cut' {
   if (node.root) return 'root'; // always-available Lvl-0 base (not researchable)
+  if (node.cut) return 'cut';   // un-researchable, greyed reference tile
   if (researched.has(node.id)) return 'researched';
   // Mutually-exclusive: a researched sibling crosses this one out.
   if (node.excludes && node.excludes.some(e => researched.has(e))) return 'excluded';

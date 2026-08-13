@@ -78,6 +78,8 @@ export const TechDefSchema = z.object({
   branch: z.string(),
   level: z.number().min(1),
   effects: z.array(TechEffectSchema),
+  plasmaCost: z.number().min(0).optional(),        // plasma cost at 1 city (0/absent = ore-only)
+  plasmaCostPerCity: z.number().min(0).optional(), // +plasma per city beyond the first
   prerequisites: z.array(z.string()).optional(), // ALL must be researched
   prerequisitesAny: z.array(z.string()).optional(), // at least ONE must be researched (e.g. Crucible OR Mech Bay)
   excludes: z.array(z.string()).optional(), // mutually-exclusive: researching any of these locks this tech out

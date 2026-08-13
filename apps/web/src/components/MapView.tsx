@@ -6,6 +6,7 @@ import { Starfield } from '../iso/Starfield.js';
 // Lazy so the three.js stack is only downloaded when the 3D renderer is chosen.
 const VoxelMapView = React.lazy(() =>
   import('../render/voxel3d/VoxelMapView.js').then(m => ({ default: m.VoxelMapView })));
+import { PlasmaIcon } from './PlasmaIcon.js';
 import { TerritorySelectBar } from './TerritorySelectBar.js';
 import { VolleySelectBar } from './VolleySelectBar.js';
 import { StrikeSelectBar } from './StrikeSelectBar.js';
@@ -40,7 +41,7 @@ const UNIT_ICONS: Record<string, string> = {
   sylvan_treant: '🌳',
 };
 
-const RESOURCE_LABEL: Record<string, string> = { ore: 'Ore ◈', plasma: 'Plasma ✦' };
+const RESOURCE_LABEL: Record<string, string> = { ore: 'Ore', plasma: 'Plasma' };
 
 type RendererKind = 'iso' | 'voxel3d';
 
@@ -87,6 +88,7 @@ export function MapView() {
       icon: terrain.icon,
       name: terrain.name,
       resource: tile.resourceKind ? (RESOURCE_LABEL[tile.resourceKind] ?? tile.resourceKind) : null,
+      resourceKind: tile.resourceKind ?? null,
       notes,
       bile,
       coord: inspectedTile,
@@ -218,7 +220,7 @@ export function MapView() {
             <div className="city-info-row">
               <span className="city-info-ico" aria-hidden>⛏️</span>
               <span className="city-info-label">Resource</span>
-              <span className="city-info-val">{tileInfo.resource}</span>
+              <span className="city-info-val">{tileInfo.resource} {tileInfo.resourceKind === 'plasma' ? <PlasmaIcon /> : '◈'}</span>
             </div>
           )}
           {tileInfo.notes.map((n, i) => (

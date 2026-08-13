@@ -1588,6 +1588,25 @@ label {
 .tech-node.locked .tech-node-icon img { filter: grayscale(1); }
 .tech-node.locked .tech-node-status { color: var(--text-muted); }
 
+/* Cut / unused techs — greyed reference tiles, not researchable. */
+.tech-node.cut { opacity: 0.4; border-style: dashed; cursor: default; }
+.tech-node.cut .tech-node-icon img { filter: grayscale(1); }
+.tech-node.cut .tech-node-name { text-decoration: line-through; }
+.tech-node.cut .tech-node-status { color: var(--text-muted); letter-spacing: 1px; }
+
+/* Cluster heading label (e.g. "Unused / Cut Tech"). */
+.tech-heading {
+  position: absolute;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  opacity: 0.7;
+  padding-top: 40px;
+}
+
 /* ── Evo recruit panel (instant on base selection) ── */
 .evo-recruit-panel {
   position: absolute;

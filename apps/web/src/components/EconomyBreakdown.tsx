@@ -1,12 +1,14 @@
 import React from 'react';
 import type { CityEconomy, EconomySource } from '@tactica/engine';
+import { PlasmaIcon } from './PlasmaIcon.js';
 
-// Resource glyphs match the top-bar totals (◈ ore, ✦ plasma).
+// Resource glyphs match the top-bar totals (◈ ore, red flame = plasma).
 const RES = {
-  ore: { sym: '◈', label: 'Ore' },
-  plasma: { sym: '✦', label: 'Plasma' },
+  ore: { label: 'Ore' },
+  plasma: { label: 'Plasma' },
 } as const;
 type ResKey = keyof typeof RES;
+const symOf = (resource: ResKey): React.ReactNode => (resource === 'plasma' ? <PlasmaIcon size={11} /> : '◈');
 
 const KIND_LABEL: Record<string, string> = {
   mine: 'Mine', extractor: 'Extractor', refinery: 'Refinery', purifier: 'Purifier',
@@ -22,7 +24,7 @@ export function cityLabel(c: CityEconomy): string {
 }
 
 /** One source line — struck through + greyed when a REB is blocked by an enemy. */
-function SourceRow({ s, sym, indent }: { s: EconomySource; sym: string; indent?: boolean }) {
+function SourceRow({ s, sym, indent }: { s: EconomySource; sym: React.ReactNode; indent?: boolean }) {
   return (
     <div className={`eco-src${indent ? ' eco-indent' : ''}${s.blocked ? ' eco-blocked' : ''}`}>
       <span className="eco-src-label">{sourceLabel(s)}</span>
@@ -38,7 +40,8 @@ function SourceRow({ s, sym, indent }: { s: EconomySource; sym: string; indent?:
  * Used by the top-bar income tooltips.
  */
 export function ResourceBreakdown({ resource, cities }: { resource: ResKey; cities: CityEconomy[] }) {
-  const { sym, label } = RES[resource];
+  const { label } = RES[resource];
+  const sym = symOf(resource);
   const rows = cities
     .map(c => ({ c, bucket: resource === 'ore' ? c.ore : c.plasma }))
     .filter(({ bucket }) => bucket.sources.length > 0);
@@ -69,7 +72,8 @@ export function ResourceBreakdown({ resource, cities }: { resource: ResKey; citi
 
 /** One resource's group for a single city — a header total + its source lines. */
 function CityResourceGroup({ resource, bucket }: { resource: ResKey; bucket: CityEconomy['ore'] }) {
-  const { sym, label } = RES[resource];
+  const { label } = RES[resource];
+  const sym = symOf(resource);
   return (
     <div className="eco-group">
       <div className="eco-city-head">

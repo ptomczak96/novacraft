@@ -18,7 +18,7 @@ import {
   canBuild, canUpgradeBuilding, upgradeCostFor, buildingCost, canFoundCity,
   cityCanLevelUp, levelUpChoices, isChoiceAvailable, recruitOreCost, validateExpansion,
 } from './economy.js';
-import { getModifier, isTechAvailable, techCostForPlayer, isUnitUnlocked, techsUnlockingUnit, grantedConditions } from './tech.js';
+import { getModifier, isTechAvailable, techCostForPlayer, techPlasmaCostForPlayer, isUnitUnlocked, techsUnlockingUnit, grantedConditions } from './tech.js';
 
 // ── Deep clone helper (JSON round-trip, since state is JSON-serializable) ──
 function clone<T>(obj: T): T {
@@ -598,10 +598,11 @@ export function getLegalActions(state: GameState, registry: DataRegistry, player
     if (isChoiceAvailable(choices.b)) actions.push({ type: 'levelUpCity', cityId: city.id, choice: choices.b });
   }
 
-  // Research actions — branch-unlock availability + city-scaled ore cost
+  // Research actions — branch-unlock availability + city-scaled ore & plasma cost
   for (const [techId, tech] of Object.entries(registry.techs)) {
     if (!isTechAvailable(state, playerId, tech, registry)) continue;
     if (techCostForPlayer(state, playerId, tech, registry) > player.ore) continue;
+    if (techPlasmaCostForPlayer(state, playerId, tech, registry) > player.plasma) continue;
     actions.push({ type: 'research', techId });
   }
 
@@ -1509,8 +1510,10 @@ function applyResearch(state: GameState, action: ResearchAction, registry: DataR
     // Registry tech: must be available AND affordable — never let ore go negative.
     if (!isTechAvailable(state, state.currentPlayer, tech, registry)) return state;
     const cost = techCostForPlayer(state, state.currentPlayer, tech, registry);
-    if (player.ore < cost) return state; // can't afford → no-op
+    const plasmaCost = techPlasmaCostForPlayer(state, state.currentPlayer, tech, registry);
+    if (player.ore < cost || player.plasma < plasmaCost) return state; // can't afford → no-op
     player.ore -= cost;
+    player.plasma -= plasmaCost;
   }
   // UI-only techs (not yet in tech-tree.json) fall through and are still recorded
   // so the selection persists/saves — their functionality is implemented separately.

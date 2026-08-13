@@ -1,5 +1,6 @@
 import { TILE_H, TILE_W } from './constants.js';
 import { tileToScreenShifted } from './projection.js';
+import { drawPlasmaFlame } from '../plasmaFlame.js';
 import type { BuildingState, ResourceKind } from '@tactica/engine';
 
 const HH = TILE_H / 2;
@@ -108,19 +109,21 @@ export function drawActionBox(
   ty: number,
   mapHeight: number,
   label: string,
-  sublabel?: string,     // e.g. a build cost "50◈" shown on a second line
+  sublabel?: string,     // e.g. a build cost "50◈ 5" shown on a second line
   unaffordable?: boolean, // dim the box + show the cost in red (valid site, can't afford)
+  plasmaFlame?: boolean,  // append a red plasma flame after the sublabel (plasma cost)
 ): ScreenRect {
   const { cx, topY } = tileCentre(tx, ty, mapHeight);
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
 
+  const FLAME = 12, FLAME_GAP = 2;
   ctx.font = 'bold 11px sans-serif';
   const labelW = ctx.measureText(label).width;
   let subW = 0;
   if (sublabel) {
     ctx.font = '10px sans-serif';
-    subW = ctx.measureText(sublabel).width;
+    subW = ctx.measureText(sublabel).width + (plasmaFlame ? FLAME_GAP + FLAME : 0);
   }
   const w = Math.max(labelW, subW) + 16;
   const h = sublabel ? 32 : 19;
@@ -140,7 +143,17 @@ export function drawActionBox(
   if (sublabel) {
     ctx.font = '10px sans-serif';
     ctx.fillStyle = unaffordable ? '#ff6b60' : '#ffe08a'; // red = can't afford, gold = ok
-    ctx.fillText(sublabel, cx, y + 23);
+    if (plasmaFlame) {
+      // Left-align the "ore◈ plasma" text, then paint the flame right after it.
+      const textW = ctx.measureText(sublabel).width;
+      const startX = cx - subW / 2;
+      ctx.textAlign = 'left';
+      ctx.fillText(sublabel, startX, y + 23);
+      drawPlasmaFlame(ctx, startX + textW + FLAME_GAP + FLAME / 2, y + 23, FLAME);
+      ctx.textAlign = 'center';
+    } else {
+      ctx.fillText(sublabel, cx, y + 23);
+    }
   }
   return { x, y, w, h };
 }

@@ -4068,3 +4068,99 @@ Real-time online 1v1 built on the deterministic engine: only ACTIONS are synced,
   the opponent's turn your legal-action set is empty). `receiveRemoteAction` applies inbound
   actions without echoing. Undo disabled in MP (would desync); fog is honour-system (agreed).
 Caveats/deferred: no reconnection re-sync; no authoritative anti-cheat (trusted testers only).
+
+### 2026-08-06 — David — Refinery & Purifier tech lines
+Added two independent tech lines to the (shared) Refinement tree, to the right of Automated
+Extraction: **Refinery Lvl 1→2→3** (col 7) and **Purifier Lvl 1→2→3** (col 8). Each is a strict
+chain (refinery_2 needs refinery_1, refinery_3 needs refinery_2; likewise purifiers) via explicit
+`prerequisites`, and the two lines are independent of each other and of the mine/plasma lines.
+Refineries/purifiers, previously ungated (`techRequired: null`), are now gated: refinery needs
+`refinery_1` (+`refinery_2`/`refinery_3` for upgrades), purifier needs `purifier_1` (+2/+3).
+Engine techs in tech-tree.json, UI cards in techTrees.ts, building gates in economy.json. Also
+buttons: replaced "Train vs AI" with **Odysseus** (handcrafted bot, v0 = weighted greedy eval)
+and **Achilles** (Patrick's slot, greedy placeholder) + added both to the control dropdowns for
+AI-vs-AI. Tests updated (refinery/purifier now require their tech) + new chain-independence test.
+
+### 2026-08-12 — David — Plasma cost on research (linear per-city scaling)
+Added an optional plasma cost to techs (new mechanic — research was ore-only before). Two data
+fields per tech: `plasmaCost` (cost at 1 city) and `plasmaCostPerCity` (+plasma per extra city);
+absent/0 = ore-only. Cost = `plasmaCost + plasmaCostPerCity × (cities − 1)`, undiscounted (R&D's
+researchCostReduction stays ore-only). Engine: `techPlasmaCostForPlayer` (tech.ts, exported);
+research now checks/deducts plasma in both `getLegalActions` and `applyResearch`. UI: tech cards
+show `X◈ Y✦` when a plasma cost exists. Rationale: plasma is the scarce, map-contested resource
+meant to bottleneck high tech; a linear scale (chosen over flat/steep) is the simple first cut,
+to be tuned by playtest. Vanguard costs set: Small Arms / Triage / Advanced Weaponry / Engineering
+/ Forge = none; Advanced Biomed, Infiltration, Tactical Engineering, Mech Bay, Crucible, Tracer
+Rounds = 5 (+5/city); Sentinel, Precision Targeting, Composite Plating, Titan, Advanced
+Projectiles = 10 (+10/city). Hive costs pending (user to supply).
+
+### 2026-08-12 — David — Hive Armory rearrange (Adrenal / Creep / Burstling / Hardened Carapace)
+Reworked the Hive L2/L3 tech layout:
+- **Adrenal Glands** moved L1→**L2** (next to Vindrace), still gated by Reaper. Effects changed:
+  now grants Reaper **Dash II** + **Scuttling +1 movement** (new `fleet_1` condition). It no
+  longer grants Creep.
+- **Creep** (`aoi_immune` on Reaper) moved off Adrenal onto **Berserker Glands** (L3, behind
+  Behemoth) — much deeper in the tree.
+- **Burstling** re-gated from Vindrace → **Reaper**. So researching Reaper (L1) now opens all
+  three L2 techs: Burstling, Vindrace, Adrenal Glands.
+- **Hardened Carapace** retargeted from Reaper → **Vindrace** (survive-any-hit-at-1-HP). NOTE:
+  this effect was never engine-wired (effects: []), so it remains a UI placeholder — retarget is
+  descriptive only until the survive-at-1 condition is built.
+New engine mechanic: `fleet_N` condition = +N base movement, parsed in pathfinding (mirrors the
+`dash_N` pattern). Documented in docs/conditions.md. Tests: tech-grants updated (Creep now
+attributed to Berserker Glands; added Scuttling fleet_1 movement test). 263 tests pass.
+
+### 2026-08-12 — David — Hive plasma tech costs + plasma glyph → 🔥
+Hive research plasma costs (same linear base + per-city model as Vanguard):
+- Reaper, Scab, Seercaust, Ravener = none (ore-only).
+- Burstling, Vindrace, Adrenal Glands = 5 (+5/city).
+- Hardened Carapace, Berserker Glands, Behemoth, Wyrm, Tunneling Network, Aftershock = 10 (+10/city).
+Changed the plasma symbol from `✦` to 🔥 (flame) everywhere in the web app — top bar, economy
+breakdown, unit/recruit costs, tech-card costs, inspector, level-up modal, map labels, canvas
+cost labels. Caveat noted to user: 🔥 is an emoji so it renders in its own red-orange and can't be
+CSS-recoloured to an exact hex (the adjacent numbers keep their existing colour); chosen for the
+flame shape over exact colour control. Tests: hive-tech `game()` helper now grants plasma (Wyrm-
+line techs cost plasma). 263 tests pass.
+
+### 2026-08-12 — David — Plasma icon: exact-red single-colour flame (SVG, not emoji)
+Replaced the 🔥 emoji (uncontrollable colour) with a single-path flame filled with one exact red.
+Shared source of truth in `apps/web/src/plasmaFlame.ts`: `PLASMA_RED` (#ff4a2a, tunable in one
+place), `FLAME_PATH`, plus a preloaded SVG image + `drawPlasmaFlame()` for canvas. React spots use
+`<PlasmaIcon/>` (apps/web/src/components/PlasmaIcon.tsx): top-bar total, Inspector, EconomyBreakdown
+(sym → ReactNode), TechTreeView cost, EvoRecruitPanel cost, MapView tile-info (label split to word +
+icon). Canvas build/upgrade cost hints: `drawActionBox` gained a `plasmaFlame` flag and paints the
+same flame image after the cost text. LevelUpModal's "+10 Plasma" choice icon left as emoji 🔥 (it's
+an all-emoji reward menu; a lone red SVG would clash) — flagged to user. Colour is a guess at the
+old fiery look; trivially retunable via PLASMA_RED.
+
+### 2026-08-13 — David — Economy: cap REB2s at L1, retune REB numbers
+Simplifying the REB economy (too many unknowns to tune L2/L3 REB2s yet):
+- **Refineries & Purifiers capped at L1.** maxLevel 1; removed the refinery_2/3 & purifier_2/3
+  upgrade techs (engine + UI); economy upgradeTechRequired → []. "Likely return later."
+- **Mine:** cost/output unchanged (50/70/90, +10/20/30); L3 supply +2→+1 (supplyByLevel [1,2,3]).
+- **Refinery (L1):** cost 150, +20 ore AND +1 supply *per adjacent same-city mine* (supply moved
+  from flat to `supplyPerAdjacentByLevel`). Ore output kept at 20/adjacent (user didn't restate it
+  — flagged for confirmation).
+- **Extractor (L1/2/3):** cost 100/200/300, output +5/+5/+5 (total 5/10/15), supply +1/+1/+1 (1/2/3).
+- **Purifier (L1):** cost 200, +5 plasma AND +1 supply per adjacent same-city extractor.
+Design intent: rising TTR by level + front-loaded supply keeps expansion (many L1 REBs) ahead of
+turtling. Tests updated (refinery supply now per-adjacent; removed the independent-chain test →
+single-level unlock test). ECONOMY.md tables updated. 263 tests pass.
+
+### 2026-08-13 — David — Resources tech branch rebuilt (simplified layout + cut cluster)
+Rebuilt the Resources (refinement) branch to the user's new layout:
+- **L1 roots:** Prospecting, Colonial Charter. Either one unlocks BOTH **Extractor** (L2) and
+  **Refinery** (L2) via `prerequisitesAny` (EITHER root — flagged for confirm vs AND).
+- **Extractor** replaces the old plasma_1/2/3 — ONE tech unlocks the extractor at all levels
+  (economy.json extractor techRequired "extractor", upgradeTechRequired [null,null]).
+- **Mines are now free** — removed mine_2/mine_3; mine upgradeTechRequired [null,null].
+- Extractor → **Sprawling Borders** (L2, =Borderless renamed), **Roads** (L3), **Purifier** (L3).
+- Refinery → **Slag Wash** (L2), **Habitation Domes** (L3), **Cross Border Resources** (L3,
+  =Cross Border Economy renamed — id `cross_border` kept so the engine wiring still matches).
+- **Sprawling Borders** = `borderless` renamed; **Cross Border Resources** = `cross_border`
+  renamed (same effects, ids preserved).
+- **Cut/unused cluster** (right, labelled "Unused / Cut Tech"): R&D, Reinforced REBs, Automated
+  Extraction, Transmutation — set `locked:true` (un-researchable) and shown greyed. New UI: TechNode
+  `cut`/`heading` flags, a `cut` card state ("✂ CUT"), and a `.tech-heading` cluster label.
+Tests updated across tech/economy/economy-tech suites (mines free, extractor single-tech, cut techs
+locked, EITHER-root gating). 264 pass. ECONOMY.md updated.

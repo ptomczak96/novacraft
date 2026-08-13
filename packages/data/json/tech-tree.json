@@ -1,28 +1,5 @@
 [
   {
-    "id": "mine_2",
-    "name": "Mine Lvl 2",
-    "branch": "refinement",
-    "level": 1,
-    "effects": []
-  },
-  {
-    "id": "reinforced_rebs",
-    "name": "Reinforced REBs",
-    "branch": "refinement",
-    "level": 2,
-    "prerequisites": ["mine_2"],
-    "effects": []
-  },
-  {
-    "id": "mine_3",
-    "name": "Mine Lvl 3",
-    "branch": "refinement",
-    "level": 3,
-    "prerequisites": ["reinforced_rebs"],
-    "effects": []
-  },
-  {
     "id": "prospecting",
     "name": "Prospecting",
     "branch": "refinement",
@@ -32,39 +9,42 @@
     ]
   },
   {
-    "id": "slag_wash",
-    "name": "Slag Wash",
+    "id": "colonial_charter",
+    "name": "Colonial Charter",
     "branch": "refinement",
     "level": 1,
-    "prerequisites": ["prospecting"],
-    "effects": [
-      { "type": "globalModifier", "params": { "modifier": "mineOutputBonus", "value": 0.1 } }
-    ]
-  },
-  {
-    "id": "cross_border",
-    "name": "Cross Border Economy",
-    "branch": "refinement",
-    "level": 2,
-    "prerequisites": ["prospecting"],
     "effects": []
   },
   {
-    "id": "rnd",
-    "name": "R&D",
+    "id": "extractor",
+    "name": "Extractor",
     "branch": "refinement",
     "level": 2,
-    "prerequisites": ["cross_border"],
-    "effects": [
-      { "type": "globalModifier", "params": { "modifier": "researchCostReduction", "value": 0.1 } }
-    ]
+    "prerequisitesAny": ["prospecting", "colonial_charter"],
+    "effects": []
+  },
+  {
+    "id": "refinery_1",
+    "name": "Refinery",
+    "branch": "refinement",
+    "level": 2,
+    "prerequisitesAny": ["prospecting", "colonial_charter"],
+    "effects": []
+  },
+  {
+    "id": "purifier_1",
+    "name": "Purifier",
+    "branch": "refinement",
+    "level": 3,
+    "prerequisites": ["extractor"],
+    "effects": []
   },
   {
     "id": "borderless",
-    "name": "Borderless Economy",
+    "name": "Sprawling Borders",
     "branch": "refinement",
-    "level": 3,
-    "prerequisites": ["cross_border"],
+    "level": 2,
+    "prerequisites": ["extractor"],
     "effects": []
   },
   {
@@ -72,40 +52,54 @@
     "name": "Roads",
     "branch": "refinement",
     "level": 3,
-    "prerequisites": ["cross_border"],
+    "prerequisites": ["extractor"],
     "effects": []
+  },
+  {
+    "id": "slag_wash",
+    "name": "Slag Wash",
+    "branch": "refinement",
+    "level": 2,
+    "prerequisites": ["refinery_1"],
+    "effects": [
+      { "type": "globalModifier", "params": { "modifier": "mineOutputBonus", "value": 0.1 } }
+    ]
   },
   {
     "id": "habitation_domes",
     "name": "Habitation Domes",
     "branch": "refinement",
     "level": 3,
-    "prerequisites": ["cross_border"],
+    "prerequisites": ["refinery_1"],
     "effects": [
       { "type": "globalModifier", "params": { "modifier": "cityPopBonus", "value": 1 } }
     ]
   },
   {
-    "id": "plasma_1",
-    "name": "Plasma Lvl 1",
-    "branch": "refinement",
-    "level": 1,
-    "effects": []
-  },
-  {
-    "id": "plasma_2",
-    "name": "Plasma Lvl 2",
-    "branch": "refinement",
-    "level": 2,
-    "prerequisites": ["plasma_1"],
-    "effects": []
-  },
-  {
-    "id": "plasma_3",
-    "name": "Plasma Lvl 3",
+    "id": "cross_border",
+    "name": "Cross Border Resources",
     "branch": "refinement",
     "level": 3,
-    "prerequisites": ["plasma_2"],
+    "prerequisites": ["refinery_1"],
+    "effects": []
+  },
+
+  {
+    "id": "rnd",
+    "name": "R&D",
+    "branch": "refinement",
+    "level": 2,
+    "locked": true,
+    "effects": [
+      { "type": "globalModifier", "params": { "modifier": "researchCostReduction", "value": 0.1 } }
+    ]
+  },
+  {
+    "id": "reinforced_rebs",
+    "name": "Reinforced REBs",
+    "branch": "refinement",
+    "level": 2,
+    "locked": true,
     "effects": []
   },
   {
@@ -113,25 +107,17 @@
     "name": "Automated Extraction",
     "branch": "refinement",
     "level": 1,
-    "prerequisites": ["plasma_1"],
+    "locked": true,
     "effects": [
       { "type": "globalModifier", "params": { "modifier": "unblockRebOutput", "value": 1 } }
     ]
-  },
-  {
-    "id": "colonial_charter",
-    "name": "Colonial Charter",
-    "branch": "refinement",
-    "level": 2,
-    "prerequisites": ["plasma_2"],
-    "effects": []
   },
   {
     "id": "transmutation",
     "name": "Transmutation",
     "branch": "refinement",
     "level": 3,
-    "prerequisites": ["plasma_2"],
+    "locked": true,
     "effects": []
   },
 
@@ -179,6 +165,8 @@
     "name": "Advanced Biomed",
     "branch": "armory",
     "level": 3,
+    "plasmaCost": 5,
+    "plasmaCostPerCity": 5,
     "prerequisites": ["triage"],
     "effects": []
   },
@@ -187,6 +175,8 @@
     "name": "Infiltration",
     "branch": "armory",
     "level": 3,
+    "plasmaCost": 5,
+    "plasmaCostPerCity": 5,
     "prerequisites": ["advanced_weaponry"],
     "effects": [
       { "type": "unlockUnit", "params": { "unit": "wraith" } }
@@ -197,6 +187,8 @@
     "name": "Tactical Engineering",
     "branch": "armory",
     "level": 3,
+    "plasmaCost": 5,
+    "plasmaCostPerCity": 5,
     "prerequisites": ["engineering"],
     "effects": []
   },
@@ -213,6 +205,8 @@
     "name": "Mech Bay",
     "branch": "armory",
     "level": 2,
+    "plasmaCost": 5,
+    "plasmaCostPerCity": 5,
     "prerequisites": ["forge"],
     "effects": [
       { "type": "unlockUnit", "params": { "unit": "stalker" } }
@@ -223,6 +217,8 @@
     "name": "Tracer Rounds",
     "branch": "armory",
     "level": 2,
+    "plasmaCost": 5,
+    "plasmaCostPerCity": 5,
     "prerequisites": ["mech_bay"],
     "effects": []
   },
@@ -231,6 +227,8 @@
     "name": "Precision Targeting",
     "branch": "armory",
     "level": 3,
+    "plasmaCost": 10,
+    "plasmaCostPerCity": 10,
     "prerequisites": ["mech_bay"],
     "effects": [
       { "type": "grantCondition", "params": { "unit": "stalker", "condition": "mountain_shooter_2" } }
@@ -241,6 +239,8 @@
     "name": "Sentinel",
     "branch": "armory",
     "level": 3,
+    "plasmaCost": 10,
+    "plasmaCostPerCity": 10,
     "prerequisites": ["mech_bay"],
     "effects": [
       { "type": "unlockUnit", "params": { "unit": "sentinel" } }
@@ -251,6 +251,8 @@
     "name": "Crucible",
     "branch": "armory",
     "level": 2,
+    "plasmaCost": 5,
+    "plasmaCostPerCity": 5,
     "prerequisites": ["forge"],
     "effects": [
       { "type": "unlockUnit", "params": { "unit": "tank" } }
@@ -261,6 +263,8 @@
     "name": "Titan",
     "branch": "armory",
     "level": 3,
+    "plasmaCost": 10,
+    "plasmaCostPerCity": 10,
     "prerequisites": ["crucible"],
     "effects": [
       { "type": "unlockUnit", "params": { "unit": "titan" } }
@@ -271,6 +275,8 @@
     "name": "Advanced Projectiles",
     "branch": "armory",
     "level": 3,
+    "plasmaCost": 10,
+    "plasmaCostPerCity": 10,
     "prerequisites": ["crucible"],
     "effects": []
   },
@@ -279,6 +285,8 @@
     "name": "Composite Plating",
     "branch": "armory",
     "level": 3,
+    "plasmaCost": 10,
+    "plasmaCostPerCity": 10,
     "prerequisitesAny": ["crucible", "mech_bay"],
     "effects": []
   },
@@ -296,11 +304,13 @@
     "id": "adrenal_glands",
     "name": "Adrenal Glands",
     "branch": "hive_armory",
-    "level": 1,
+    "level": 2,
+    "plasmaCost": 5,
+    "plasmaCostPerCity": 5,
     "prerequisites": ["reaper_tech"],
     "effects": [
       { "type": "grantCondition", "params": { "unit": "reaper", "condition": "dash_2" } },
-      { "type": "grantCondition", "params": { "unit": "reaper", "condition": "aoi_immune" } }
+      { "type": "grantCondition", "params": { "unit": "scuttling", "condition": "fleet_1" } }
     ]
   },
   {
@@ -308,6 +318,8 @@
     "name": "Vindrace",
     "branch": "hive_armory",
     "level": 2,
+    "plasmaCost": 5,
+    "plasmaCostPerCity": 5,
     "prerequisites": ["reaper_tech"],
     "effects": [
       { "type": "unlockUnit", "params": { "unit": "vindrace" } }
@@ -318,7 +330,9 @@
     "name": "Burstling",
     "branch": "hive_armory",
     "level": 2,
-    "prerequisites": ["vindrace_tech"],
+    "plasmaCost": 5,
+    "plasmaCostPerCity": 5,
+    "prerequisites": ["reaper_tech"],
     "effects": [
       { "type": "unlockUnit", "params": { "unit": "burstling" } }
     ]
@@ -328,6 +342,8 @@
     "name": "Hardened Carapace",
     "branch": "hive_armory",
     "level": 3,
+    "plasmaCost": 10,
+    "plasmaCostPerCity": 10,
     "prerequisites": ["vindrace_tech"],
     "effects": []
   },
@@ -336,6 +352,8 @@
     "name": "Behemoth",
     "branch": "hive_armory",
     "level": 3,
+    "plasmaCost": 10,
+    "plasmaCostPerCity": 10,
     "prerequisites": ["vindrace_tech"],
     "effects": [
       { "type": "unlockUnit", "params": { "unit": "behemoth" } }
@@ -346,8 +364,12 @@
     "name": "Berserker Glands",
     "branch": "hive_armory",
     "level": 3,
+    "plasmaCost": 10,
+    "plasmaCostPerCity": 10,
     "prerequisites": ["behemoth_tech"],
-    "effects": []
+    "effects": [
+      { "type": "grantCondition", "params": { "unit": "reaper", "condition": "aoi_immune" } }
+    ]
   },
   {
     "id": "scab_tech",
@@ -383,6 +405,8 @@
     "name": "Wyrm",
     "branch": "hive_armory",
     "level": 3,
+    "plasmaCost": 10,
+    "plasmaCostPerCity": 10,
     "prerequisitesAny": ["vindrace_tech", "seercaust_tech"],
     "effects": [
       { "type": "unlockUnit", "params": { "unit": "wyrm" } }
@@ -393,6 +417,8 @@
     "name": "Tunneling Network",
     "branch": "hive_armory",
     "level": 3,
+    "plasmaCost": 10,
+    "plasmaCostPerCity": 10,
     "prerequisites": ["wyrm_tech"],
     "excludes": ["aftershock"],
     "effects": [
@@ -404,6 +430,8 @@
     "name": "Aftershock",
     "branch": "hive_armory",
     "level": 3,
+    "plasmaCost": 10,
+    "plasmaCostPerCity": 10,
     "prerequisites": ["wyrm_tech"],
     "excludes": ["tunneling_network"],
     "effects": [

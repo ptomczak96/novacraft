@@ -10,7 +10,9 @@ import { TechTreeView } from './TechTreeView.js';
 import { LevelUpModal } from './LevelUpModal.js';
 import type { Action } from '@tactica/engine';
 import { getLegalActions, playerEconomy } from '@tactica/engine';
+import { OdysseusBot, GreedyBot } from '@tactica/bots';
 import { ResourceBreakdown } from './EconomyBreakdown.js';
+import { PlasmaIcon } from './PlasmaIcon.js';
 
 export function GameScreen() {
   const {
@@ -46,7 +48,12 @@ export function GameScreen() {
     if (actions.length === 0) return;
 
     let action: Action;
-    if (botSetting === 'random') {
+    if (botSetting === 'odysseus' && state.visibleState) {
+      action = new OdysseusBot().chooseAction(state.visibleState, state.registry, actions);
+    } else if (botSetting === 'achilles' && state.visibleState) {
+      // Placeholder — Patrick's slot; runs the greedy evaluator until his AI lands.
+      action = new GreedyBot().chooseAction(state.visibleState, state.registry, actions);
+    } else if (botSetting === 'random') {
       action = actions[Math.floor(Math.random() * actions.length)];
     } else {
       // Greedy: simple heuristic — prefer attacks > moves > endTurn
@@ -150,7 +157,7 @@ export function GameScreen() {
               onMouseEnter={() => setShowPlasma(true)}
               onMouseLeave={() => setShowPlasma(false)}
             >
-              {player.plasma}✦
+              {player.plasma}<PlasmaIcon />
               {showPlasma && hasPlasma && (
                 <div className="eco-tooltip">
                   <ResourceBreakdown resource="plasma" cities={economy} />
