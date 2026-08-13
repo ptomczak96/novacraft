@@ -32,6 +32,11 @@ describe('Mapgen — ruins & territories', () => {
 
     expect(terrains.filter(t => t === 'water').length).toBeGreaterThan(8);
     expect(terrains.filter(t => t === 'sand').length).toBeGreaterThan(80);
+    expect(terrains.filter(t => t === 'mountain').length).toBeGreaterThan(8);
+    expect(terrains.filter(t => t === 'forest').length).toBeGreaterThan(0);
+    for (const capital of a.cities.filter(c => c.isCapital)) {
+      expect(a.map.tiles[capital.position.y][capital.position.x].terrain).toBe('sand');
+    }
     expect(JSON.stringify(a.map)).toBe(JSON.stringify(b.map));
   });
 
