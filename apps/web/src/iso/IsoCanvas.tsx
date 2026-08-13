@@ -4,75 +4,9 @@ import { previewCombat, isExpansionTileEligible, buildingBlocked, canBuildLocati
 import type { Coord, Unit, Action, BuildingKind } from '@tactica/engine';
 
 import type { GameState, DataRegistry, CityState } from '@tactica/engine';
+import { coherentSubset, volleyPicker, strikePicker } from '../game/pickers.js';
 import { ELEVATION, BG_COLOR } from './constants.js';
 
-// Greedily keep the picks that still form a valid chain (drops any tile orphaned
-// when an earlier pick it depended on is removed). Order = current pick order.
-function coherentSubset(state: GameState, registry: DataRegistry, city: CityState, picks: Coord[]): Coord[] {
-  const accepted: Coord[] = [];
-  const remaining = [...picks];
-  let progress = true;
-  while (remaining.length && progress) {
-    progress = false;
-    for (let i = 0; i < remaining.length; i++) {
-      if (isExpansionTileEligible(state, registry, city, remaining[i], accepted)) {
-        accepted.push(remaining[i]);
-        remaining.splice(i, 1);
-        progress = true;
-        break;
-      }
-    }
-  }
-  return accepted;
-}
-
-// Ballistic Volley picker helper. Returns the tiles still tickable given the current
-// picks (any tile that, together with the picks, fits inside one legal 2×2 grid) and
-// whether the 4-tile square is complete. Shape (strict 2×2) + range band come straight
-// from the engine's enumerateVolleyGrids, so UI and engine agree exactly.
-function volleyPicker(
-  state: GameState, registry: DataRegistry,
-  sel: { unitId: number; abilityId: string; picks: Coord[] },
-): { eligible: Coord[]; done: boolean } {
-  const unit = state.units.find(u => u.id === sel.unitId);
-  const ability = unit && registry.unitTypes[unit.typeId]?.abilities.find(a => a.id === sel.abilityId);
-  if (!unit || !ability) return { eligible: [], done: false };
-  const grids = enumerateVolleyGrids(unit.position, state.map.width, state.map.height, ability.minRange ?? 0, ability.range ?? 0);
-  const has = (g: Coord[], c: Coord) => g.some(t => t.x === c.x && t.y === c.y);
-  const candidates = grids.filter(g => sel.picks.every(p => has(g, p)));
-  const done = sel.picks.length === 4 && candidates.length > 0;
-  if (done || sel.picks.length >= 4) return { eligible: [], done };
-  const seen = new Set(sel.picks.map(p => `${p.x},${p.y}`));
-  const eligible: Coord[] = [];
-  for (const g of candidates) for (const c of g) {
-    const k = `${c.x},${c.y}`;
-    if (!seen.has(k)) { seen.add(k); eligible.push(c); }
-  }
-  return { eligible, done };
-}
-// Wyrm strike picker helper. Pick 1 = primary (within the Wyrm's 3×3); pick 2 = a cell
-// touching the primary. Eligibility is derived from the engine's wyrmStrikePairs so the
-// UI and engine agree exactly on legal shapes.
-function strikePicker(
-  state: GameState, registry: DataRegistry,
-  sel: { unitId: number; picks: Coord[] },
-): { eligible: Coord[]; done: boolean } {
-  const unit = state.units.find(u => u.id === sel.unitId);
-  if (!unit) return { eligible: [], done: false };
-  if (sel.picks.length >= 2) return { eligible: [], done: true };
-  const pairs = wyrmStrikePairs(unit.position, state.map.width, state.map.height);
-  const same = (a: Coord, b: Coord) => a.x === b.x && a.y === b.y;
-  const seen = new Set<string>();
-  const eligible: Coord[] = [];
-  const push = (c: Coord) => { const k = `${c.x},${c.y}`; if (!seen.has(k)) { seen.add(k); eligible.push(c); } };
-  if (sel.picks.length === 0) {
-    for (const [p] of pairs) push(p);           // all valid primaries
-  } else {
-    const primary = sel.picks[0];
-    for (const [p, q] of pairs) if (same(p, primary)) push(q); // cells touching the primary
-  }
-  return { eligible, done: false };
-}
 import { canvasSize, screenToTile, tileToScreenShifted } from './projection.js';
 import { drawTile } from './drawTile.js';
 import { drawUnitAt } from './drawUnit.js';
@@ -885,10 +819,10 @@ export function IsoCanvas({ mode, onPaint, pan, onPanChange }: IsoCanvasProps) {
             const ore = def.costByLevel?.[nextLevel - 1] ?? 0;
             const plasma = def.plasmaCostByLevel?.[nextLevel - 1] ?? 0;
             const label = techMet ? `Upgrade → L${nextLevel}` : `Locked: ${registry.techs[techReq!]?.name ?? techReq}`;
-            const cost = techMet ? `${ore}◈${plasma > 0 ? ` ${plasma}` : ''}` : '';
+            const cost = techMet ? `${ore}◈${plasma > 0 ? ` ${plasma}✦` : ''}` : '';
             const action: Action = { type: 'upgradeBuilding', position: { x, y } };
             boxes.push({
-              rect: drawActionBox(ctx, x, y, map.height, label, cost, !hasAction, techMet && plasma > 0),
+              rect: drawActionBox(ctx, x, y, map.height, label, cost, !hasAction),
               action,
               disabled: !hasAction,
             });
@@ -902,10 +836,10 @@ export function IsoCanvas({ mode, onPaint, pan, onPanChange }: IsoCanvasProps) {
             const player = gameState.players[currentPlayer];
             const affordable = player.ore >= ore && player.plasma >= plasma;
             const label = BUILD_LABELS[kind] ?? 'Build?';
-            const cost = `${ore}◈${plasma > 0 ? ` ${plasma}` : ''}`;
+            const cost = `${ore}◈${plasma > 0 ? ` ${plasma}✦` : ''}`;
             const action: Action = { type: 'build', kind, position: { x, y } };
             boxes.push({
-              rect: drawActionBox(ctx, x, y, map.height, label, cost, !affordable, plasma > 0),
+              rect: drawActionBox(ctx, x, y, map.height, label, cost, !affordable),
               action,
               disabled: !affordable,
             });

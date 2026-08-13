@@ -26,6 +26,7 @@ const THEME_OPTIONS = [
   { value: 'gen6_desert', label: 'GEN 6 - Desert (Scenario)' },
   { value: 'itb_desert', label: 'ITB - Desert' },
   { value: 'gen7_industrial', label: 'GEN 7 - Industrial' },
+  { value: 'gen8_tileset3d', label: 'GEN 8 - 3D Tileset' },
 ];
 
 // Win condition & resource choices are single-select (David, 2026-07-22).

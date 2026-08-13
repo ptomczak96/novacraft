@@ -6,6 +6,7 @@ import { Inspector } from './Inspector.js';
 import { UnitSheet } from './UnitSheet.js';
 import { CoachPanel } from './CoachPanel.js';
 import { CombatLog } from './CombatLog.js';
+import { Gen8Hud } from './gen8/Gen8Hud.js';
 import { TechTreeView } from './TechTreeView.js';
 import { LevelUpModal } from './LevelUpModal.js';
 import type { Action } from '@tactica/engine';
@@ -21,8 +22,13 @@ export function GameScreen() {
     executeAction, undo, saveGame, setScreen,
     editorOpen, setEditorOpen, inspectorOpen, setInspectorOpen,
     botSettings, autoPlay, setAutoPlay,
-    mySeat, mpStatus,
+    mySeat, mpStatus, tileTheme,
   } = useGameStore();
+
+  // GEN 8 - 3D Tileset carries its own neon HUD skin (ported from
+  // RIGBOUND_3js) over the map area; `?tileset=1` is the dev override.
+  const gen8 = tileTheme === 'gen8_tileset3d' ||
+    new URLSearchParams(window.location.search).get('tileset') === '1';
 
   const autoPlayRef = useRef(autoPlay);
   autoPlayRef.current = autoPlay;
@@ -119,8 +125,13 @@ export function GameScreen() {
   const economy = playerEconomy(gameState, currentPlayer, registry);
   const hasPlasma = economy.some(c => c.plasma.sources.length > 0);
 
+  // A selected HOSTILE unit swaps the standard sheet for the GEN 8 red intel
+  // card (see gen8hud.css `.g8-enemy-sel`).
+  const enemySelected = gen8 && selectedUnitId != null &&
+    visibleState.units.find(u => u.id === selectedUnitId)?.owner !== currentPlayer;
+
   return (
-    <div className="game-screen">
+    <div className={`game-screen${gen8 ? ' gen8-skin' : ''}${enemySelected ? ' g8-enemy-sel' : ''}`}>
       {/* Combat Log — left side */}
       <CombatLog />
 
@@ -194,8 +205,15 @@ export function GameScreen() {
           </div>
         </div>
 
-        {/* Map */}
-        <MapView />
+        {/* Map (GEN 8 wraps it so the ported HUD overlays the map area only) */}
+        {gen8 ? (
+          <div style={{ position: 'relative', flex: 1, display: 'flex', overflow: 'hidden' }}>
+            <MapView />
+            <Gen8Hud onEndTurn={handleEndTurn} />
+          </div>
+        ) : (
+          <MapView />
+        )}
 
         {/* City level-up choice (pops when an owned city has enough supply) */}
         <LevelUpModal />

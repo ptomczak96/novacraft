@@ -408,6 +408,9 @@ export interface PlayerState {
   ore: number; // primary resource (basic units + buildings)
   plasma: number; // advanced resource (high-tech units + buildings)
   researchedTechs: string[];
+  // Set on OTHER players' entries in a fog-of-war VisibleState: their ore/plasma/
+  // researchedTechs are zeroed/emptied, not real. Never set on true GameState.
+  redacted?: true;
 }
 
 /** A unit a city *could* recruit, with whether the player can currently afford it. */
@@ -483,7 +486,7 @@ export interface VisibleState {
   config: GameConfig;
   map: GameMap;
   units: Unit[]; // only visible enemy units + all own units
-  players: PlayerState[]; // own player full, others limited
+  players: PlayerState[]; // own player full; under fog others are `redacted` (id/faction only)
   cities: CityState[];
   buildings: BuildingState[];
   nodes: NodeState[];
@@ -494,6 +497,9 @@ export interface VisibleState {
   phase: 'playing' | 'finished';
   winner: PlayerId | null;
   winConditionMet: string | null;
+  // Empty under fog of war: Action entries carry no acting-player attribution, so the
+  // log can't be filtered per-viewer — and exposing it whole would reveal every enemy
+  // move made out of sight. Full log only when fogOfWar is off (perfect information).
   actionLog: Action[];
 }
 

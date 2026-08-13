@@ -16,7 +16,7 @@ import { MarkRemovalBar } from './MarkRemovalBar.js';
 import { EvoRecruitPanel } from './evo/EvoRecruitPanel.js';
 import { CityEconomyLines } from './EconomyBreakdown.js';
 
-const UNIT_ICONS: Record<string, string> = {
+export const UNIT_ICONS: Record<string, string> = {
   scout: '🏃',
   warrior: '⚔️',
   lancer: '🪖',
@@ -49,15 +49,21 @@ export function MapView() {
   const {
     gameState, visibleState, registry,
     selectedCity, executeAction, setSelectedCity,
-    inspectedTile, setInspectedTile,
+    inspectedTile, setInspectedTile, tileTheme,
   } = useGameStore();
 
   // Renderer selection: `?renderer=voxel3d` or the on-screen toggle. The 2D iso
-  // canvas remains the default and is untouched by the voxel3d option.
+  // canvas remains the default and is untouched by the voxel3d option. The
+  // GEN 8 — 3D Tileset map-generation option is inherently 3D, so it starts on
+  // the voxel renderer (the toggle still allows dropping back to 2D).
   const [renderer, setRenderer] = React.useState<RendererKind>(() =>
     new URLSearchParams(window.location.search).get('renderer') === 'voxel3d'
+      || tileTheme === 'gen8_tileset3d'
       ? 'voxel3d'
       : 'iso');
+  useEffect(() => {
+    if (tileTheme === 'gen8_tileset3d') setRenderer('voxel3d');
+  }, [tileTheme]);
 
   // Map pan offset (drag-to-pan). Drives both the board's CSS translate and the
   // starfield parallax. Reset to centre whenever a new game starts.

@@ -4164,3 +4164,286 @@ Rebuilt the Resources (refinement) branch to the user's new layout:
   `cut`/`heading` flags, a `cut` card state ("✂ CUT"), and a `.tech-heading` cluster label.
 Tests updated across tech/economy/economy-tech suites (mines free, extractor single-tech, cut techs
 locked, EITHER-root gating). 264 pass. ECONOMY.md updated.
+### 2026-08-07 — Patrick Tomczak — Fog now hides enemy economy & tech (engine) + AI-opponent approach decided
+
+**Fog information leak sealed.** `getVisibleState` cloned the FULL `PlayerState` of every
+player (ore, plasma, researchedTechs) and the entire `actionLog` into `VisibleState` — even
+under fog. The type at `types.ts` already promised "own player full, others limited", so this
+is a contract fix, not a behaviour change:
+- Under fog, other players' entries are now **redacted**: id + factionId kept (public),
+  ore/plasma zeroed, researchedTechs emptied, `redacted: true` marker set. Array stays
+  index-addressable by PlayerId (bots do `players[me]`).
+- `actionLog` is now **empty under fog** — `Action` entries carry no acting-player field, so
+  the log can't be filtered per-viewer, and whole it reveals every enemy move made out of
+  sight. No consumer read `visibleState.actionLog` (web reads `gameState.actionLog`).
+- Fog **off** = perfect information: nothing redacted (sim benchmarks stay comparable).
+- `UnitSheet.tsx` was reading enemy `researchedTechs` off `visibleState` to show tech-granted
+  passives/abilities on ENEMY unit sheets — a real in-game leak. Now gated on the `redacted`
+  flag: enemy sheets show the unit's baseline kit only.
+- Sim gained `--fog` to run fog-honest games (default remains fog-off).
+- New regression tests in `fog.test.ts` (redaction, symmetry, empty log, no-mutation).
+
+**Why now:** it's the prerequisite for the AI-opponent work. The planned bot infers hidden
+enemy state (e.g. "titan by turn 8 ⟹ bounded income history ⟹ min city count") — pointless
+while the engine hands that state over, and untestable while the sim runs fog-off.
+
+**AI approach decision (partially supersedes AI_OPPONENT.md 2026-07-17):** build a
+**belief-constrained search bot** — (1) a belief module tracking hard constraints on enemy
+state (spend accounting from seen units/techs, map-gen invariants like "ruins never on edge /
+centres ≥3 apart", negative info from seen-empty tiles; testable via sim assertion "the truth
+is always inside the belief"); (2) a policy that samples feasible worlds from the belief and
+runs turn-level macro-action search (determinized search); (3) rented compute goes to
+**evolutionary/population self-play tuning of eval weights** (embarrassingly parallel), NOT
+deep RL first. AlphaZero-style NN remains an optional final rung — the old doc's "RL is
+overkill" is softened to "premature": rungs 1–3 build exactly the infra NN self-play needs.
+Sequencing: fog seal (done, this entry) → engine perf pass (clone cost dominates:
+JSON-stringify deep copies + O(n²) actionLog re-cloning; ~10-50× available) → belief module →
+search policy → tuning.
+
+### 2026-08-07 — Patrick Tomczak — AI pivot: self-play RL (tribes-rl template) — docs/OdysseusAI.md
+
+**Supersedes the same-day "belief-constrained search bot" decision above** (kept per
+append-only rule). After studying tribes-rl (tribes.binhph.am — open-source Polytopia
+rebuilt for RL: C engine at ~1.8M steps/sec on one consumer GPU, PufferLib self-play,
+10B steps ≈ 11M games in ~2h, recurrent 8.2M-param policy, WASM in-browser inference as
+a fully static site), the "RL is premature" pricing no longer holds — it was priced
+against our ~1 game/sec TS engine. For exactly our game class, the engineering goes into
+a fast native engine (golden-trace-verified port of the TS engine, Rust vs C undecided),
+after which strong RL costs single-digit dollars per run. The handcrafted belief module
+drops from core architecture to optional observation features (sample-efficiency lever);
+the fog seal (earlier entry today) remains the observation boundary. Full charter,
+mental models, self-play pitfalls (league play vs cycling; 50% self-play win rate is
+definitional; human-as-exploiter loop), and adaptability principles (stats-not-names
+observations, domain randomization, retrain-per-ruleset) recorded in
+**docs/OdysseusAI.md** — Patrick's entry in a two-AI competition with his brother, whose
+AI will be built separately. Alpha-beta pruning considered and rejected as a pipeline
+stage (doesn't fit fog + variable-length turn sequences; needs the hand-crafted eval
+this approach avoids).
+
+### 2026-08-07 — Patrick Tomczak — Odysseus "Round 2" decided: belief deductions as observation features
+Human-style fog inference ("titan by turn 8 ⟹ ≥2 bases ⟹ bounded remaining spend")
+will be built into training as **derived observation features** computed by a
+deterministic, VisibleState-only belief calculator (spend lower bound, min income
+sources, unspent-resources upper bound, feasible-base mask) — appended to the obs
+tensor, never as rules ("install a fuel gauge; the net stays the pilot"). Sequencing:
+Round 1 trains on raw observations, Round 2 adds instruments and A/Bs the difference.
+Rationale: the deductions are exact arithmetic under determinism (sim-assertable:
+truth must satisfy the bounds), fog-honest, ignorable by the net, and buy sample
+efficiency without dictating strategy. Recorded in docs/OdysseusAI.md §5.
+
+### 2026-08-07 — Patrick Tomczak — Odysseus edge plan: strategy mining, personality bots, play-time search
+Added OdysseusAI.md §7. Decisions: (1) strategy mining over sim traces — per-game
+behavior fingerprints, conditional win-rate queries (P(win | tech/unit milestones)),
+clustering as the definition of "distinct strategy", checkpoint-over-time clustering
+to chart the meta; (2) personality bots via checkpoint zoo / reward-flavored short
+runs / style-conditioned net, fed back into the training league (mine → distill →
+league → robustness); (3) ranked competition edges vs the brother's AI, #1 being
+play-time search (MCTS-style lookahead with the net over belief-sampled worlds — the
+AlphaZero component absent from the base tribes-rl recipe). Doubles as balance
+telemetry for the game itself.
+
+### 2026-08-10 — Patrick Tomczak — GEN 8 "3D Tileset" map-generation option: GLB tile board + real unit models
+Added a new Map Generation option, **GEN 8 - 3D Tileset** (`tileTheme:
+'gen8_tileset3d'`), that renders the board from the 3D tile GLBs in /assets and
+spawns each unit's real GLB model. Decisions and reasoning:
+
+- **Delivered as a mode of the voxel3d renderer, not a third renderer.** The
+  voxel3d pipeline already carries the whole gameplay contract (click plane →
+  tile coords, highlights, selection shells, fog clouds, combat FX, city/ruin/
+  resource props, camera). The tileset mode swaps only what the art changes:
+  `ModelTiles` replaces `Floor` (one InstancedMesh per tile kind: flat/forest/
+  mountain/water), and `UnitBody`/`GhostUnit` route kinds with a registered GLB
+  to `GlbUnitModel`. Everything else — base perimeters, recruit flow, fog,
+  economy props — is inherited unchanged, which is why the game plays normally
+  in the new mode. Selecting the option auto-switches MapView to the 3D
+  renderer (2D toggle still works and falls back to default sprites).
+- **Asset pipeline is mandatory, not optional.** The raw exports are ~40 MB per
+  GLB (834 MB total) — unshippable. `scripts/optimize-3d-assets.sh` bakes them
+  to ~0.3 MB each (5.9 MB total) with gltf-transform: meshopt compression
+  (drei's useGLTF decodes it natively — no extra decoder files), webp textures
+  at 1K, and mesh simplification. Tiles use a coarser simplify error (0.005 →
+  ~1–5 k tris) than units (0.001) because tiles are instanced ~400× per board.
+  Raw /assets is gitignored (same convention as imported_assets/); the
+  optimized copies in apps/web/public/voxel3d/models are what's committed.
+- **Normalization at load, not in the DCC files.** Tiles are auto-scaled so
+  their footprint is exactly 1×1 world unit with the FLAT tile's top at y=0
+  (the walkable plane every other system assumes); mountains rise above it,
+  water dips below. Units auto-scale to a per-kind target height in
+  `modelAssets.ts` — heights deliberately vary by class (scuttling 0.38 →
+  titan 1.1 / behemoth 1.15) so silhouettes read — with a hard footprint clamp
+  (≤0.85 tile) so every unit fits inside its own tile. This survives re-exports
+  at any scale without retuning.
+- **Ownership reads from an additive team-colour ring at the unit's feet**
+  (baked model textures are kept and shared between clones, never tinted);
+  ghost fades clone materials so a death fade can't dim living units sharing
+  the same GLB. Unit ids without a model (medic, engineer, archer, catapult,
+  reaper, ravener, ironclads, sylvans…) keep the box-voxel build, so modded or
+  not-yet-modelled units never break. `tank_assault`→tank and
+  `wyrm_burrowed`→wyrm reuse their base model.
+- **Terrain→tile mapping:** plains/sand/snow/resource→flat, forest→forest,
+  mountain→mountain, water/river/lava→water (no hole-cutting in this mode).
+  Instanced tiles carry no pointer handlers — clicks ride one invisible plane
+  at y=0 with Floor's exact coordinate math, so per-frame raycasts never touch
+  400 instanced geometries. Deterministic per-tile quarter-turns
+  (`(x*7+y*13)%4`) break up repetition, matching TerrainBlocks' jitter idiom.
+- Dev harness: `?tileset=1` forces the mode (pairs with `?unitGallery=1` to
+  review all models on the board).
+
+### 2026-08-10 — Patrick Tomczak — GEN 8 visual/UX pass: sun lighting, FX, outline & click fixes
+Follow-up batch on the 3D Tileset mode, driven by Patrick's playtest notes:
+
+- **Golden-hour sun (tileset only).** The night-arena grade buried the
+  hand-painted tile textures. Tileset mode now gets its own light rig in
+  Lights.tsx: warm key at 3.4 intensity raking low across the board (long
+  readable shadows, 2K shadow maps on high), sky/ground hemisphere fill, and a
+  faint cool opposite rim so shadow sides stay legible. 2.1 intensity looked
+  identical to the old night grade under ACES tonemapping — 3.4 is the tuned
+  value; other renderer modes are untouched.
+- **TilesetFX layer** (models/TilesetFX.tsx): sunlit dust motes drifting over
+  the board (one additive point cloud, deterministic scatter, twinkle +
+  orbital drift in the vertex shader) and animated water caustics (one
+  instanced quad per water tile, two counter-scrolling interference bands,
+  edge-faded so ripples never touch the tile rim). One draw call each.
+- **Selection outline rebuilt.** The old shell scaled the whole clone group
+  1.06× about its origin — fine for boxy voxel units, but on organic glTF
+  bodies parts sit far from the origin so the shell smeared into a detached
+  green blob (bug report screenshot). The shell material now inflates each
+  vertex along its normal by a constant WORLD distance (modelMatrix scale read
+  in-shader), giving a uniform rim that hugs any silhouette. Same path for box
+  and GLB units.
+- **Units never merge into tile geometry.** Mountain tiles lift their occupant
+  onto the rock top (MOUNTAIN_UNIT_ELEVATION = 0.34, lerped along the move
+  glide); forest tiles swap to a flat tile while occupied (Polytopia-style)
+  because standing a unit on top of trees would look worse than hiding them.
+- **North-tile click fix.** A unit's invisible click collider (fixed 0.7×1.05
+  box) shadowed the tile behind it, so a selected unit could not be sent to
+  its northern move target. Colliders are now sized to the actual model
+  (height + hover), and while a unit IS selected its collider projects the
+  click ray through to the ground tile instead of eating it — move targets
+  win over "click self to deselect", which the ground plane still provides.
+- **Scuttling 30% smaller** (0.38 → 0.27) per playtest feel; **sentinel is a
+  flyer** — new `hover` field in the unit-model registry floats the body 0.3
+  above the tile with a phase-shifted idle bob; the team ring stays grounded
+  as a landing marker, and its ghost sinks from hover height.
+
+### 2026-08-10 — Patrick Tomczak — GEN 8 tile levelling (per-kind Y trim)
+The four tile GLBs were authored with different ground-slab thicknesses, so
+base-aligning them left forest tiles sitting proud of the ground plane. Added
+TILE_Y_OFFSET in ModelTiles (hand-tuned; not derivable from bboxes since they
+can't separate slab from trees/peaks): forest −0.09 so it sits level with flat
+(mountain already did), water a further 20% of a slab height (−0.062) below
+ground per Patrick's direction — reads as a recessed river bed with a stepped
+bank. Water ripple overlay follows the surface down.
+
+### 2026-08-10 — Patrick Tomczak — GEN 8: RIGBOUND_3js voxel deck as ground tiles + selection/centring/board-edge fixes
+Second follow-up batch on the 3D Tileset mode, from Patrick's playtest notes:
+
+- **Ground tiles are now the RIGBOUND_3js voxel deck.** Ported the ITB-style
+  procedural tile painter (~/RIGBOUND_3js/src/voxelTiles.js + voxels.js) into
+  models/deck/: 16×16-voxel plates with recessed groove rings, lit bevel
+  chamfers, plate-value patchwork, seams, grime walks, rivets, vents and rare
+  machinery lights — geometry cached per (type, variant) [2 types × 8
+  variants] and drawn as InstancedMeshes (~20–40 draw calls for any board).
+  Deck top sits exactly on the y=0 walkable plane. Zone/glow tile types were
+  NOT ported (GEN 8 has its own highlight system). Forest / mountain / water
+  keep their GLB tile models, reading as biome features on the deck.
+- **Selection outline is now a true screen-space silhouette** (postprocessing
+  OutlineEffect via drei, replacing the inverted-hull shell, which showed
+  backfaces through every crevice of organic glTF bodies). Selected unit's
+  meshes are handed to PostFX through a tiny outlineStore; the effect stays
+  mounted permanently and only its selection swaps. Root-caused a silent
+  failure: r3f leaves renderer.autoClear=true, so OutlineEffect's mask pass —
+  which clears its target WHITE for the R-channel edge detector and then
+  restores the previous clear color — got auto-cleared back to black by its
+  own scene render, producing an empty edge buffer. PostFX wraps the mask
+  pass's render with autoClear=false (see patchOutlineClear).
+- **Units centre on their FEET, not their bbox** — a long sword/tail dragged
+  the bbox centre sideways, so bodies stood visibly off-tile. GlbUnitModel now
+  computes the x/z centre from vertices in the bottom ~18% of the model.
+- **No platform frame in tileset mode** — EdgeRim (the black table-like rim)
+  is skipped; the board reads as a floating island of tiles, edges exposed.
+
+### 2026-08-10 — Patrick Tomczak — GEN 8: "1" tile set, Reaper model, attack FX, health bars
+- **Tile set swapped to the "1" exports** (Tile - Flat1/Forest1/Mountain1/
+  Water1). The RIGBOUND_3js voxel deck was removed again at Patrick's
+  direction (models/deck/ deleted; the port lives in git history). Water1
+  shipped with a squashed z-axis (1.9×1.6 footprint) — ModelTiles now applies
+  PER-AXIS footprint normalization in model space (before the quarter-turn),
+  so any export is stretched to an exact 1×1 tile; height uses the smaller
+  factor (the export's intended uniform scale). Per-kind Y trims reset to
+  zero for this set; water keeps the 20%-of-a-slab drop.
+- **Reaper GLB registered** (hive flyer: height 0.55, hover 0.25 — it reads
+  as a winged creature, so it flies like the sentinel).
+- **Attack animations matched to the unit's weapon** (units/attackStyles.ts):
+  melee kinds keep the lunge plus a new slash-arc crescent at the defender;
+  gun-holders (scout/lancer/wraith/stalker) fire tracer rounds with a muzzle
+  flash — even at range 1, a rifle is a rifle; artillery (tank/catapult/siege
+  tower) lobs arcing shells; titan/seercaust cast glowing bolts; hive ranged
+  (scab/ravener) spit arcing acid globs; archers loose arrows. Attackers turn
+  to face their target and ease back; ranged units recoil instead of lunging;
+  the defender's hit-flash is delayed until the projectile actually lands.
+  Also fixed: VoxelMapView computed combat/ghost events but never passed them
+  to VoxelArena, so NO attack/death FX had ever played in the 3D renderer.
+- **Floating health bar** above a unit when it's clicked/selected (any owner):
+  camera-facing billboard, green→amber→red by HP fraction, drawn depth-free so
+  terrain can't hide it. HP travels on UnitView (u.hp / registry maxHP).
+
+### 2026-08-10 — Patrick Tomczak — GEN 8: RIGBOUND_3js in-game HUD ported onto the game screen
+Ported the neon tactical overlay from RIGBOUND_3js (src/ui/hud.css + hud.js)
+into the web app as a GEN 8-only skin (components/gen8/): scan-line glass
+panels, corner-ticked cards, condensed uppercase type, cyan chrome with red
+threat accents. Mapped to RIGBOUND's systems rather than copied wholesale:
+
+- **New HUD elements** (Gen8Hud overlay over the map area): OBJECTIVES panel
+  top-left (live win-condition progress from config.winConditions), the
+  bracket-framed END TURN button + TURN tab top-centre (owns turn ending; the
+  plain top-bar button is hidden in this skin), the angled faction turn tag
+  bottom-left (cyan for Vanguard, red for Hive) with a unit tray beside it —
+  your units then sighted hostiles, each slot an icon with an HP underbar,
+  click-to-select, `+N` overflow — and a red HOSTILE INTEL card bottom-right
+  (HP pips, ATK/DEF/MOVE/RANGE, ability list) that replaces the standard
+  UnitSheet whenever the selected unit is an enemy.
+- **Existing UI re-chromed, not rebuilt**: the top bar, side panel and
+  city/tile cards get the ported glass chrome via `.gen8-skin` CSS overrides.
+  The UnitSheet deliberately KEEPS serving as the friendly unit card — it
+  already owns ability arming, tech gating, morphs and upgrades, and
+  duplicating that in a ported left-card would fork the logic.
+- Skin activates with the GEN 8 - 3D Tileset map style (or ?tileset=1); every
+  other theme is untouched.
+
+### 2026-08-10 — Patrick Tomczak — GEN 8: pip health bar, full ability pass (pickers, cast FX, site actions)
+- **Floating health bar restyled to the HUD's segmented pips** (per Patrick's
+  screenshot): up to 12 glowing segments on a dark plate, red for hostiles,
+  cyan for own units — the intel card's row, in-world.
+- **Ability audit — the 3D renderer now supports every active-ability flow.**
+  Root cause of most gaps: interactive flows lived only in IsoCanvas.
+  - Multi-tile pickers (Titan's Ballistic Volley 2×2, Wyrm strike pair,
+    Cure/Repair unit targets, city territory expansion) now work in 3D:
+    eligibility helpers hoisted to src/game/pickers.ts (shared by BOTH
+    renderers, deriving from engine helpers so UI and engine agree), with
+    VoxelMapView painting eligible/picked tiles as highlights and routing
+    clicks through the same tick/untick logic as iso.
+  - **Found City / Capture City / Build & Upgrade REB** were iso-only
+    on-canvas action boxes — the reason "can't settle ruins / build REBs" in
+    GEN 8. They're now HUD prompt buttons (bottom centre, neon chrome) shown
+    when the selected unit's tile has those actions, driven by legalActions +
+    canBuildLocation exactly like iso.
+  - **Cast animations**: new store event `lastAbilityEvent` (mirrors
+    lastCombatEvent; also fired for wyrmStrike) drives an AbilityFxLayer in
+    the arena. Every ability maps to two pooled primitives — an optional
+    projectile (straight bolt: infect/stun/tracer/plant-explosives; lobbed:
+    bile/percussive/volley) and a burst at the destination (expanding ring +
+    rising glow column; heals/repairs/shield rise tall and green/amber/cyan,
+    self-casts and morphs burst at the caster, self-destruct blasts big).
+    Multi-target casts stagger per target.
+  - **Bile-infected tiles now render in 3D** (pulsing violet wash, instanced)
+    — Spray Bile's persistent effect was previously invisible outside 2D.
+
+### 2026-08-10 — Patrick Tomczak — GEN 8 ability pass verified live + dev store hook
+Verified in the running app via the test-combat sandbox (startTestCombat spawns
+2 of every unit): segmented pip health bar over selected units (cyan friendly /
+red hostile), tray click-to-select, Titan Ballistic Volley end-to-end — arm
+from UnitSheet → eligible 2×2 band highlighted on the 3D board → tiles ticked/
+unticked by real board clicks → confirm → four staggered arcing shells with
+burst rings on impact. Added a dev-only console handle (`window.__game` →
+zustand store, vite dev builds only) for driving actions while debugging.

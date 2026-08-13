@@ -87,7 +87,7 @@ interface TerrainSets {
   cityWindow: BlockInstance[];
 }
 
-function buildTerrain(map: MapData, visibility: TileVisibility[][] | undefined, desert: boolean): TerrainSets {
+function buildTerrain(map: MapData, visibility: TileVisibility[][] | undefined, desert: boolean, natureProps: boolean): TerrainSets {
   const s: TerrainSets = {
     mountainBase: [], mountainPeak: [], forestCanopy: [], forestTrunk: [],
     oreCrystal: [], plasmaCrystal: [],
@@ -114,13 +114,13 @@ function buildTerrain(map: MapData, visibility: TileVisibility[][] | undefined, 
         s.cityBase.push({ pos: [cx, 0.05, cz], scale: [0.6, 0.1, 0.6] });
         s.cityTower.push({ pos: [cx, 0.4, cz], scale: [0.34, 0.6, 0.34] });
         s.cityWindow.push({ pos: [cx, 0.46, cz], scale: [0.36, 0.07, 0.36], color: teamColor });
-      } else if (tile.terrain === 'mountain') {
+      } else if (tile.terrain === 'mountain' && natureProps) {
         // A low cluster of rocks, not a tile-filling monolith — units (0.7
         // tall) should still dominate the silhouette.
         // One clean raised block — simple SC1-style high ground.
         s.mountainBase.push({ pos: [cx - 0.12, 0.16, cz - 0.12], scale: [0.56, 0.32, 0.56] });
         s.mountainPeak.push({ pos: [cx - 0.12, 0.38, cz - 0.12], scale: [0.4, 0.12, 0.4] });
-      } else if (tile.terrain === 'forest') {
+      } else if (tile.terrain === 'forest' && natureProps) {
         if (desert) {
           // Simple saguaro: trunk + two arms.
           s.forestTrunk.push({ pos: [cx - 0.18, 0.24, cz - 0.16], scale: [0.13, 0.48, 0.13] });
@@ -159,15 +159,18 @@ function buildTerrain(map: MapData, visibility: TileVisibility[][] | undefined, 
   return s;
 }
 
-export function TerrainBlocks({ map, visibility, theme = 'city' }: {
+export function TerrainBlocks({ map, visibility, theme = 'city', natureProps = true }: {
   map: MapData;
   visibility?: TileVisibility[][];
   theme?: ArenaTheme;
+  /** False in GEN 8 tileset mode: the GLB tiles carry mountains/forests, so
+   *  only cities / ruins / resource deposits are placed as props. */
+  natureProps?: boolean;
 }) {
   const desert = theme === 'desert';
   const sets = React.useMemo(
-    () => buildTerrain(map, visibility, desert),
-    [map, visibility, desert],
+    () => buildTerrain(map, visibility, desert, natureProps),
+    [map, visibility, desert, natureProps],
   );
   return (
     <>

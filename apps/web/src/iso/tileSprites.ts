@@ -10,7 +10,7 @@
 
 export type TileTheme =
   | 'default' | 'gen2_volcanic' | 'grass_iso' | 'gen3_desert' | 'gen5_desert'
-  | 'gen6_desert' | 'itb_desert' | 'gen7_industrial'
+  | 'gen6_desert' | 'itb_desert' | 'gen7_industrial' | 'gen8_tileset3d'
   | 'variety_neon_blue' | 'variety_toxic_green' | 'variety_violet_ash'
   | 'variety_ember_red' | 'variety_frost_teal';
 
@@ -91,30 +91,37 @@ function variantHash(x: number, y: number): number {
   return ((x * 73856093) ^ (y * 19349663)) >>> 0;
 }
 
-const THEMES: Record<TileTheme, ThemeDef> = {
-  // ── Default: hand-built grassland / stone cubes (148×164 art) ──
-  default: {
-    base: '/tiles',
-    files: [
-      'plains', 'forest', 'dirt',
-      'stone01', 'stone02', 'stone03',
-      'water', 'lava', 'sand', 'snow', 'resource', 'mountain',
-      'ore', 'plasma',
-    ],
-    variants: {
-      plains:   ['plains', 'plains', 'plains', 'dirt'],
-      forest:   ['forest'],
-      mountain: ['stone02', 'stone02', 'stone02', 'stone01', 'stone03'],
-      // Disabled-but-supported terrains (not generated right now):
-      water:    ['water'],
-      lava:     ['lava'],
-      sand:     ['sand'],
-      snow:     ['snow'],
-      resource: ['plains'],
-    },
-    resources: { ore: 'ore', plasma: 'plasma' },
-    draw: { spriteW: 132, topOffsetY: -6 },
+// ── Default: hand-built grassland / stone cubes (148×164 art) ──
+const DEFAULT_THEME: ThemeDef = {
+  base: '/tiles',
+  files: [
+    'plains', 'forest', 'dirt',
+    'stone01', 'stone02', 'stone03',
+    'water', 'lava', 'sand', 'snow', 'resource', 'mountain',
+    'ore', 'plasma',
+  ],
+  variants: {
+    plains:   ['plains', 'plains', 'plains', 'dirt'],
+    forest:   ['forest'],
+    mountain: ['stone02', 'stone02', 'stone02', 'stone01', 'stone03'],
+    // Disabled-but-supported terrains (not generated right now):
+    water:    ['water'],
+    lava:     ['lava'],
+    sand:     ['sand'],
+    snow:     ['snow'],
+    resource: ['plains'],
   },
+  resources: { ore: 'ore', plasma: 'plasma' },
+  draw: { spriteW: 132, topOffsetY: -6 },
+};
+
+const THEMES: Record<TileTheme, ThemeDef> = {
+  default: DEFAULT_THEME,
+
+  // ── GEN 8 — 3D Tileset renders through the voxel3d pipeline (GLB tile blocks
+  // + real unit models); if the user toggles back to the 2D renderer, the
+  // default sprite set is what the iso canvas falls back to. ──
+  gen8_tileset3d: DEFAULT_THEME,
 
   // ── Shared 192×256 iso-tile transform (originally derived for the Space Station
   //    set; reused by GEN 2 - Volcanic) ──
