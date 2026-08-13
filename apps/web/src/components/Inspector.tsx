@@ -2,6 +2,7 @@ import React from 'react';
 import { useGameStore } from '../store/gameStore.js';
 import { calculateOreIncome, calculatePlasmaIncome, computeScores, cityProduction, cityPop, unitsHomedAt } from '@tactica/engine';
 import type { Action } from '@tactica/engine';
+import { PlasmaIcon } from './PlasmaIcon.js';
 
 export function Inspector() {
   const { gameState, registry } = useGameStore();
@@ -43,12 +44,12 @@ export function Inspector() {
               <span className="stat-value">{p.ore}</span>
             </div>
             <div className="stat-row">
-              <span className="stat-label">Plasma ✦</span>
+              <span className="stat-label">Plasma <PlasmaIcon /></span>
               <span className="stat-value">{p.plasma}</span>
             </div>
             <div className="stat-row">
               <span className="stat-label">Income/turn</span>
-              <span className="stat-value">+{oreIncome}◈ +{plasmaIncome}✦</span>
+              <span className="stat-value">+{oreIncome}◈ +{plasmaIncome}<PlasmaIcon /></span>
             </div>
             <div className="stat-row">
               <span className="stat-label">Cities</span>

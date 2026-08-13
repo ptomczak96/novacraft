@@ -15,7 +15,7 @@ const CHOICE_META: Record<LevelUpChoice, { label: string; desc: string; icon: st
   muster:      { label: 'Muster',           desc: 'Units recruited here may MOVE the turn they’re built (they still can’t attack).', icon: '🏃' },
   detect:      { label: 'Detect',           desc: 'Exposes cloaked & burrowed enemy units within this city’s 3×3.', icon: '🛰️' },
   conscription:{ label: 'Conscription',     desc: 'Units recruited here cost 20% less ore.', icon: '📜' },
-  plasma:      { label: '+10 Plasma',       desc: '+10 plasma every turn, permanently.', icon: '✦' },
+  plasma:      { label: '+10 Plasma',       desc: '+10 plasma every turn, permanently.', icon: '🔥' },
   hero:        { label: 'Hero',             desc: 'Recruit a Hero. Coming soon — and you may only have one living hero at a time.', icon: '⭐' },
 };
 

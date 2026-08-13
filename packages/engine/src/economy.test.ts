@@ -155,7 +155,7 @@ describe('REB1 — extractors (plasma)', () => {
     let state = createGame(getConfig(), registry, ['vanguard', 'hive'], 7);
     const cap = capitalOf(state, 0);
     state.players[0].ore = 800;
-    state = applyAction(state, { type: 'research', techId: 'plasma_1' }, registry); // gate: extractor
+    state.players[0].researchedTechs.push('extractor'); // gate: extractor (unlocks all levels)
     const v = makeOreTile(state, cap.position, 1, 0);
     state.map.tiles[v.y][v.x].resourceKind = 'plasma'; // make it a plasma vent
 
@@ -165,14 +165,13 @@ describe('REB1 — extractors (plasma)', () => {
     expect(calculatePlasmaIncome(state, 0, registry)).toBe(plasmaBefore + 5); // +5 plasma
     expect(calculateOreIncome(state, 0, registry)).toBe(oreBefore); // never any ore
 
-    state = applyAction(state, { type: 'research', techId: 'plasma_2' }, registry); // gate: extractor L2
-    state = applyAction(state, { type: 'upgradeBuilding', position: v }, registry); // → L2
+    state = applyAction(state, { type: 'upgradeBuilding', position: v }, registry); // → L2 (no extra tech now)
     expect(calculatePlasmaIncome(state, 0, registry)).toBe(plasmaBefore + 10); // total 10 at L2
   });
 });
 
-describe('REB2 — refineries (per-adjacent-mine output, flat supply, adjacent-REB1 gate)', () => {
-  it('produces +20 ore per adjacent mine and a FLAT +2 supply (level-agnostic multiplier)', () => {
+describe('REB2 — refineries (per-adjacent-mine output & supply, adjacent-REB1 gate)', () => {
+  it('produces +20 ore and +1 supply per adjacent mine', () => {
     const registry = getRegistry();
     let state = createGame(getConfig(), registry, ['vanguard', 'hive'], 7);
     const cap = capitalOf(state, 0);
@@ -183,7 +182,7 @@ describe('REB2 — refineries (per-adjacent-mine output, flat supply, adjacent-R
     const proc = makeLandTile(state, cap.position, 0, 1); // adjacent to both mines
     state = applyAction(state, { type: 'build', kind: 'mine', position: m1 }, registry);
     state = applyAction(state, { type: 'build', kind: 'mine', position: m2 }, registry);
-    // No tech gate on refineries — buildable as soon as a mine is adjacent.
+    state.players[0].researchedTechs.push('refinery_1'); // refineries are gated behind Refinery Lvl 1
 
     const oreBefore = calculateOreIncome(state, 0, registry);
     const supplyBefore = cityAt(state, cap.position)!.supply;
@@ -191,7 +190,7 @@ describe('REB2 — refineries (per-adjacent-mine output, flat supply, adjacent-R
     state = applyAction(state, { type: 'build', kind: 'refinery', position: proc }, registry);
 
     expect(calculateOreIncome(state, 0, registry)).toBe(oreBefore + 40); // +20 per mine x2
-    expect(cityAt(state, cap.position)!.supply).toBe(supplyBefore + 2); // FLAT +2 (not per-mine)
+    expect(cityAt(state, cap.position)!.supply).toBe(supplyBefore + 2); // +1 supply per mine x2
   });
 
   it('requires an adjacent MINE (a bare ore tile is not enough), then shows once the mine exists', () => {
@@ -200,6 +199,7 @@ describe('REB2 — refineries (per-adjacent-mine output, flat supply, adjacent-R
     const cap = capitalOf(state, 0);
     state.players[0].ore = 800;
 
+    state.players[0].researchedTechs.push('refinery_1'); // unlock the refinery (tech gate)
     const ore = makeOreTile(state, cap.position, 1, 0);   // ore tile in territory, no mine yet
     const proc = makeLandTile(state, cap.position, 0, 1);  // adjacent to the ore tile
     expect(canBuild(state, registry, 0, 'refinery', proc)).toBe(false); // no mine → not buildable
@@ -214,6 +214,7 @@ describe('REB2 — refineries (per-adjacent-mine output, flat supply, adjacent-R
     const cap = capitalOf(state, 0);
     state.players[0].ore = 800;
 
+    state.players[0].researchedTechs.push('refinery_1'); // unlock the refinery (tech gate)
     const mA = makeOreTile(state, cap.position, 1, 0);
     const mB = makeOreTile(state, cap.position, -1, 1);
     state = applyAction(state, { type: 'build', kind: 'mine', position: mA }, registry);
@@ -232,7 +233,8 @@ describe('REB2 — purifiers (require an adjacent extractor)', () => {
     let state = createGame(getConfig(), registry, ['vanguard', 'hive'], 7);
     const cap = capitalOf(state, 0);
     state.players[0].ore = 1200;
-    state = applyAction(state, { type: 'research', techId: 'plasma_1' }, registry); // gate: extractor
+    state.players[0].researchedTechs.push('extractor'); // gate: extractor
+    state.players[0].researchedTechs.push('purifier_1'); // gate: purifier
 
     const vent = makeOreTile(state, cap.position, 1, 0);
     state.map.tiles[vent.y][vent.x].resourceKind = 'plasma'; // a plasma vent, no extractor

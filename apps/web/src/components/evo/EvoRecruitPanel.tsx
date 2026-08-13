@@ -1,6 +1,7 @@
 import React from 'react';
 import type { DataRegistry, RecruitOption } from '@tactica/engine';
 import { playUi } from './uiSounds.js';
+import { PlasmaIcon } from '../PlasmaIcon.js';
 
 /** Unit glyphs for the recruit cards (shared with the map HUD). */
 const UNIT_ICONS: Record<string, string> = {
@@ -66,7 +67,7 @@ export function EvoRecruitPanel({ options, registry, onRecruit, onClose, hint }:
                 {opt.locked ? '🔒' : (
                   <>
                     <em>{opt.cost}◈</em>
-                    {opt.plasmaCost > 0 && <em className="plasma"> {opt.plasmaCost}✦</em>}
+                    {opt.plasmaCost > 0 && <em className="plasma"> {opt.plasmaCost}<PlasmaIcon size={11} /></em>}
                   </>
                 )}
               </span>

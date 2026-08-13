@@ -3,8 +3,9 @@ import { getTechTrees, layoutTree, nodeState, NODE_W, NODE_H } from '../data/tec
 import type { TechNode } from '../data/techTrees.js';
 import { useGameStore } from '../store/gameStore.js';
 import { abilityDef } from './UnitSheet.js';
-import { techCostForPlayer } from '@tactica/engine';
+import { techCostForPlayer, techPlasmaCostForPlayer } from '@tactica/engine';
 import type { DataRegistry, GameState } from '@tactica/engine';
+import { PlasmaIcon } from './PlasmaIcon.js';
 
 interface TechTreeViewProps {
   factionName: string;
@@ -30,13 +31,16 @@ function unitDetail(registry: DataRegistry, unitId: string): { name: string; pas
 export function TechTreeView({ factionName, factionId, researched, onResearch, onClose }: TechTreeViewProps) {
   const registry = useGameStore(s => s.registry);
   const gameState = useGameStore(s => s.gameState);
-  // Live research price for a node: the city-scaled cost (incl. R&D) for the current player.
-  // null for the always-on base node (no cost).
-  const costOf = (node: TechNode): number | null => {
+  // Live research price for a node: the city-scaled ore cost (incl. R&D) plus any
+  // plasma cost, for the current player. null for the always-on base node.
+  const costOf = (node: TechNode): { ore: number; plasma: number } | null => {
     if (node.root || !gameState) return null;
     const tech = registry.techs[node.id];
     if (!tech) return null;
-    return techCostForPlayer(gameState, gameState.currentPlayer, tech, registry);
+    return {
+      ore: techCostForPlayer(gameState, gameState.currentPlayer, tech, registry),
+      plasma: techPlasmaCostForPlayer(gameState, gameState.currentPlayer, tech, registry),
+    };
   };
   const TREES = getTechTrees(factionId);
   const firstActive = TREES.findIndex(t => !t.blank);
@@ -96,6 +100,14 @@ export function TechTreeView({ factionName, factionId, researched, onResearch, o
                     </svg>
                     {/* nodes */}
                     {layout.nodes.map(p => {
+                      if (p.node.heading) {
+                        return (
+                          <div key={p.node.id} className="tech-heading"
+                            style={{ left: p.x + 44, top: p.y + 8, width: NODE_W }}>
+                            {p.node.name}
+                          </div>
+                        );
+                      }
                       const state = nodeState(p.node, active, researched);
                       return (
                         <TechCard
@@ -103,7 +115,7 @@ export function TechTreeView({ factionName, factionId, researched, onResearch, o
                           node={p.node}
                           state={state}
                           registry={registry}
-                          cost={costOf(p.node)}
+                          cost={state === 'cut' ? null : costOf(p.node)}
                           style={{ left: p.x + 44, top: p.y + 8 }}
                           onResearch={() => onResearch(p.node.id)}
                         />
@@ -120,7 +132,7 @@ export function TechTreeView({ factionName, factionId, researched, onResearch, o
   );
 }
 
-type CardState = 'researched' | 'available' | 'locked' | 'excluded' | 'root';
+type CardState = 'researched' | 'available' | 'locked' | 'excluded' | 'root' | 'cut';
 
 function TechCard({
   node, state, style, onResearch, registry, cost,
@@ -130,7 +142,7 @@ function TechCard({
   style: React.CSSProperties;
   onResearch: () => void;
   registry: DataRegistry;
-  cost: number | null;
+  cost: { ore: number; plasma: number } | null;
 }) {
   const hasDetail = !!(node.unlockUnits?.length || node.unlockPassives?.length || node.unlockUpgrades?.length);
   return (
@@ -146,11 +158,16 @@ function TechCard({
       <div className="tech-node-status">
         {state === 'researched' ? '✓ DONE'
           : state === 'root' ? 'BASE'
+          : state === 'cut' ? '✂ CUT'
           : state === 'excluded' ? '✕ LOCKED OUT'
           : (
             <>
               {state === 'available' ? 'RESEARCH' : '🔒'}
-              {cost != null && <span className="tech-node-cost">{cost}◈</span>}
+              {cost != null && (
+                <span className="tech-node-cost">
+                  {cost.ore}◈{cost.plasma > 0 && <> {cost.plasma}<PlasmaIcon size={11} /></>}
+                </span>
+              )}
             </>
           )}
       </div>

@@ -6,7 +6,7 @@ import type { GameConfig } from './types.js';
 const registry = buildRegistry();
 const cfg = (o: Partial<GameConfig> = {}): GameConfig => ({ ...defaultConfig, ...o });
 // Hive is player 0 here.
-const game = () => { const s = createGame(cfg(), registry, ['hive','vanguard'], 7); s.players[0].ore = 100000; return s; };
+const game = () => { const s = createGame(cfg(), registry, ['hive','vanguard'], 7); s.players[0].ore = 100000; s.players[0].plasma = 100000; return s; };
 
 describe('Hive Armory tech gating', () => {
   it('gates hive units behind their techs (Reaper ← Reaper tech; Vindrace ← Vindrace)', () => {

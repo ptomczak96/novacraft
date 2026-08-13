@@ -56,7 +56,7 @@ export interface AbilityEvent {
 }
 
 export type AppScreen = 'setup' | 'game' | 'mapEditor';
-export type BotSetting = 'human' | 'random' | 'greedy';
+export type BotSetting = 'human' | 'random' | 'greedy' | 'odysseus' | 'achilles';
 
 interface GameStore {
   // App state

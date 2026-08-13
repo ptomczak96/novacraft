@@ -43,6 +43,7 @@ opts in by listing the condition id in its `conditions` array in
 | `squinting_eyes_1` | Squinting eyes (L1) | Sees its 3×3 as **fog** only (terrain, not units). |
 | `squinting_eyes_2` | Squinting eyes (L2) | 3×3 fully visible; the surrounding 5×5 ring as **fog** (≈ visibility 1.5). |
 | `dash_N` | Dash N | After attacking, the unit may move up to **N** tiles (default: no move after attacking). |
+| `fleet_N` | Fleet N | **+N base movement** (parsed from the id: `fleet_1`, `fleet_2`, …). E.g. Adrenal Glands grants Scuttling `fleet_1`. |
 | `corrosive` | Corrosive | *(passive ability)* The unit's attack applies the **`corrosive_1` condition** (−20% defence) to the target. |
 | `stumble` | Stumble | While inside an enemy's **area of influence** (the 3×3 around it), its movement is capped at **1**. |
 | `mountain_movement` | Mountain Movement | Can climb mountains (movement access only — **no combat or sight bonus**). |

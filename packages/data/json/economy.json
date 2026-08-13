@@ -33,106 +33,46 @@
       "output": "ore",
       "maxLevel": 3,
       "perCity": null,
-      "costByLevel": [
-        50,
-        70,
-        90
-      ],
-      "outputByLevel": [
-        10,
-        20,
-        30
-      ],
-      "supplyByLevel": [
-        1,
-        2,
-        4
-      ],
+      "costByLevel": [50, 70, 90],
+      "outputByLevel": [10, 20, 30],
+      "supplyByLevel": [1, 2, 3],
       "techRequired": null,
-      "upgradeTechRequired": [
-        "mine_2",
-        "mine_3"
-      ]
+      "upgradeTechRequired": [null, null]
     },
     "extractor": {
       "on": "plasma",
       "output": "plasma",
       "maxLevel": 3,
       "perCity": null,
-      "costByLevel": [
-        100,
-        125,
-        200
-      ],
-      "outputByLevel": [
-        5,
-        10,
-        20
-      ],
-      "supplyByLevel": [
-        2,
-        3,
-        4
-      ],
-      "techRequired": "plasma_1",
-      "upgradeTechRequired": [
-        "plasma_2",
-        "plasma_3"
-      ]
+      "costByLevel": [100, 200, 300],
+      "outputByLevel": [5, 10, 15],
+      "supplyByLevel": [1, 2, 3],
+      "techRequired": "extractor",
+      "upgradeTechRequired": [null, null]
     },
     "refinery": {
       "on": "land",
       "output": "ore",
-      "maxLevel": 3,
+      "maxLevel": 1,
       "perCity": 1,
       "adjacentTo": "mine",
-      "costByLevel": [
-        100,
-        150,
-        250
-      ],
-      "outputPerAdjacentByLevel": [
-        20,
-        40,
-        80
-      ],
-      "supplyByLevel": [
-        2,
-        3,
-        4
-      ],
-      "techRequired": null,
-      "upgradeTechRequired": [
-        null,
-        null
-      ]
+      "costByLevel": [150],
+      "outputPerAdjacentByLevel": [20],
+      "supplyPerAdjacentByLevel": [1],
+      "techRequired": "refinery_1",
+      "upgradeTechRequired": []
     },
     "purifier": {
       "on": "land",
       "output": "plasma",
-      "maxLevel": 3,
+      "maxLevel": 1,
       "perCity": 1,
       "adjacentTo": "extractor",
-      "costByLevel": [
-        300,
-        400,
-        750
-      ],
-      "outputPerAdjacentByLevel": [
-        5,
-        15,
-        30
-      ],
-      "supplyByLevel": [
-        3,
-        4,
-        5
-      ],
-      "techRequired": null,
-      "upgradeTechRequired": [
-        null,
-        null
-      ]
+      "costByLevel": [200],
+      "outputPerAdjacentByLevel": [5],
+      "supplyPerAdjacentByLevel": [1],
+      "techRequired": "purifier_1",
+      "upgradeTechRequired": []
     }
   },
   "foundCity": {

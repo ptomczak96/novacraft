@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   createGame, applyAction, getLegalActions, getRecruitOptions,
   techCost, isTechAvailable, isUnitUnlocked, getModifier, calculateOreIncome,
-  canBuild, canUpgradeBuilding, cityAt,
+  canBuild, canUpgradeBuilding, cityAt, techPlasmaCostForPlayer,
 } from './index.js';
 import { buildRegistry, defaultConfig } from '@tactica/data';
 import type { DataRegistry, GameConfig, GameState, Coord, CityState } from './types.js';
@@ -36,15 +36,15 @@ describe('Branch-unlock rule', () => {
     let state = createGame(getConfig(), r, ['vanguard', 'hive'], 7);
     state.players[0].ore = 200;
 
-    expect(isTechAvailable(state, 0, r.techs['mine_2'], r)).toBe(true);      // L1 root
-    expect(isTechAvailable(state, 0, r.techs['prospecting'], r)).toBe(true); // L1 root
-    expect(isTechAvailable(state, 0, r.techs['slag_wash'], r)).toBe(false);  // needs Prospecting
-    expect(isTechAvailable(state, 0, r.techs['cross_border'], r)).toBe(false); // L2 needs Prospecting
+    expect(isTechAvailable(state, 0, r.techs['prospecting'], r)).toBe(true);      // L1 root
+    expect(isTechAvailable(state, 0, r.techs['colonial_charter'], r)).toBe(true); // L1 root
+    expect(isTechAvailable(state, 0, r.techs['extractor'], r)).toBe(false);       // L2 needs an L1
+    expect(isTechAvailable(state, 0, r.techs['refinery_1'], r)).toBe(false);      // L2 needs an L1
 
     state = applyAction(state, { type: 'research', techId: 'prospecting' }, r);
     expect(state.players[0].researchedTechs).toContain('prospecting');
-    expect(isTechAvailable(state, 0, r.techs['slag_wash'], r)).toBe(true);
-    expect(isTechAvailable(state, 0, r.techs['cross_border'], r)).toBe(true);
+    expect(isTechAvailable(state, 0, r.techs['extractor'], r)).toBe(true);
+    expect(isTechAvailable(state, 0, r.techs['refinery_1'], r)).toBe(true);
   });
 });
 
@@ -53,13 +53,13 @@ describe('Research deducts the city-scaled cost', () => {
     const r = getRegistry();
     let s1 = createGame(getConfig(), r, ['vanguard', 'hive'], 7);
     s1.players[0].ore = 80;
-    s1 = applyAction(s1, { type: 'research', techId: 'mine_2' }, r);
+    s1 = applyAction(s1, { type: 'research', techId: 'prospecting' }, r);
     expect(s1.players[0].ore).toBe(30); // 80 - 50
 
     let s2 = createGame(getConfig(), r, ['vanguard', 'hive'], 7);
     s2.players[0].ore = 80;
     s2.cities.push({ id: 999, position: { x: 0, y: 0 }, owner: 0, isCapital: false, level: 1, supply: 0, incomeBonus: 0, popBonus: 0, bonusSupply: 0, fortified: false, extraTerritory: [] });
-    s2 = applyAction(s2, { type: 'research', techId: 'mine_2' }, r);
+    s2 = applyAction(s2, { type: 'research', techId: 'prospecting' }, r);
     expect(s2.players[0].ore).toBe(20); // 80 - 60 (two cities)
   });
 });
@@ -75,7 +75,8 @@ describe('Slag Wash boosts mine output', () => {
 
     const before = calculateOreIncome(state, 0, r);
     expect(getModifier(state.players[0], r, 'mineOutputBonus')).toBe(0);
-    state = applyAction(state, { type: 'research', techId: 'prospecting' }, r); // prereq for Slag Wash
+    state = applyAction(state, { type: 'research', techId: 'prospecting' }, r); // L1 root
+    state = applyAction(state, { type: 'research', techId: 'refinery_1' }, r);  // prereq for Slag Wash
     state = applyAction(state, { type: 'research', techId: 'slag_wash' }, r);
     expect(getModifier(state.players[0], r, 'mineOutputBonus')).toBe(0.1);
     expect(calculateOreIncome(state, 0, r)).toBe(before + 1); // 10 -> 11
@@ -83,39 +84,38 @@ describe('Slag Wash boosts mine output', () => {
 });
 
 describe('Tech gates on buildings', () => {
-  it('extractor is gated behind the Plasma Lvl 1 tech', () => {
+  it('extractor is gated behind the Extractor tech', () => {
     const r = getRegistry();
     let state = createGame(getConfig(), r, ['vanguard', 'hive'], 7);
     const cap = capitalOf(state, 0);
     state.players[0].ore = 300;
     const p = makeTile(state, cap.position, 1, 0, 'plasma');
-    expect(canBuild(state, r, 0, 'extractor', p)).toBe(false); // needs Plasma Lvl 1
-    state = applyAction(state, { type: 'research', techId: 'plasma_1' }, r);
+    expect(canBuild(state, r, 0, 'extractor', p)).toBe(false); // needs the Extractor tech
+    state.players[0].researchedTechs.push('extractor');
     expect(canBuild(state, r, 0, 'extractor', p)).toBe(true);
   });
 
-  it('the refinery has no tech gate — buildable as soon as a mine is adjacent', () => {
+  it('the refinery is gated behind Refinery Lvl 1 (and needs a mine adjacent)', () => {
     const r = getRegistry();
     let state = createGame(getConfig(), r, ['vanguard', 'hive'], 7);
     const cap = capitalOf(state, 0);
     state.players[0].ore = 400;
     const m = makeTile(state, cap.position, 1, 0, 'ore');
     const ref = makeTile(state, cap.position, 0, 1, null); // land, adjacent to the mine site
-    expect(canBuild(state, r, 0, 'refinery', ref)).toBe(false); // no mine yet
     state = applyAction(state, { type: 'build', kind: 'mine', position: m }, r);
-    expect(canBuild(state, r, 0, 'refinery', ref)).toBe(true);  // mine adjacent, no tech needed
+    expect(canBuild(state, r, 0, 'refinery', ref)).toBe(false); // mine adjacent but no Refinery tech
+    state.players[0].researchedTechs.push('refinery_1');
+    expect(canBuild(state, r, 0, 'refinery', ref)).toBe(true);  // now unlocked
   });
 
-  it('Mine Lvl 2 tech gates the mine L2 upgrade', () => {
+  it('mines upgrade freely — no tech gate', () => {
     const r = getRegistry();
     let state = createGame(getConfig(), r, ['vanguard', 'hive'], 7);
     const cap = capitalOf(state, 0);
     state.players[0].ore = 400;
     const m = makeTile(state, cap.position, 1, 0, 'ore');
     state = applyAction(state, { type: 'build', kind: 'mine', position: m }, r);
-    expect(canUpgradeBuilding(state, r, 0, m)).toBe(false); // no Drilling
-    state = applyAction(state, { type: 'research', techId: 'mine_2' }, r);
-    expect(canUpgradeBuilding(state, r, 0, m)).toBe(true);
+    expect(canUpgradeBuilding(state, r, 0, m)).toBe(true); // mines are free (no research needed)
   });
 });
 
@@ -140,6 +140,7 @@ describe('Armory branch', () => {
     const r = getRegistry();
     let state = createGame(getConfig(), r, ['vanguard', 'hive'], 7);
     state.players[0].ore = 5000;
+    state.players[0].plasma = 50; // Mech Bay now costs 5 plasma
     state = applyAction(state, { type: 'research', techId: 'forge' }, r);
     expect(isTechAvailable(state, 0, r.techs['composite_plating'], r)).toBe(false); // neither yet
     state = applyAction(state, { type: 'research', techId: 'mech_bay' }, r);
@@ -192,14 +193,75 @@ describe('Research affordability guard', () => {
   it('a tech you cannot afford is a no-op (ore never goes negative)', () => {
     const r = getRegistry();
     let state = createGame(getConfig(), r, ['vanguard', 'hive'], 7);
-    state.players[0].ore = 30; // mine_2 (L1) costs 50 at one city
-    state = applyAction(state, { type: 'research', techId: 'mine_2' }, r);
-    expect(state.players[0].researchedTechs).not.toContain('mine_2'); // not researched
+    state.players[0].ore = 30; // prospecting (L1) costs 50 at one city
+    state = applyAction(state, { type: 'research', techId: 'prospecting' }, r);
+    expect(state.players[0].researchedTechs).not.toContain('prospecting'); // not researched
     expect(state.players[0].ore).toBe(30); // unchanged, not negative
     // With enough ore it goes through and deducts.
     state.players[0].ore = 60;
-    state = applyAction(state, { type: 'research', techId: 'mine_2' }, r);
-    expect(state.players[0].researchedTechs).toContain('mine_2');
+    state = applyAction(state, { type: 'research', techId: 'prospecting' }, r);
+    expect(state.players[0].researchedTechs).toContain('prospecting');
     expect(state.players[0].ore).toBe(10); // 60 - 50
+  });
+});
+
+describe('Resources tree: REB unlock techs & the cut/locked cluster', () => {
+  const avail = (s: GameState, r: DataRegistry, id: string) => isTechAvailable(s, 0, r.techs[id], r);
+  it('extractor/refinery open from EITHER L1 root; purifier gates behind extractor', () => {
+    const r = getRegistry();
+    let s = createGame(getConfig({ techTreeEnabled: true }), r, ['vanguard', 'hive'], 7);
+    // L2 REB unlocks locked until an L1 root is researched.
+    expect(avail(s, r, 'extractor')).toBe(false);
+    expect(avail(s, r, 'refinery_1')).toBe(false);
+    // EITHER prospecting OR colonial_charter opens both (prerequisitesAny).
+    s.players[0].researchedTechs.push('colonial_charter');
+    expect(avail(s, r, 'extractor')).toBe(true);
+    expect(avail(s, r, 'refinery_1')).toBe(true);
+    expect(avail(s, r, 'purifier_1')).toBe(false); // L3, needs extractor first
+    s.players[0].researchedTechs.push('extractor');
+    expect(avail(s, r, 'purifier_1')).toBe(true);
+  });
+  it('cut techs are locked (un-researchable); L2/L3 REB2 techs are gone', () => {
+    const r = getRegistry();
+    const s = createGame(getConfig({ techTreeEnabled: true }), r, ['vanguard', 'hive'], 7);
+    for (const id of ['rnd', 'reinforced_rebs', 'automated_extraction', 'transmutation']) {
+      expect(r.techs[id]?.locked).toBe(true);
+      expect(avail(s, r, id)).toBe(false); // locked → never available
+    }
+    for (const id of ['refinery_2', 'refinery_3', 'purifier_2', 'purifier_3', 'mine_2', 'mine_3', 'plasma_1', 'plasma_2', 'plasma_3']) {
+      expect(r.techs[id]).toBeUndefined();
+    }
+  });
+});
+
+describe('Plasma tech costs (linear per-city scaling)', () => {
+  it('advanced_biomed = 5 plasma at 1 city, +5 per extra city; gates research on plasma', () => {
+    const r = getRegistry();
+    let s = createGame(getConfig(), r, ['vanguard', 'hive'], 7);
+    // 1 city → 5 plasma.
+    expect(techPlasmaCostForPlayer(s, 0, r.techs['advanced_biomed'], r)).toBe(5);
+    // 3 cities → 5 + 5*2 = 15.
+    s.cities.push({ id: 901, position: { x: 0, y: 0 }, owner: 0, isCapital: false, level: 1, supply: 0, incomeBonus: 0, popBonus: 0, bonusSupply: 0, fortified: false, extraTerritory: [] });
+    s.cities.push({ id: 902, position: { x: 0, y: 1 }, owner: 0, isCapital: false, level: 1, supply: 0, incomeBonus: 0, popBonus: 0, bonusSupply: 0, fortified: false, extraTerritory: [] });
+    expect(techPlasmaCostForPlayer(s, 0, r.techs['advanced_biomed'], r)).toBe(15);
+    // Sentinel line = 10/+10.
+    expect(techPlasmaCostForPlayer(s, 0, r.techs['sentinel'], r)).toBe(30);
+    // Ore-only techs report 0 plasma.
+    expect(techPlasmaCostForPlayer(s, 0, r.techs['small_arms'], r)).toBe(0);
+    expect(techPlasmaCostForPlayer(s, 0, r.techs['forge'], r)).toBe(0);
+  });
+
+  it('research is a no-op without enough plasma, and deducts it when affordable', () => {
+    const r = getRegistry();
+    let s = createGame(getConfig(), r, ['vanguard', 'hive'], 7);
+    s.players[0].ore = 5000;
+    s = applyAction(s, { type: 'research', techId: 'forge' }, r); // ore-only prereq
+    s.players[0].plasma = 4; // Mech Bay needs 5
+    s = applyAction(s, { type: 'research', techId: 'mech_bay' }, r);
+    expect(s.players[0].researchedTechs).not.toContain('mech_bay'); // couldn't afford plasma
+    s.players[0].plasma = 12;
+    s = applyAction(s, { type: 'research', techId: 'mech_bay' }, r);
+    expect(s.players[0].researchedTechs).toContain('mech_bay');
+    expect(s.players[0].plasma).toBe(7); // 12 - 5
   });
 });

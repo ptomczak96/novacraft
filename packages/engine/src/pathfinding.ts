@@ -22,6 +22,11 @@ export function getReachableTiles(
   knownTiles?: Set<string>, // tiles the player has already seen — a blind unit won't walk into a KNOWN lethal tile
 ): Map<string, number> {
   let maxMove = unitType.movement + movementBonus;
+  // "Fleet" (e.g. Adrenal Glands → Scuttling): each fleet_N condition adds +N base movement.
+  for (const c of unitType.conditions ?? []) {
+    const fm = /^fleet_(\d+)$/.exec(c);
+    if (fm) maxMove += Number(fm[1]);
+  }
   const ignoresTerrain = unitType.traits.includes('ignoresTerrainCost');
   // "Burrowed" (Wyrm): moves UNDER enemy units (co-occupying their tile, to Erupt),
   // but can't move under buildings, resource tiles, or mountains. See docs/conditions.md.

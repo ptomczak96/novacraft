@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useGameStore } from '../store/gameStore.js';
+import { useGameStore, type BotSetting } from '../store/gameStore.js';
 import { EvoSelect, EvoCheckbox, EvoButton } from './evo/EvoControls.js';
 import { MultiplayerLobby } from './MultiplayerLobby.js';
 
@@ -7,6 +7,8 @@ const BOT_OPTIONS = [
   { value: 'human', label: 'Human' },
   { value: 'random', label: 'Random Bot' },
   { value: 'greedy', label: 'Greedy Bot' },
+  { value: 'odysseus', label: 'Odysseus' },
+  { value: 'achilles', label: 'Achilles' },
 ];
 
 const BIOME_OPTIONS = [
@@ -52,8 +54,8 @@ export function SetupScreen() {
   const [seed] = useState(Math.floor(Math.random() * 100000));
   const [faction0, setFaction0] = useState(factions[0]?.id || 'vanguard');
   const [faction1, setFaction1] = useState(factions[1]?.id || 'hive');
-  const [bot0, setBot0] = useState<'human' | 'random' | 'greedy'>('human');
-  const [bot1, setBot1] = useState<'human' | 'random' | 'greedy'>('human');
+  const [bot0, setBot0] = useState<BotSetting>('human');
+  const [bot1, setBot1] = useState<BotSetting>('human');
   const [showLobby, setShowLobby] = useState(false);
   // Combatants section starts collapsed — the defaults are almost always right.
   const [showCombatants, setShowCombatants] = useState(false);
@@ -78,11 +80,12 @@ export function SetupScreen() {
     startGame([faction0, faction1], seed);
   };
 
-  // Train: you (P1) vs the greedy AI (P2), with the coaching loop on from the start.
-  const handleTrain = () => {
+  // Play you (P1, human) vs a named AI (P2). Odysseus = the handcrafted bot; Achilles =
+  // Patrick's slot (greedy placeholder until his AI lands).
+  const handleVsBot = (bot: 'odysseus' | 'achilles') => {
     setBotSetting(0, 'human');
-    setBotSetting(1, 'greedy');
-    setCoachEnabled(true);
+    setBotSetting(1, bot);
+    setCoachEnabled(false);
     startGame([faction0, faction1], seed);
   };
 
@@ -259,12 +262,12 @@ export function SetupScreen() {
           <div className="setup-field">
             <label>Player 1 Control</label>
             <EvoSelect value={bot0} options={BOT_OPTIONS}
-              onChange={v => setBot0(v as 'human' | 'random' | 'greedy')} />
+              onChange={v => setBot0(v as BotSetting)} />
           </div>
           <div className="setup-field">
             <label>Player 2 Control</label>
             <EvoSelect value={bot1} options={BOT_OPTIONS}
-              onChange={v => setBot1(v as 'human' | 'random' | 'greedy')} />
+              onChange={v => setBot1(v as BotSetting)} />
           </div>
         </div>
         </>)}
@@ -304,7 +307,8 @@ export function SetupScreen() {
         <div className="setup-actions">
           <EvoButton primary onClick={handleStart}>Start Game</EvoButton>
           <EvoButton onClick={() => setShowLobby(true)}>Online 1v1</EvoButton>
-          <EvoButton onClick={handleTrain}>Train vs AI</EvoButton>
+          <EvoButton onClick={() => handleVsBot('odysseus')}>Odysseus</EvoButton>
+          <EvoButton onClick={() => handleVsBot('achilles')}>Achilles</EvoButton>
           <EvoButton onClick={handleSandbox}>Sandbox</EvoButton>
           <EvoButton onClick={handleLoad}>Load Game</EvoButton>
           <EvoButton onClick={initMapEditor}>Map Editor</EvoButton>

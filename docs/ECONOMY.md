@@ -84,27 +84,28 @@ payback of each step = step cost ÷ marginal output gained.
 |---|---|---|---|---|---|
 | 1 | 50 | 10 | +10 | 5 | 1 |
 | 2 | 70 | 20 | +10 | 7 | 2 |
-| 3 | 90 | 30 | +10 | 9 | 4 |
+| 3 | 90 | 30 | +10 | 9 | 3 |
 
 **Extractor** (plasma):
 
 | Level | Cost (ore) | Output/turn (total) | Marginal | TTR | Supply (total) |
 |---|---|---|---|---|---|
-| 1 | 100 | 5 | +5 | 20 | 2 |
-| 2 | 125 | 10 | +5 | 25 | 3 |
-| 3 | 200 | 20 | +10 | 20 | 4 |
+| 1 | 100 | 5 | +5 | 20 | 1 |
+| 2 | 200 | 10 | +5 | 40 | 2 |
+| 3 | 300 | 15 | +5 | 60 | 3 |
 
 - Supply is each building's *total* contribution at that level (not incremental).
 - Mine & Extractor: unlimited per city (count is governed by ore/plasma tile spawns, not a hard cap).
-- **No tech gate** on either — a mine builds on any ore tile, an extractor on any
-  plasma vent, within owned territory. (`plasma_tap` is now an inert/repurposable tech.)
+- **Mines are free** — no research; build/upgrade L1–L3 on any ore tile in territory.
+  **Extractors** need the single **Extractor** tech (Resources branch), which unlocks all
+  three levels at once (no per-level tech).
 - **Starting ore per team = 20** (a small opening buffer; starting plasma = 0).
 
 ### REB2 — Refinery (near mines) / Purifier (near extractors)
-**Output** = per-adjacent-REB1 value × (count of same-city REB1s of its kind in its 3×3),
-scaling with the REB2's own level. The multiplier is **level-agnostic**: a REB2 next to
-a L1 REB1 counts it the same as a L3 one. **Supply is now a FLAT per-level total** (no
-longer per-adjacent). Upgradeable to L3.
+**Output AND supply** = per-adjacent-REB1 value × (count of same-city REB1s of its kind in
+its 3×3). The multiplier is **level-agnostic**: a REB2 next to a L1 REB1 counts it the same
+as a L3 one. **Both refineries and purifiers are capped at L1 for now** (the L2/L3 upgrades
+— and their gating techs — were removed; likely to return once the economy settles).
 
 **Build gate:** built on a plain (passable, non-resource) **land tile in the city's
 territory** that has **≥1 same-city REB1 of the kind it boosts adjacent in its 3×3** —
@@ -114,27 +115,22 @@ Same-city adjacency keeps it in this city's territory (a REB1 in another city's
 territory doesn't count). **Limited to 1 per city** (both refinery and purifier, for now).
 (This supersedes an earlier "resource-tile" gate — see DEVELOPMENT_RATIONALE.)
 
-**Refinery** (ore, counts adjacent **mines**):
+**Refinery** (ore, counts adjacent **mines**) — capped at L1:
 
-| Level | Cost (ore) | Output/turn per adj mine (total) | Marginal | TTR/adj | Supply (flat total) |
-|---|---|---|---|---|---|
-| 1 | 100 | 20 | +20 | 5 | 2 |
-| 2 | 150 | 40 | +20 | 7.5 | 3 |
-| 3 | 250 | 80 | +40 | 6.25 | 4 |
+| Level | Cost (ore) | Output/turn per adj mine | Supply per adj mine | TTR/adj |
+|---|---|---|---|---|
+| 1 | 150 | +20 | +1 | 7.5 |
 
-**Purifier** (plasma, counts adjacent **extractors**):
+**Purifier** (plasma, counts adjacent **extractors**) — capped at L1:
 
-| Level | Cost (ore) | Output/turn per adj extractor (total) | Marginal | TTR/adj | Supply (flat total) |
-|---|---|---|---|---|---|
-| 1 | 300 | 5 | +5 | 60 | 3 |
-| 2 | 400 | 15 | +10 | 40 | 4 |
-| 3 | 750 | 30 | +15 | 50 | 5 |
+| Level | Cost (ore) | Output/turn per adj extractor | Supply per adj extractor | TTR/adj |
+|---|---|---|---|---|
+| 1 | 200 | +5 | +1 | 40 |
 
-- TTR/adj is the step payback assuming **1** adjacent REB1; with N adjacent it divides
-  by N (e.g. a L1 refinery next to 2 mines → +40 ore/turn, TTR 2.5).
-- Neither REB2 has a tech gate now — both build as soon as their REB1 is adjacent.
-  (The refinery's old **Refineries** tech requirement was dropped for parity with the
-  purifier; the `refineries` tech still exists but no longer gates anything.)
+- TTR/adj is the payback assuming **1** adjacent REB1; with N adjacent it divides by N
+  (e.g. a refinery next to 2 mines → +40 ore/turn + 2 supply, TTR 3.75).
+- Each REB2 is gated behind a single unlock tech: **Refinery** (`refinery_1`) and
+  **Purifier** (`purifier_1`), in the Resources branch. One research unlocks the (only) level.
 - **Same-city only:** a REB2 never counts a REB1 in a different city's territory.
 
 ## 4. Income (collected at turn rollover)
