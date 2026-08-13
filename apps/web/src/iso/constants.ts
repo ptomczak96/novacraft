@@ -69,11 +69,6 @@ export const UNIT_SHAPES: Record<string, UnitShape> = {
   scout:                'diamond',
   archer:               'triangle',
   defender:             'hexagon',
-  catapult:             'circle',
-  ironclad_berserker:   'star',
-  ironclad_siege_tower: 'square',
-  sylvan_ranger:        'arrow',
-  sylvan_treant:        'cross',
 };
 
 // ── Grid label font ──

@@ -42,6 +42,7 @@ opt "$SRC/Vanguard - Sentinel.glb" "$OUT/units/sentinel.glb"   0.001
 opt "$SRC/Hive - Scuttling.glb"    "$OUT/units/scuttling.glb"  0.001
 opt "$SRC/Hive - Scout.glb"        "$OUT/units/hive_scout.glb" 0.001
 opt "$SRC/Hive - Reaper.glb"       "$OUT/units/reaper.glb"     0.001
+opt "$SRC/Hive - Ravener.glb"      "$OUT/units/ravener.glb"    0.001
 opt "$SRC/Hive - Scab.glb"         "$OUT/units/scab.glb"       0.001
 opt "$SRC/Hive - Vindrace.glb"     "$OUT/units/vindrace.glb"   0.001
 opt "$SRC/Hive - Seercaust.glb"    "$OUT/units/seercaust.glb"  0.001

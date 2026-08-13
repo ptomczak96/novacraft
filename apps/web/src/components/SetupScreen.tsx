@@ -13,6 +13,7 @@ const BIOME_OPTIONS = [
   { value: 'grassland', label: 'Grassland' },
   { value: 'stone', label: 'Stone' },
   { value: 'desert', label: 'Desert' },
+  { value: 'ashwater', label: 'Ashwater Basin — Breach-inspired' },
 ];
 
 const THEME_OPTIONS = [
@@ -20,10 +21,8 @@ const THEME_OPTIONS = [
   { value: 'gen2_volcanic', label: 'GEN 2 - Volcanic' },
   { value: 'grass_iso', label: 'Grassland (fantasy)' },
   { value: 'gen3_desert', label: 'GEN 3 - Desert' },
-  { value: 'gen5_desert', label: 'GEN 5 - Desert' },
-  { value: 'gen6_desert', label: 'GEN 6 - Desert (Scenario)' },
   { value: 'itb_desert', label: 'ITB - Desert' },
-  { value: 'gen7_industrial', label: 'GEN 7 - Industrial' },
+  { value: 'breach_ashwater', label: 'INTO THE BREACH — Ashwater Basin 3D' },
   { value: 'gen8_tileset3d', label: 'GEN 8 - 3D Tileset' },
 ];
 
@@ -48,7 +47,7 @@ const MAP_SIZE_OPTIONS = [
 ];
 
 export function SetupScreen() {
-  const { config, setConfig, factions, startGame, initMapEditor, loadGame, setBotSetting, setCoachEnabled, tileTheme, setTileTheme, musicMuted, setMusicMuted } = useGameStore();
+  const { config, setConfig, factions, startGame, startSandbox, initMapEditor, loadGame, setBotSetting, setCoachEnabled, tileTheme, setTileTheme, musicMuted, setMusicMuted } = useGameStore();
   // Seed is random per visit — deliberately no UI for it (Patrick, 2026-07-22).
   const [seed] = useState(Math.floor(Math.random() * 100000));
   const [faction0, setFaction0] = useState(factions[0]?.id || 'vanguard');
@@ -56,6 +55,21 @@ export function SetupScreen() {
   const [bot0, setBot0] = useState<'human' | 'random' | 'greedy'>('human');
   const [bot1, setBot1] = useState<'human' | 'random' | 'greedy'>('human');
   const [showLobby, setShowLobby] = useState(false);
+  // Combatants section starts collapsed — the defaults are almost always right.
+  const [showCombatants, setShowCombatants] = useState(false);
+
+  // Direct visual-review route for the Titan pixel-3D experiment. Opening
+  // `?pixelTitan=1&sandbox=1` should require no setup clicks: use the existing
+  // all-units workbench, force the 3D board, and leave normal launches alone.
+  const autoSandboxed = React.useRef(false);
+  React.useEffect(() => {
+    if (autoSandboxed.current) return;
+    const query = new URLSearchParams(window.location.search);
+    if (query.get('pixelTitan') !== '1' || query.get('sandbox') !== '1') return;
+    autoSandboxed.current = true;
+    setTileTheme('gen8_tileset3d');
+    startSandbox([faction0, faction1], 4242);
+  }, [faction0, faction1, setTileTheme, startSandbox]);
 
   const handleStart = () => {
     setBotSetting(0, bot0);
@@ -72,10 +86,53 @@ export function SetupScreen() {
     startGame([faction0, faction1], seed);
   };
 
+  // Sandbox: prototyping workbench — every unit kind spawned for both teams,
+  // unlimited moves/attacks/ability casts, no cooldowns, no tech gates.
+  const handleSandbox = () => {
+    setBotSetting(0, 'human');
+    setBotSetting(1, 'human');
+    setCoachEnabled(false);
+    startSandbox([faction0, faction1], seed);
+  };
+
   // Map generation options (all optional; sensible defaults applied in the engine).
   const mapgen = config.mapgen ?? {};
   const setMapgen = (patch: Partial<NonNullable<typeof config.mapgen>>) =>
     setConfig({ ...config, mapgen: { ...mapgen, ...patch } });
+
+  const handleBiomeChange = (value: string) => {
+    const biome = value as NonNullable<typeof mapgen.biome>;
+    if (biome === 'ashwater') {
+      setConfig({
+        ...config,
+        mapgen: {
+          ...mapgen,
+          biome,
+          impassableFraction: 0.14,
+          mountainFraction: 0.12,
+        },
+      });
+      setTileTheme('breach_ashwater');
+      return;
+    }
+    setMapgen({ biome });
+  };
+
+  const handleThemeChange = (value: string) => {
+    const theme = value as typeof tileTheme;
+    setTileTheme(theme);
+    if (theme === 'breach_ashwater') {
+      setConfig({
+        ...config,
+        mapgen: {
+          ...mapgen,
+          biome: 'ashwater',
+          impassableFraction: 0.14,
+          mountainFraction: 0.12,
+        },
+      });
+    }
+  };
 
   // ── Win condition (single choice) ──
   const winKey = config.winConditions.captureCapital ? 'captureCapital'
@@ -149,7 +206,7 @@ export function SetupScreen() {
             <EvoSelect
               value={mapgen.biome ?? 'grassland'}
               options={BIOME_OPTIONS}
-              onChange={v => setMapgen({ biome: v as NonNullable<typeof mapgen.biome> })}
+              onChange={handleBiomeChange}
             />
           </div>
           <div className="setup-field">
@@ -157,12 +214,36 @@ export function SetupScreen() {
             <EvoSelect
               value={tileTheme}
               options={THEME_OPTIONS}
-              onChange={v => setTileTheme(v as typeof tileTheme)}
+              onChange={handleThemeChange}
             />
           </div>
         </div>
 
-        <div className="evo-section">Combatants</div>
+        {mapgen.biome === 'ashwater' && (
+          <div className="ashwater-brief" role="note">
+            <span className="ashwater-brief-kicker">NEW BATTLEFIELD</span>
+            <strong>Ashwater Basin</strong>
+            <p>Cracked salt flats, luminous mineral channels, rust mesas, and a built-in VFX Lab.</p>
+            <div className="ashwater-tags" aria-label="Map characteristics">
+              <span>14% water</span><span>raised badlands</span><span>3D effects</span>
+            </div>
+          </div>
+        )}
+
+        {/* Combatants — defaults (Vanguard vs Hive, both human) are almost
+            always right, so the section starts collapsed behind a chevron. */}
+        <button
+          type="button"
+          className={`evo-section evo-collapse${showCombatants ? ' open' : ''}`}
+          onClick={() => setShowCombatants(v => !v)}
+        >
+          <span className="chev" aria-hidden>▸</span>
+          Combatants
+          <span className="evo-collapse-summary">
+            {showCombatants ? '' : `${factions.find(f => f.id === faction0)?.name ?? faction0} vs ${factions.find(f => f.id === faction1)?.name ?? faction1}`}
+          </span>
+        </button>
+        {showCombatants && (<>
         <div className="setup-row">
           <div className="setup-field">
             <label>Player 1 Faction</label>
@@ -186,6 +267,7 @@ export function SetupScreen() {
               onChange={v => setBot1(v as 'human' | 'random' | 'greedy')} />
           </div>
         </div>
+        </>)}
 
         <div className="evo-section">Rules</div>
         <div className="setup-field">
@@ -223,6 +305,7 @@ export function SetupScreen() {
           <EvoButton primary onClick={handleStart}>Start Game</EvoButton>
           <EvoButton onClick={() => setShowLobby(true)}>Online 1v1</EvoButton>
           <EvoButton onClick={handleTrain}>Train vs AI</EvoButton>
+          <EvoButton onClick={handleSandbox}>Sandbox</EvoButton>
           <EvoButton onClick={handleLoad}>Load Game</EvoButton>
           <EvoButton onClick={initMapEditor}>Map Editor</EvoButton>
         </div>

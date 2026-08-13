@@ -2,7 +2,16 @@ import * as THREE from 'three';
 import React from 'react';
 import { useFrame } from '@react-three/fiber';
 import { useGLTF } from '@react-three/drei';
+import { SkeletonUtils } from 'three-stdlib';
 import { MAX_FOOTPRINT, unitModelForKind } from '../models/modelAssets.js';
+import { applyPixelTitanMaterials } from './pixelTitanMaterial.js';
+
+/** Render-side motion state written by UnitMesh each frame; rigged models
+ *  read it to choose their animation clip (walk / attack / idle). */
+export interface UnitMotion {
+  moving: boolean;
+  attackSeq: number;
+}
 
 /**
  * Generic GLB unit body for the GEN 8 — 3D Tileset mode. Loads the kind's
@@ -41,7 +50,9 @@ function feetCenter(model: THREE.Group, box: THREE.Box3): { x: number; z: number
 }
 
 function normalize(scene: THREE.Group, targetHeight: number, opts?: { cloneMaterials?: boolean }) {
-  const model = scene.clone(true);
+  // SkeletonUtils.clone keeps skinned meshes bound to THEIR clone's skeleton —
+  // a plain clone would leave every instance puppeting the shared source bones.
+  const model = SkeletonUtils.clone(scene) as THREE.Group;
   model.updateMatrixWorld(true);
   const box = new THREE.Box3().setFromObject(model);
   const size = box.getSize(new THREE.Vector3());
@@ -56,6 +67,8 @@ function normalize(scene: THREE.Group, targetHeight: number, opts?: { cloneMater
   model.traverse(o => {
     if (o instanceof THREE.Mesh) {
       o.castShadow = true;
+      // Animated skins move outside their bind-pose bounds; never cull them.
+      if ((o as THREE.SkinnedMesh).isSkinnedMesh) o.frustumCulled = false;
       if (opts?.cloneMaterials) {
         o.material = (o.material as THREE.Material).clone();
         (o.material as THREE.Material).transparent = true;
@@ -76,11 +89,96 @@ function HoverBody({ hover, children }: { hover: number; children: React.ReactNo
   return <group ref={ref} position-y={hover}>{children}</group>;
 }
 
-export function GlbUnitModel({ kind, teamColor }: { kind: string; teamColor: string }) {
+export function GlbUnitModel({ kind, teamColor, motion }: {
+  kind: string;
+  teamColor: string;
+  motion?: React.MutableRefObject<UnitMotion>;
+}) {
   const def = unitModelForKind(kind);
   if (!def) throw new Error(`no GLB model registered for unit kind "${kind}"`);
-  const { scene } = useGLTF(def.url);
+  const { scene, animations } = useGLTF(def.url);
   const { model } = React.useMemo(() => normalize(scene, def.height), [scene, def]);
+  // Opt-in comparison prototype: ?pixelTitan=1. Titan keeps its GLB rig and
+  // clips, but receives a chunky stepped pixel-3D material. No shared source
+  // material is mutated, so removing the query flag restores the current look.
+  const pixelTitan = React.useMemo(
+    () => def.pixelStyle === true && new URLSearchParams(window.location.search).get('pixelTitan') === '1',
+    [def.pixelStyle],
+  );
+  React.useEffect(() => {
+    if (!pixelTitan) return;
+    return applyPixelTitanMaterials(model);
+  }, [model, pixelTitan]);
+
+  // ── Clip playback for rigged models (walk / attack / idle by name) ──
+  const animRef = React.useRef<{
+    mixer: THREE.AnimationMixer;
+    clips: Record<string, THREE.AnimationAction>;
+    mode: 'idle' | 'walk' | 'attack';
+    attackSeq: number;
+    current: THREE.AnimationAction | null;
+  } | null>(null);
+
+  React.useEffect(() => {
+    if (!animations.length) { animRef.current = null; return; }
+    const mixer = new THREE.AnimationMixer(model);
+    const clips: Record<string, THREE.AnimationAction> = {};
+    for (const c of animations) clips[c.name] = mixer.clipAction(c);
+    const st = {
+      mixer, clips, mode: 'idle' as 'idle' | 'walk' | 'attack',
+      attackSeq: motion?.current.attackSeq ?? -1,
+      current: null as THREE.AnimationAction | null,
+    };
+    if (clips.idle) { clips.idle.play(); st.current = clips.idle; }
+    const onFinished = () => {
+      // Attack finished → settle back to idle
+      if (st.mode === 'attack') {
+        st.mode = 'idle';
+        if (clips.idle) {
+          clips.idle.reset().fadeIn(0.15).play();
+          st.current?.fadeOut(0.15);
+          st.current = clips.idle;
+        }
+      }
+    };
+    mixer.addEventListener('finished', onFinished);
+    animRef.current = st;
+    return () => {
+      mixer.removeEventListener('finished', onFinished);
+      mixer.stopAllAction();
+      animRef.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [model, animations]);
+
+  useFrame((_, dt) => {
+    const st = animRef.current;
+    if (!st) return;
+    const m = motion?.current;
+    if (m) {
+      const swap = (next: THREE.AnimationAction, mode: typeof st.mode, timeScale = 1) => {
+        next.reset().setEffectiveTimeScale(timeScale).fadeIn(0.12).play();
+        st.current?.fadeOut(0.12);
+        st.current = next;
+        st.mode = mode;
+      };
+      if (m.attackSeq !== st.attackSeq) {
+        st.attackSeq = m.attackSeq;
+        if (st.clips.attack) {
+          st.clips.attack.setLoop(THREE.LoopOnce, 1);
+          swap(st.clips.attack, 'attack', 1.4);
+        }
+      } else if (st.mode !== 'attack') {
+        if (m.moving && st.mode !== 'walk' && st.clips.walk) {
+          swap(st.clips.walk, 'walk', 2.0); // brisk stride for the short glide
+        } else if (!m.moving && st.mode === 'walk' && st.clips.idle) {
+          swap(st.clips.idle, 'idle');
+        }
+      }
+    }
+    st.mixer.update(dt);
+  });
+
   const body = <primitive object={model} />;
   return (
     <group>

@@ -11,4 +11,13 @@ export default defineConfig({
   optimizeDeps: {
     exclude: ['@tactica/engine', '@tactica/data', '@tactica/bots'],
   },
+  server: {
+    watch: {
+      // With preserveSymlinks the workspace packages resolve through
+      // node_modules/@tactica/*, which the watcher ignores by default — edits
+      // to packages/*/json then serve STALE from the transform cache forever
+      // (units.json kept resurrecting deleted units). Un-ignore them.
+      ignored: ['!**/node_modules/@tactica/**'],
+    },
+  },
 });

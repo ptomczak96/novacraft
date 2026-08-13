@@ -35,8 +35,6 @@ interface UnitSpriteDef {
 const vanguardDuo = (typeId: string, m: { srcW: number; srcH: number; footY: number; drawW: number }): UnitSpriteDef =>
   ({ base: `/units/vanguard/${typeId}`, duo: true, ...m });
 
-const gen7Duo = (typeId: string, m: { srcW: number; srcH: number; footY: number; drawW: number }): UnitSpriteDef =>
-  ({ base: `/units/vanguard_gen7/${typeId}`, duo: true, ...m });
 
 // Keys are either `${factionId}:${typeId}` (sprite only for that team) or a bare
 // `typeId` (sprite for every team). Faction-scoped entries win over bare ones.
@@ -60,20 +58,6 @@ const UNIT_SPRITES: Record<string, UnitSpriteDef> = {
   'vanguard:titan':        vanguardDuo('titan',    { srcW: 260,  srcH: 252, footY: 217, drawW: 107.7 }),
   'vanguard:wraith':       vanguardDuo('wraith',   { srcW: 440,  srcH: 841, footY: 831, drawW: 44.0 }),
 
-  // ── Theme-scoped skins ──
-  // Keys prefixed `${tileTheme}::` override the faction/global sets while that
-  // map-generation theme is active. GEN 7's stone-plated mech roster (from the
-  // industrial asset sheet, split + body-anchored by unit_normalizer).
-  'gen7_industrial::vanguard:warrior':      gen7Duo('warrior',  { srcW: 256, srcH: 228, footY: 208, drawW: 103.8 }),
-  'gen7_industrial::vanguard:scout':        gen7Duo('scout',    { srcW: 256, srcH: 270, footY: 250, drawW: 97.8 }),
-  'gen7_industrial::vanguard:lancer':       gen7Duo('lancer',   { srcW: 272, srcH: 236, footY: 216, drawW: 106.2 }),
-  'gen7_industrial::vanguard:defender':     gen7Duo('defender', { srcW: 256, srcH: 244, footY: 224, drawW: 102.7 }),
-  'gen7_industrial::vanguard:sentinel':     gen7Duo('sentinel', { srcW: 256, srcH: 270, footY: 247, drawW: 103.8 }),
-  'gen7_industrial::vanguard:stalker':      gen7Duo('stalker',  { srcW: 256, srcH: 222, footY: 191, drawW: 102.1 }),
-  'gen7_industrial::vanguard:tank':         gen7Duo('tank',     { srcW: 256, srcH: 254, footY: 234, drawW: 100.5 }),
-  'gen7_industrial::vanguard:tank_assault': gen7Duo('tank',     { srcW: 256, srcH: 254, footY: 234, drawW: 100.5 }),
-  'gen7_industrial::vanguard:titan':        gen7Duo('titan',    { srcW: 256, srcH: 302, footY: 275, drawW: 103.9 }),
-  'gen7_industrial::vanguard:wraith':       gen7Duo('wraith',   { srcW: 256, srcH: 196, footY: 169, drawW: 97.8 }),
 };
 
 const QUAD_FACINGS: Facing[] = ['ne', 'nw', 'se', 'sw'];

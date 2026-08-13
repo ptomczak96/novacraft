@@ -50,6 +50,9 @@ export interface AbilityEvent {
   casterPos: { x: number; y: number };
   /** Target tiles (empty for self-casts / morphs). */
   targets: { x: number; y: number }[];
+  /** Units this cast killed (diffed around applyAction) — lets the renderer
+   *  hold their corpses until the cast's impact actually lands. */
+  killed: { id: number; pos: { x: number; y: number } }[];
 }
 
 export type AppScreen = 'setup' | 'game' | 'mapEditor';
@@ -181,6 +184,7 @@ interface GameStore {
   // Actions
   startGame: (factions: [string, string], seed: number) => void;
   startTestCombat: (factions: [string, string], seed: number) => void;
+  startSandbox: (factions: [string, string], seed: number) => void;
   selectUnit: (unitId: number | null) => void;
   setSelectedCity: (c: Coord | null) => void;
   setHoveredTile: (c: Coord | null) => void;
@@ -368,6 +372,35 @@ export const useGameStore = create<GameStore>((set, get) => ({
     get().ensureUnitLabels();
   },
 
+  // Prototyping sandbox: the test-combat arena but with ONE of every unit kind
+  // in the registry per team, and engine sandboxMode on — unlimited moves,
+  // attacks and ability casts per turn, no cooldowns, no tech gates, and an
+  // unlimited wallet. For trying out units and abilities, not for balance.
+  startSandbox: (factions, seed) => {
+    const { config, registry } = get();
+    const sandboxConfig = { ...config, sandboxMode: true, unlimitedResources: true };
+    const state = createTestCombatGame(sandboxConfig, registry, factions, seed, { allUnitTypes: true, copies: 1 });
+    const visible = getVisibleState(state, state.currentPlayer, registry);
+    const legal = getLegalActions(state, registry, state.currentPlayer);
+    set({
+      gameState: state,
+      visibleState: visible,
+      legalActions: legal,
+      botSettings: ['human', 'human'], // both human — it's a workbench
+      stateHistory: [],
+      selectedUnitId: null,
+      selectedCity: null,
+      inspectedTile: null,
+      screen: 'game',
+      showInterstitial: false,
+      unitLabels: {},
+      unitLabelSeq: {},
+      coachLog: [],
+      strategyNotes: [],
+    });
+    get().ensureUnitLabels();
+  },
+
   selectUnit: (unitId) => set({ selectedUnitId: unitId, selectedCity: null, inspectedTile: null, abilityMode: null, volleySelect: null, strikeSelect: null, targetSelect: null }),
   setSelectedCity: (c) => set({ selectedCity: c, selectedUnitId: null, inspectedTile: null, abilityMode: null, volleySelect: null, strikeSelect: null, targetSelect: null }),
   setHoveredTile: (c) => set({ hoveredTile: c }),
@@ -498,12 +531,20 @@ export const useGameStore = create<GameStore>((set, get) => ({
           unitId: caster.id,
           casterPos: { ...caster.position },
           targets: targets.map(t => ({ x: t.x, y: t.y })),
+          killed: [],
         };
       }
     }
 
     const prevPlayer = gameState.currentPlayer;
     const newState = applyAction(gameState, action, registry);
+    // Which units did the cast kill? The renderer delays their death animation
+    // until the cast's projectile/impact actually arrives.
+    if (abilityEvent) {
+      abilityEvent.killed = gameState.units
+        .filter(u => !newState.units.some(n => n.id === u.id))
+        .map(u => ({ id: u.id, pos: { x: u.position.x, y: u.position.y } }));
+    }
     // Network game → always view/act as our own seat; local → the current player.
     const seat = get().mySeat ?? newState.currentPlayer;
     const visible = getVisibleState(newState, seat, registry);

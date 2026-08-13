@@ -22,3 +22,6 @@ imported_assets/
 # Raw 3D model exports (~800 MB of GLBs) — optimized copies are vendored into
 # apps/web/public/voxel3d/models by scripts/optimize-3d-assets.sh
 assets/
+
+# Ripped reference SFX (Blizzard IP — local prototyping only, never commit)
+apps/web/public/audio/starcraft/

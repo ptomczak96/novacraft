@@ -11,11 +11,14 @@ import { Floor } from './Floor.js';
 import { EdgeRim } from './EdgeRim.js';
 import { ModelTiles } from './models/ModelTiles.js';
 import { TilesetFX } from './models/TilesetFX.js';
+import { BreachTiles } from './breach/BreachTiles.js';
+import { AttackPreviewLayer } from './AttackPreview.js';
 import { MOUNTAIN_UNIT_ELEVATION } from './models/modelAssets.js';
 import { TerrainBlocks } from './TerrainBlocks.js';
 import { Highlights } from './Highlights.js';
 import { Units } from './Units.js';
 import { PostFX } from './PostFX.js';
+import { BattlefieldVfx } from './fx/BattlefieldVfx.js';
 
 export function VoxelArena({
   map,
@@ -23,12 +26,15 @@ export function VoxelArena({
   highlights,
   quality = 'high',
   onTileClick,
+  onTileHover,
+  preview,
   visibility,
   floorTextures,
   combat,
   ability,
   ghosts,
   tileset = false,
+  breach = false,
 }: VoxelArenaProps) {
   const debugCam = React.useMemo(
     () => new URLSearchParams(window.location.search).get('debugCam') === '1',
@@ -59,8 +65,11 @@ export function VoxelArena({
         if (tile.terrain === 'sand') sand++;
       }
     }
+    if (breach) return 'breach';
     return total > 0 && sand / total > 0.3 ? 'desert' : 'city';
-  }, [map]);
+  }, [map, breach]);
+
+  const modelUnits = tileset || breach;
 
   // Garrisoned units shift slightly toward the camera so they stand clear of
   // their (centred) city tower. In tileset mode, units on mountain tiles are
@@ -78,9 +87,9 @@ export function VoxelArena({
   // Tiles occupied by a unit — forest blocks swap to flat ground under them
   // (Polytopia-style) so trees never clip through a unit's body.
   const occupied = React.useMemo(() => {
-    if (!tileset) return undefined;
+    if (!modelUnits) return undefined;
     return new Set(units.map(u => `${u.gridPos.x},${u.gridPos.y}`));
-  }, [tileset, units]);
+  }, [modelUnits, units]);
 
   // Impassable terrain renders as holes in the platform (SC1 space-platform
   // style): no floor tile, space visible through the gap.
@@ -103,11 +112,23 @@ export function VoxelArena({
       style={{ position: 'absolute', inset: 0 }}
     >
       {/* Open space: near-black void, no atmospheric fog. */}
-      <color attach="background" args={[BACKGROUND_COLOR]} />
+      <color attach="background" args={[breach ? '#120f0f' : BACKGROUND_COLOR]} />
       <CameraRig width={map.width} height={map.height} debugCam={debugCam} interaction={interaction} focus={focus} />
-      <Lights width={map.width} height={map.height} theme={theme} quality={quality} tileset={tileset} />
+      <Lights width={map.width} height={map.height} theme={theme} quality={quality} tileset={modelUnits} />
       <React.Suspense fallback={null}>
-        {tileset ? (
+        {breach ? (
+          <>
+            <BreachTiles
+              map={map}
+              visibility={visibility}
+              onTileClick={onTileClick}
+              onTileHover={onTileHover}
+              interaction={interaction}
+              occupied={occupied}
+            />
+            <TilesetFX map={map} visibility={visibility} quality={quality} variant="breach" />
+          </>
+        ) : tileset ? (
           // GEN 8 — 3D Tileset: GLB tile blocks ARE the board (flat / forest /
           // mountain / water); no reflector floor, no hole-cutting.
           <>
@@ -115,6 +136,7 @@ export function VoxelArena({
               map={map}
               visibility={visibility}
               onTileClick={onTileClick}
+              onTileHover={onTileHover}
               interaction={interaction}
               occupied={occupied}
             />
@@ -134,10 +156,12 @@ export function VoxelArena({
         )}
       </React.Suspense>
       {/* No platform frame in tileset mode — the GLB tiles ARE the island edge. */}
-      {!tileset && <EdgeRim width={map.width} height={map.height} theme={theme} />}
-      <TerrainBlocks map={map} visibility={visibility} theme={theme} natureProps={!tileset} />
+      {!modelUnits && <EdgeRim width={map.width} height={map.height} theme={theme} />}
+      <TerrainBlocks map={map} visibility={visibility} theme={theme} natureProps={!modelUnits} />
       <Highlights highlights={highlights} />
-      <Units units={adjustedUnits} ghosts={ghosts} combat={combat} ability={ability} onTileClick={onTileClick} interaction={interaction} useModels={tileset} />
+      <Units units={adjustedUnits} ghosts={ghosts} combat={combat} ability={ability} onTileClick={onTileClick} onTileHover={onTileHover} interaction={interaction} useModels={modelUnits} />
+      <BattlefieldVfx map={map} units={adjustedUnits} combat={combat} ability={ability} />
+      <AttackPreviewLayer preview={preview ?? null} />
       <FogClouds map={map} visibility={visibility} theme={theme} />
       <SpaceStars width={map.width} height={map.height} quality={quality} />
       {quality === 'high' && (

@@ -22,12 +22,10 @@ export function coordLabel(x: number, y: number): string {
 export const UNIT_CODES: Record<string, string> = {
   scout: 'SCT', warrior: 'WAR', lancer: 'LAN', archer: 'ARC',
   defender: 'BUL', stalker: 'STL', wraith: 'WRA', medic: 'MED', engineer: 'ENG',
-  tank: 'TNK', tank_assault: 'TNK', catapult: 'CAT', titan: 'TTN', sentinel: 'SEN',
-  ironclad_berserker: 'BSK', ironclad_siege_tower: 'SIE',
+  tank: 'TNK', tank_assault: 'TNK', titan: 'TTN', sentinel: 'SEN',
   scuttling: 'SCU', hive_scout: 'HSC', reaper: 'REA', scab: 'SCB',
   vindrace: 'VIN', seercaust: 'SEE', wyrm: 'WYR', wyrm_burrowed: 'WYR',
   burstling: 'BUR', behemoth: 'BEH', ravener: 'RAV',
-  sylvan_ranger: 'RNG', sylvan_treant: 'TRE',
 };
 
 export function unitCode(typeId: string): string {

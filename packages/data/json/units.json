@@ -11,7 +11,12 @@
     "movement": 1,
     "attackRange": 1,
     "visibility": 2,
-    "conditions": ["mountain_restricted", "low_horizons", "impotent_founder", "aoi_none"],
+    "conditions": [
+      "mountain_restricted",
+      "low_horizons",
+      "impotent_founder",
+      "aoi_none"
+    ],
     "abilities": [],
     "traits": []
   },
@@ -42,7 +47,9 @@
     "movement": 1,
     "attackRange": 2,
     "visibility": 1,
-    "conditions": ["mountain_shooter"],
+    "conditions": [
+      "mountain_shooter"
+    ],
     "abilities": [],
     "traits": []
   },
@@ -60,7 +67,10 @@
     "visibility": 0,
     "popCost": 0.5,
     "recruitCount": 2,
-    "conditions": ["sacrificial_founder", "blind"],
+    "conditions": [
+      "sacrificial_founder",
+      "blind"
+    ],
     "abilities": [],
     "traits": []
   },
@@ -76,7 +86,12 @@
     "movement": 2,
     "attackRange": 1,
     "visibility": 1.5,
-    "conditions": ["squinting_eyes_2", "impotent_founder", "stumble", "aoi_none"],
+    "conditions": [
+      "squinting_eyes_2",
+      "impotent_founder",
+      "stumble",
+      "aoi_none"
+    ],
     "abilities": [],
     "traits": []
   },
@@ -92,7 +107,9 @@
     "movement": 2,
     "attackRange": 1,
     "visibility": 1,
-    "conditions": ["dash_1"],
+    "conditions": [
+      "dash_1"
+    ],
     "abilities": [],
     "traits": []
   },
@@ -108,7 +125,10 @@
     "movement": 1,
     "attackRange": 2,
     "visibility": 1,
-    "conditions": ["corrosive", "mountain_sight"],
+    "conditions": [
+      "corrosive",
+      "mountain_sight"
+    ],
     "abilities": [],
     "traits": []
   },
@@ -124,9 +144,19 @@
     "movement": 2,
     "attackRange": 1,
     "visibility": 1,
-    "conditions": ["slash", "mountain_movement"],
+    "conditions": [
+      "slash",
+      "mountain_movement"
+    ],
     "abilities": [
-      { "id": "ram", "name": "Ram", "range": 1, "targetKind": "unit", "targetEnemy": true, "effects": [] }
+      {
+        "id": "ram",
+        "name": "Ram",
+        "range": 1,
+        "targetKind": "unit",
+        "targetEnemy": true,
+        "effects": []
+      }
     ],
     "traits": []
   },
@@ -142,7 +172,9 @@
     "movement": 1,
     "attackRange": 1,
     "visibility": 3,
-    "conditions": ["detect"],
+    "conditions": [
+      "detect"
+    ],
     "abilities": [
       {
         "id": "infect",
@@ -151,7 +183,14 @@
         "targetKind": "unit",
         "targetClass": "light",
         "cooldown": 2,
-        "effects": [{ "type": "applyStatus", "params": { "status": "infected" } }]
+        "effects": [
+          {
+            "type": "applyStatus",
+            "params": {
+              "status": "infected"
+            }
+          }
+        ]
       },
       {
         "id": "spray_bile",
@@ -160,7 +199,15 @@
         "targetKind": "tile",
         "duration": 5,
         "cooldown": 2,
-        "effects": [{ "type": "applyStatus", "params": { "status": "bile", "duration": 5 } }]
+        "effects": [
+          {
+            "type": "applyStatus",
+            "params": {
+              "status": "bile",
+              "duration": 5
+            }
+          }
+        ]
       }
     ],
     "traits": []
@@ -177,9 +224,16 @@
     "movement": 1,
     "attackRange": 1,
     "visibility": 1,
-    "conditions": ["twin_strike"],
+    "conditions": [
+      "twin_strike"
+    ],
     "abilities": [
-      { "id": "burrow", "name": "Burrow", "morphTo": "wyrm_burrowed", "effects": [] }
+      {
+        "id": "burrow",
+        "name": "Burrow",
+        "morphTo": "wyrm_burrowed",
+        "effects": []
+      }
     ],
     "traits": []
   },
@@ -195,9 +249,19 @@
     "movement": 2,
     "attackRange": 1,
     "visibility": 0,
-    "conditions": ["burrowed", "impotent_founder", "aoi_none", "aoi_immune"],
+    "conditions": [
+      "burrowed",
+      "impotent_founder",
+      "aoi_none",
+      "aoi_immune"
+    ],
     "abilities": [
-      { "id": "erupt", "name": "Erupt", "morphTo": "wyrm", "effects": [] }
+      {
+        "id": "erupt",
+        "name": "Erupt",
+        "morphTo": "wyrm",
+        "effects": []
+      }
     ],
     "traits": []
   },
@@ -213,9 +277,16 @@
     "movement": 2,
     "attackRange": 0,
     "visibility": 1,
-    "conditions": ["death_burst", "impotent_founder"],
+    "conditions": [
+      "death_burst",
+      "impotent_founder"
+    ],
     "abilities": [
-      { "id": "self_destruct", "name": "Self Destruct", "effects": [] }
+      {
+        "id": "self_destruct",
+        "name": "Self Destruct",
+        "effects": []
+      }
     ],
     "traits": []
   },
@@ -249,7 +320,9 @@
     "visibility": 2,
     "conditions": [],
     "abilities": [],
-    "traits": ["flying"]
+    "traits": [
+      "flying"
+    ]
   },
   {
     "id": "archer",
@@ -277,7 +350,9 @@
     "movement": 1,
     "attackRange": 1,
     "visibility": 1,
-    "conditions": ["mountain_defense"],
+    "conditions": [
+      "mountain_defense"
+    ],
     "abilities": [],
     "traits": []
   },
@@ -293,7 +368,10 @@
     "movement": 2,
     "attackRange": 2,
     "visibility": 2,
-    "conditions": ["mountain_movement", "mobile"],
+    "conditions": [
+      "mountain_movement",
+      "mobile"
+    ],
     "abilities": [],
     "traits": []
   },
@@ -309,11 +387,34 @@
     "movement": 2,
     "attackRange": 3,
     "visibility": 2,
-    "conditions": ["cloak", "impotent_founder"],
+    "conditions": [
+      "cloak",
+      "impotent_founder"
+    ],
     "abilities": [
-      { "id": "stun", "name": "Stun", "range": 3, "targetKind": "unit", "targetEnemy": true, "effects": [] },
-      { "id": "raid", "name": "Raid", "disabled": true, "effects": [] },
-      { "id": "plant_explosives", "name": "Plant Explosives", "range": 3, "targetKind": "unit", "targetEnemy": true, "duration": 2, "effects": [] }
+      {
+        "id": "stun",
+        "name": "Stun",
+        "range": 3,
+        "targetKind": "unit",
+        "targetEnemy": true,
+        "effects": []
+      },
+      {
+        "id": "raid",
+        "name": "Raid",
+        "disabled": true,
+        "effects": []
+      },
+      {
+        "id": "plant_explosives",
+        "name": "Plant Explosives",
+        "range": 3,
+        "targetKind": "unit",
+        "targetEnemy": true,
+        "duration": 2,
+        "effects": []
+      }
     ],
     "traits": []
   },
@@ -329,12 +430,71 @@
     "movement": 1,
     "attackRange": 1,
     "visibility": 1,
-    "conditions": ["impotent_founder"],
+    "conditions": [
+      "impotent_founder"
+    ],
     "abilities": [
-      { "id": "heal_1", "name": "Heal I", "range": 1, "targetKind": "units", "targetAlly": true, "targetClasses": ["light"], "maxTargets": 1, "supersededByTech": "advanced_biomed", "effects": [{ "type": "heal", "params": { "amount": 8 } }] },
-      { "id": "heal_2", "name": "Heal II", "range": 1, "targetKind": "units", "targetAlly": true, "targetClasses": ["light"], "maxTargets": 2, "requiresTech": "advanced_biomed", "effects": [{ "type": "heal", "params": { "amount": 10 } }] },
-      { "id": "cure", "name": "Cure", "range": 1, "targetKind": "units", "targetAlly": true, "targetAfflicted": true, "maxTargets": 1, "requiresTech": "advanced_biomed", "effects": [] },
-      { "id": "tracer_round", "name": "Tracer Round", "range": 3, "targetKind": "unit", "targetEnemy": true, "requiresTech": "advanced_biomed", "duration": 3, "effects": [] }
+      {
+        "id": "heal_1",
+        "name": "Heal I",
+        "range": 1,
+        "targetKind": "units",
+        "targetAlly": true,
+        "targetClasses": [
+          "light"
+        ],
+        "maxTargets": 1,
+        "supersededByTech": "advanced_biomed",
+        "effects": [
+          {
+            "type": "heal",
+            "params": {
+              "amount": 8
+            }
+          }
+        ]
+      },
+      {
+        "id": "heal_2",
+        "name": "Heal II",
+        "range": 1,
+        "targetKind": "units",
+        "targetAlly": true,
+        "targetClasses": [
+          "light"
+        ],
+        "maxTargets": 2,
+        "requiresTech": "advanced_biomed",
+        "effects": [
+          {
+            "type": "heal",
+            "params": {
+              "amount": 10
+            }
+          }
+        ]
+      },
+      {
+        "id": "cure",
+        "name": "Cure",
+        "range": 1,
+        "targetKind": "units",
+        "targetAlly": true,
+        "targetAfflicted": true,
+        "maxTargets": 1,
+        "requiresTech": "advanced_biomed",
+        "effects": []
+      },
+      {
+        "id": "tracer_round",
+        "name": "Tracer Round",
+        "range": 3,
+        "targetKind": "unit",
+        "targetEnemy": true,
+        "requiresTech": "advanced_biomed",
+        "duration": 3,
+        "effects": []
+      }
     ],
     "traits": []
   },
@@ -350,11 +510,60 @@
     "movement": 1,
     "attackRange": 1,
     "visibility": 1,
-    "conditions": ["impotent_founder"],
+    "conditions": [
+      "impotent_founder"
+    ],
     "abilities": [
-      { "id": "repair_1", "name": "Repair I", "range": 1, "targetKind": "units", "targetAlly": true, "targetClasses": ["heavy", "giant"], "maxTargets": 1, "supersededByTech": "tactical_engineering", "effects": [{ "type": "heal", "params": { "amount": 5 } }] },
-      { "id": "repair_2", "name": "Repair II", "range": 1, "targetKind": "units", "targetAlly": true, "targetClasses": ["heavy", "giant"], "maxTargets": 2, "requiresTech": "tactical_engineering", "effects": [{ "type": "heal", "params": { "amount": 8 } }] },
-      { "id": "build_node", "name": "Build Node", "range": 1, "targetKind": "tile", "requiresTech": "tactical_engineering", "effects": [] }
+      {
+        "id": "repair_1",
+        "name": "Repair I",
+        "range": 1,
+        "targetKind": "units",
+        "targetAlly": true,
+        "targetClasses": [
+          "heavy",
+          "giant"
+        ],
+        "maxTargets": 1,
+        "supersededByTech": "tactical_engineering",
+        "effects": [
+          {
+            "type": "heal",
+            "params": {
+              "amount": 5
+            }
+          }
+        ]
+      },
+      {
+        "id": "repair_2",
+        "name": "Repair II",
+        "range": 1,
+        "targetKind": "units",
+        "targetAlly": true,
+        "targetClasses": [
+          "heavy",
+          "giant"
+        ],
+        "maxTargets": 2,
+        "requiresTech": "tactical_engineering",
+        "effects": [
+          {
+            "type": "heal",
+            "params": {
+              "amount": 8
+            }
+          }
+        ]
+      },
+      {
+        "id": "build_node",
+        "name": "Build Node",
+        "range": 1,
+        "targetKind": "tile",
+        "requiresTech": "tactical_engineering",
+        "effects": []
+      }
     ],
     "traits": []
   },
@@ -370,9 +579,16 @@
     "movement": 1,
     "attackRange": 2,
     "visibility": 1,
-    "conditions": ["repositioning"],
+    "conditions": [
+      "repositioning"
+    ],
     "abilities": [
-      { "id": "assault_mode", "name": "Enter Assault Mode", "morphTo": "tank_assault", "effects": [] }
+      {
+        "id": "assault_mode",
+        "name": "Enter Assault Mode",
+        "morphTo": "tank_assault",
+        "effects": []
+      }
     ],
     "traits": []
   },
@@ -389,105 +605,15 @@
     "attackRange": 3,
     "minAttackRange": 2,
     "visibility": 3,
-    "conditions": ["repositioning"],
-    "abilities": [
-      { "id": "assault_mode", "name": "Exit Assault Mode", "morphTo": "tank", "effects": [] }
+    "conditions": [
+      "repositioning"
     ],
-    "traits": []
-  },
-  {
-    "id": "catapult",
-    "name": "Catapult",
-    "faction": "shared",
-    "cost": 8,
-    "maxHP": 8,
-    "attack": 10,
-    "defence": 1,
-    "movement": 1,
-    "attackRange": 3,
-    "visibility": 1,
-    "abilities": [],
-    "traits": ["noMoveAndAttack"]
-  },
-  {
-    "id": "ironclad_berserker",
-    "name": "Berserker",
-    "faction": "vanguard",
-    "cost": 7,
-    "maxHP": 18,
-    "attack": 8,
-    "defence": 2,
-    "movement": 3,
-    "attackRange": 1,
-    "visibility": 1,
     "abilities": [
       {
-        "id": "rage",
-        "name": "Rage",
-        "effects": [
-          { "type": "modifyStat", "params": { "stat": "attack", "amount": 3, "duration": 1 } }
-        ],
-        "cooldown": 3
-      }
-    ],
-    "traits": []
-  },
-  {
-    "id": "ironclad_siege_tower",
-    "name": "Siege Tower",
-    "faction": "vanguard",
-    "cost": 10,
-    "maxHP": 25,
-    "attack": 7,
-    "defence": 5,
-    "movement": 1,
-    "attackRange": 2,
-    "visibility": 1,
-    "abilities": [],
-    "traits": ["noMoveAndAttack"]
-  },
-  {
-    "id": "sylvan_ranger",
-    "name": "Ranger",
-    "faction": "hive",
-    "cost": 6,
-    "maxHP": 12,
-    "attack": 5,
-    "defence": 2,
-    "movement": 3,
-    "attackRange": 2,
-    "visibility": 1,
-    "abilities": [
-      {
-        "id": "camouflage",
-        "name": "Camouflage",
-        "effects": [
-          { "type": "applyStatus", "params": { "status": "hidden", "duration": 2 } }
-        ],
-        "cooldown": 3
-      }
-    ],
-    "traits": ["ignoresTerrainCost"]
-  },
-  {
-    "id": "sylvan_treant",
-    "name": "Treant",
-    "faction": "hive",
-    "cost": 9,
-    "maxHP": 22,
-    "attack": 6,
-    "defence": 4,
-    "movement": 1,
-    "attackRange": 1,
-    "visibility": 1,
-    "abilities": [
-      {
-        "id": "entangle",
-        "name": "Entangle",
-        "effects": [
-          { "type": "applyStatus", "params": { "status": "rooted", "duration": 1 } }
-        ],
-        "cooldown": 2
+        "id": "assault_mode",
+        "name": "Exit Assault Mode",
+        "morphTo": "tank",
+        "effects": []
       }
     ],
     "traits": []
@@ -505,8 +631,29 @@
     "attackRange": 2,
     "visibility": 2,
     "abilities": [
-      { "id": "percussive_shells", "name": "Percussive Shells", "range": 2, "targetKind": "tile", "effects": [] },
-      { "id": "ballistic_volley", "name": "Ballistic Volley", "range": 3, "minRange": 2, "targetKind": "grid2x2", "cooldown": 2, "effects": [{ "type": "damage", "params": { "amount": 2 } }] }
+      {
+        "id": "percussive_shells",
+        "name": "Percussive Shells",
+        "range": 2,
+        "targetKind": "tile",
+        "effects": []
+      },
+      {
+        "id": "ballistic_volley",
+        "name": "Ballistic Volley",
+        "range": 3,
+        "minRange": 2,
+        "targetKind": "grid2x2",
+        "cooldown": 2,
+        "effects": [
+          {
+            "type": "damage",
+            "params": {
+              "amount": 2
+            }
+          }
+        ]
+      }
     ],
     "traits": []
   },
@@ -522,10 +669,23 @@
     "movement": 2,
     "attackRange": 1,
     "visibility": 2,
-    "conditions": ["detect_2", "overwatch_network_1", "aoi_none"],
-    "abilities": [
-      { "id": "kinetic_shield", "name": "Kinetic Shield", "range": 2, "targetKind": "unit", "targetAlly": true, "effects": [] }
+    "conditions": [
+      "detect_2",
+      "overwatch_network_1",
+      "aoi_none"
     ],
-    "traits": ["flying"]
+    "abilities": [
+      {
+        "id": "kinetic_shield",
+        "name": "Kinetic Shield",
+        "range": 2,
+        "targetKind": "unit",
+        "targetAlly": true,
+        "effects": []
+      }
+    ],
+    "traits": [
+      "flying"
+    ]
   }
 ]

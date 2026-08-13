@@ -157,7 +157,7 @@ label {
   border-image: url('/ui/frame-lines.png') 24 / 12px stretch;
   border-radius: 0;
   padding: 30px 36px 34px;
-  width: 500px;
+  width: 640px;
   max-width: 92vw;
   animation: evo-card-in 0.45s cubic-bezier(0.16, 1, 0.3, 1);
   box-shadow: 0 30px 80px rgba(0, 0, 0, 0.7);
@@ -195,6 +195,35 @@ label {
   padding-bottom: 6px;
   border-bottom: 1px solid #232427;
   position: relative;
+}
+
+/* Collapsible section header (Combatants): chevron rotates open, and while
+   collapsed a dim inline summary shows what the hidden defaults are. */
+button.evo-collapse {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  background: none;
+  border: none;
+  border-bottom: 1px solid #232427;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.evo-collapse .chev {
+  display: inline-block;
+  transition: transform 0.15s ease;
+  font-size: 10px;
+}
+.evo-collapse.open .chev { transform: rotate(90deg); }
+.evo-collapse-summary {
+  margin-left: auto;
+  color: #6d7076;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: none;
+  font-size: 11px;
 }
 .evo-section::after {
   content: '';
@@ -383,6 +412,191 @@ label {
   display: flex;
   gap: 10px;
   margin-top: 22px;
+}
+
+.ashwater-brief {
+  position: relative;
+  margin-top: 10px;
+  padding: 13px 15px 14px 18px;
+  overflow: hidden;
+  background:
+    linear-gradient(100deg, rgba(108, 55, 27, 0.34), rgba(9, 48, 57, 0.18) 72%),
+    #0c0d0f;
+  border: 1px solid #3b3028;
+  clip-path: polygon(7px 0, 100% 0, 100% calc(100% - 7px), calc(100% - 7px) 100%, 0 100%, 0 7px);
+}
+.ashwater-brief::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: linear-gradient(#e47e37 0 58%, #50d7de 58%);
+}
+.ashwater-brief-kicker {
+  display: block;
+  margin-bottom: 3px;
+  color: #58d7dc;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.2em;
+}
+.ashwater-brief strong {
+  color: #f1c18c;
+  font-size: 15px;
+  letter-spacing: 0.03em;
+}
+.ashwater-brief p {
+  max-width: 54ch;
+  margin: 5px 0 9px;
+  color: #a99a8a;
+  font-size: 11px;
+  line-height: 1.45;
+}
+.ashwater-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.ashwater-tags span {
+  padding: 3px 6px;
+  color: #c9b29a;
+  background: #171513;
+  border: 1px solid #3a3028;
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* ── Ashwater live VFX library ───────────────────────────────────────── */
+.fx-lab {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  z-index: 35;
+  width: min(318px, calc(100% - 28px));
+  color: #ddd0bf;
+  font-family: Inter, sans-serif;
+}
+.fx-lab-trigger {
+  width: 100%;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 0 10px;
+  color: #e8cfaa;
+  background: #17120f;
+  border: 1px solid #5c3e2c;
+  border-radius: 0;
+  box-shadow: 0 7px 20px rgba(0, 0, 0, 0.42);
+  font: inherit;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  cursor: pointer;
+  clip-path: polygon(7px 0, 100% 0, 100% calc(100% - 7px), calc(100% - 7px) 100%, 0 100%, 0 7px);
+}
+.fx-lab-trigger:hover { background: #211811; border-color: #c07642; }
+.fx-lab-pip {
+  width: 7px;
+  height: 7px;
+  background: #51e5e2;
+  box-shadow: 0 0 9px rgba(81, 229, 226, 0.72);
+}
+.fx-lab-key {
+  margin-left: auto;
+  color: #7e7167;
+  font-size: 8px;
+  letter-spacing: 0.13em;
+}
+.fx-lab-panel {
+  margin-top: 5px;
+  padding: 12px;
+  background:
+    linear-gradient(165deg, rgba(90, 48, 26, 0.16), transparent 52%),
+    #110f0e;
+  border: 1px solid #463426;
+  border-top-color: #b76836;
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.66);
+  animation: fx-lab-in 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes fx-lab-in {
+  from { opacity: 0; transform: translateY(7px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.fx-lab-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding-bottom: 9px;
+  border-bottom: 1px solid #302820;
+}
+.fx-lab-heading span {
+  color: #efbd82;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+}
+.fx-lab-heading small {
+  color: #766b62;
+  font-size: 8px;
+}
+.fx-lab-group { margin-top: 10px; }
+.fx-lab-group-name {
+  display: block;
+  margin-bottom: 5px;
+  color: #5bcfd1;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+.fx-lab-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+}
+.fx-lab-grid button {
+  min-height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 5px 7px 5px 8px;
+  color: #a99b8e;
+  background: #181512;
+  border: 1px solid #302a24;
+  border-radius: 0;
+  font: inherit;
+  font-size: 9px;
+  text-align: left;
+  cursor: pointer;
+  transition: color 0.12s ease, border-color 0.12s ease, background 0.12s ease;
+}
+.fx-lab-grid button:hover,
+.fx-lab-grid button.active {
+  color: #f5d4a9;
+  background: #251b14;
+  border-color: #9a5933;
+}
+.fx-lab-grid button i {
+  width: 4px;
+  height: 4px;
+  flex: none;
+  background: #574a40;
+}
+.fx-lab-grid button.active i {
+  background: #63edf0;
+  box-shadow: 0 0 7px #63edf0;
+}
+
+@media (max-width: 700px) {
+  .fx-lab { right: 8px; bottom: 8px; width: min(288px, calc(100% - 16px)); }
+  .fx-lab-panel { max-height: 48vh; overflow-y: auto; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fx-lab-panel { animation: none; }
 }
 .evo-button {
   position: relative;

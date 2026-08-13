@@ -72,10 +72,11 @@ const TILE_Y_OFFSET: Record<TileModelKind, number> = {
   water: -0.2 * 0.29,
 };
 
-export function ModelTiles({ map, visibility, onTileClick, interaction, occupied }: {
+export function ModelTiles({ map, visibility, onTileClick, onTileHover, interaction, occupied }: {
   map: MapData;
   visibility?: TileVisibility[][];
   onTileClick?: (x: number, y: number) => void;
+  onTileHover?: (x: number | null, y?: number) => void;
   interaction?: React.MutableRefObject<CameraInteraction>;
   /** "x,y" keys of unit-occupied tiles: forest blocks swap to flat ground
    *  there so trees never clip through a unit's body. */
@@ -163,6 +164,14 @@ export function ModelTiles({ map, visibility, onTileClick, interaction, occupied
         position={[map.width / 2, 0, map.height / 2]}
         visible={false}
         onClick={handleClick}
+        onPointerMove={e => {
+          if (!onTileHover) return;
+          onTileHover(
+            Math.min(map.width - 1, Math.max(0, Math.floor(e.point.x))),
+            Math.min(map.height - 1, Math.max(0, Math.floor(e.point.z))),
+          );
+        }}
+        onPointerLeave={() => onTileHover?.(null)}
       >
         <planeGeometry args={[map.width, map.height]} />
       </mesh>

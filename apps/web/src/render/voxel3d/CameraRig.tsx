@@ -1,8 +1,9 @@
 import * as THREE from 'three';
 import React from 'react';
-import { useThree } from '@react-three/fiber';
+import { useFrame, useThree } from '@react-three/fiber';
 import { OrthographicCamera, OrbitControls } from '@react-three/drei';
 import { LAYER_NO_REFLECT } from './layers.js';
+import { subscribeCameraShake } from './fx/fxEvents.js';
 
 /** Fraction of viewport height the arena would fill at fit zoom. */
 const FIT_FRACTION = 0.7;
@@ -78,6 +79,40 @@ export function CameraRig({ width, height, debugCam, interaction, focus }: {
     cam.updateProjectionMatrix();
     cam.updateMatrixWorld(true);
   }, []);
+
+  // Screen-space camera impulse. The pan state remains untouched: every shake
+  // frame starts from the authored view, adds a tiny high-frequency offset,
+  // then snaps exactly back when the impulse expires.
+  const shakeRef = React.useRef({ remaining: 0, duration: 0, magnitude: 0, phase: 0, active: false });
+  React.useEffect(() => subscribeCameraShake(({ magnitude, duration }) => {
+    const shake = shakeRef.current;
+    shake.remaining = Math.max(shake.remaining, duration);
+    shake.duration = Math.max(duration, 0.001);
+    shake.magnitude = Math.max(shake.magnitude, magnitude);
+    shake.phase += 1.73;
+    shake.active = true;
+  }), []);
+
+  useFrame((_, delta) => {
+    const camera = camRef.current;
+    const shake = shakeRef.current;
+    if (!camera || !shake.active) return;
+    applyView();
+    if (shake.remaining <= 0) {
+      shake.active = false;
+      shake.magnitude = 0;
+      return;
+    }
+    shake.remaining = Math.max(0, shake.remaining - delta);
+    const envelope = shake.remaining / shake.duration;
+    const right = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0);
+    const up = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 1);
+    const t = performance.now() * 0.001;
+    camera.position
+      .addScaledVector(right, Math.sin(t * 79 + shake.phase) * shake.magnitude * envelope)
+      .addScaledVector(up, Math.sin(t * 101 + shake.phase * 1.7) * shake.magnitude * 0.65 * envelope);
+    camera.updateMatrixWorld(true);
+  });
 
   React.useLayoutEffect(() => {
     const cam = camRef.current;

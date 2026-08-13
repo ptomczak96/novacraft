@@ -131,6 +131,24 @@ function desertTerrain(e: number, t: number, m: number, mountainLevel: number): 
 }
 
 /**
+ * Ashwater Basin: ochre salt flats split by coherent mineral-water channels,
+ * with rust mesas on the high band and sparse mineral scrub in moist pockets.
+ * The biome is intentionally simple and high-contrast so every tactical cell
+ * keeps an unmistakable silhouette in the dedicated Breach-inspired renderer.
+ */
+function ashwaterTerrain(
+  e: number,
+  m: number,
+  seaLevel: number,
+  mountainLevel: number,
+): string {
+  if (e < seaLevel) return 'water';
+  if (e > mountainLevel) return 'mountain';
+  if (m > 0.76) return 'forest';
+  return 'sand';
+}
+
+/**
  * Full classifier using smooth elevation + temperature + moisture fields.
  * Produces water (low), lava (hot peaks), mountain (peaks), snow/sand
  * (temperature extremes) and forest (moist temperate land) — so every themed
@@ -193,8 +211,10 @@ export function generateMap(
   for (let y = 0; y < height; y++) {
     tiles[y] = [];
     for (let x = 0; x < width; x++) {
-      const terrain = o.biome === 'desert'
-        ? desertTerrain(elevation[y][x], temperature[y][x], moisture[y][x], mountainLevel)
+      const terrain = o.biome === 'ashwater'
+        ? ashwaterTerrain(elevation[y][x], moisture[y][x], seaLevel, mountainLevel)
+        : o.biome === 'desert'
+          ? desertTerrain(elevation[y][x], temperature[y][x], moisture[y][x], mountainLevel)
         : ENABLE_WATER_LAVA
           ? waterLavaTerrain(elevation[y][x], temperature[y][x], moisture[y][x], seaLevel, mountainLevel)
           : biomeTerrain(o.biome, elevation[y][x], moisture[y][x]);
@@ -246,11 +266,12 @@ export function generateMap(
     }
   }
 
-  // Carve each base: a clean 3×3 of owned plains, with the surrounding ring
+  // Carve each base: a clean 3×3 of owned flat terrain, with the surrounding ring
   // flagged as perimeter and the centre as the capital. Then drop 2 ore + 1
   // plasma onto random perimeter tiles (never the city tile).
   for (let i = 0; i < cityPositions.length; i++) {
     const pos = cityPositions[i];
+    const baseTerrain = o.biome === 'desert' || o.biome === 'ashwater' ? 'sand' : 'plains';
     const perimeter: Coord[] = [];
     for (let dy = -1; dy <= 1; dy++) {
       for (let dx = -1; dx <= 1; dx++) {
@@ -259,7 +280,7 @@ export function generateMap(
         if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
         const isCenter = dx === 0 && dy === 0;
         tiles[ny][nx] = {
-          terrain: 'plains',
+          terrain: baseTerrain,
           owner: i,
           isCity: isCenter,
           isResourceTile: false,

@@ -9,7 +9,7 @@ import type { GameMap, TileVisibility } from '@tactica/engine';
 export type MapData = GameMap;
 
 /** Visual dressing of the arena — detected from the map's dominant terrain. */
-export type ArenaTheme = 'city' | 'desert';
+export type ArenaTheme = 'city' | 'desert' | 'breach';
 
 /** Render-side facing, derived from move deltas in the adapter (never engine state). */
 export type Facing = 'ne' | 'nw' | 'se' | 'sw';
@@ -33,6 +33,10 @@ export interface UnitView {
   /** Current / max HP — drives the floating health bar on selection. */
   hp?: number;
   maxHp?: number;
+  /** Kinetic Shield active — a bubble stays on the unit until it absorbs a hit. */
+  shielded?: boolean;
+  /** Runtime conditions copied read-only for status-hit presentation. */
+  statuses?: string[];
 }
 
 /** One executed attack, for render-side lunge/flash effects (from the store's
@@ -43,12 +47,21 @@ export interface CombatFx {
   defenderId: number;
   attackerPos: { x: number; y: number };
   defenderPos: { x: number; y: number };
+  damage?: number;
+  retaliation?: number;
+  defenderKilled?: boolean;
+  attackerKilled?: boolean;
 }
 
-/** A just-killed unit's last view, rendered as a fading ghost. */
+/** A just-killed unit's last view, rendered as a corpse that holds until the
+ *  killing blow lands, then falls over and fades. */
 export interface UnitGhost {
   view: UnitView;
   ghostKey: string;
+  /** Seconds the corpse stands (projectile flight / shell arc) before dying. */
+  delay?: number;
+  /** Knockback direction (world x/z, normalized) — the body falls this way. */
+  dir?: { x: number; z: number };
 }
 
 /** One executed ability cast, for render-side cast animations (from the
@@ -59,6 +72,8 @@ export interface AbilityFx {
   unitId: number;
   casterPos: { x: number; y: number };
   targets: { x: number; y: number }[];
+  /** Units the cast killed — corpses hold until the cast's impact lands. */
+  killed?: { id: number; pos: { x: number; y: number } }[];
 }
 
 export type HighlightKind = 'move' | 'threat' | 'select' | 'path';
@@ -86,6 +101,11 @@ export interface VoxelArenaProps {
   highlights: TileHighlight[];
   quality?: 'high' | 'low';
   onTileClick?: (x: number, y: number) => void;
+  /** Pointer moved over a tile (null = left the board) — drives the
+   *  Into-the-Breach attack telegraphs. */
+  onTileHover?: (x: number | null, y?: number) => void;
+  /** Hover-computed attack forecast to draw (see AttackPreview.tsx). */
+  preview?: import('./AttackPreview.js').AttackPreviewData | null;
   /** Optional fog-of-war grid ([y][x]); hidden tiles render as dark cloud blocks. */
   visibility?: TileVisibility[][];
   floorTextures?: FloorTextures;
@@ -98,4 +118,6 @@ export interface VoxelArenaProps {
   /** GEN 8 — 3D Tileset mode: GLB tile blocks replace the floor plane and
    *  units with real models render them (see models/modelAssets.ts). */
   tileset?: boolean;
+  /** Ashwater Basin's procedural Breach-inspired slab/water tileset. */
+  breach?: boolean;
 }

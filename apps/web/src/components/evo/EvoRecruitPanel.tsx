@@ -6,10 +6,7 @@ import { playUi } from './uiSounds.js';
 const UNIT_ICONS: Record<string, string> = {
   scout: '🏃', warrior: '⚔️', lancer: '🪖', archer: '🏹', defender: '🛡️',
   wraith: '🥷', stalker: '🕷️', titan: '🗿', sentinel: '📡', tank: '🛞',
-  catapult: '💣', scuttling: '🐛', hive_scout: '👁️', reaper: '🦅',
   scab: '⚗️', vindrace: '🦏', seercaust: '🔮', wyrm: '🪱',
-  ironclad_berserker: '🪓', ironclad_siege_tower: '🏰',
-  sylvan_ranger: '🌿', sylvan_treant: '🌳',
 };
 
 /**

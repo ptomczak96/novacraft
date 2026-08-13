@@ -5,50 +5,80 @@
     "scout": 1,
     "warrior": 1,
     "archer": 1,
-    "defender": 1,
-    "catapult": 2,
-    "ironclad_berserker": 2,
-    "ironclad_siege_tower": 2,
-    "sylvan_ranger": 1,
-    "sylvan_treant": 2
+    "defender": 1
   },
-
   "startingOre": 20,
   "startingPlasma": 0,
-
   "city": {
     "maxLevel": 8,
     "capitalBaseProduction": 20,
     "cityBaseProduction": 10,
     "productionPerLevel": 10,
     "popBase": 2,
-    "supplyThresholds": [2, 5, 9, 14, 20, 27, 35],
+    "supplyThresholds": [
+      2,
+      5,
+      9,
+      14,
+      20,
+      27,
+      35
+    ],
     "territoryRadius": 1,
     "capitalSightRadius": 2
   },
-
   "buildings": {
     "mine": {
       "on": "ore",
       "output": "ore",
       "maxLevel": 3,
       "perCity": null,
-      "costByLevel": [50, 70, 90],
-      "outputByLevel": [10, 20, 30],
-      "supplyByLevel": [1, 2, 4],
+      "costByLevel": [
+        50,
+        70,
+        90
+      ],
+      "outputByLevel": [
+        10,
+        20,
+        30
+      ],
+      "supplyByLevel": [
+        1,
+        2,
+        4
+      ],
       "techRequired": null,
-      "upgradeTechRequired": ["mine_2", "mine_3"]
+      "upgradeTechRequired": [
+        "mine_2",
+        "mine_3"
+      ]
     },
     "extractor": {
       "on": "plasma",
       "output": "plasma",
       "maxLevel": 3,
       "perCity": null,
-      "costByLevel": [100, 125, 200],
-      "outputByLevel": [5, 10, 20],
-      "supplyByLevel": [2, 3, 4],
+      "costByLevel": [
+        100,
+        125,
+        200
+      ],
+      "outputByLevel": [
+        5,
+        10,
+        20
+      ],
+      "supplyByLevel": [
+        2,
+        3,
+        4
+      ],
       "techRequired": "plasma_1",
-      "upgradeTechRequired": ["plasma_2", "plasma_3"]
+      "upgradeTechRequired": [
+        "plasma_2",
+        "plasma_3"
+      ]
     },
     "refinery": {
       "on": "land",
@@ -56,11 +86,26 @@
       "maxLevel": 3,
       "perCity": 1,
       "adjacentTo": "mine",
-      "costByLevel": [100, 150, 250],
-      "outputPerAdjacentByLevel": [20, 40, 80],
-      "supplyByLevel": [2, 3, 4],
+      "costByLevel": [
+        100,
+        150,
+        250
+      ],
+      "outputPerAdjacentByLevel": [
+        20,
+        40,
+        80
+      ],
+      "supplyByLevel": [
+        2,
+        3,
+        4
+      ],
       "techRequired": null,
-      "upgradeTechRequired": [null, null]
+      "upgradeTechRequired": [
+        null,
+        null
+      ]
     },
     "purifier": {
       "on": "land",
@@ -68,15 +113,31 @@
       "maxLevel": 3,
       "perCity": 1,
       "adjacentTo": "extractor",
-      "costByLevel": [300, 400, 750],
-      "outputPerAdjacentByLevel": [5, 15, 30],
-      "supplyByLevel": [3, 4, 5],
+      "costByLevel": [
+        300,
+        400,
+        750
+      ],
+      "outputPerAdjacentByLevel": [
+        5,
+        15,
+        30
+      ],
+      "supplyByLevel": [
+        3,
+        4,
+        5
+      ],
       "techRequired": null,
-      "upgradeTechRequired": [null, null]
+      "upgradeTechRequired": [
+        null,
+        null
+      ]
     }
   },
-
-  "foundCity": { "cost": 0, "requiresUnitOnTile": true },
-
+  "foundCity": {
+    "cost": 0,
+    "requiresUnitOnTile": true
+  },
   "unitPlasmaCost": {}
 }

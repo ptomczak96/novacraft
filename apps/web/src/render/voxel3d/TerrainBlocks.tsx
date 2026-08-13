@@ -87,7 +87,7 @@ interface TerrainSets {
   cityWindow: BlockInstance[];
 }
 
-function buildTerrain(map: MapData, visibility: TileVisibility[][] | undefined, desert: boolean, natureProps: boolean): TerrainSets {
+function buildTerrain(map: MapData, visibility: TileVisibility[][] | undefined, desert: boolean, breach: boolean, natureProps: boolean): TerrainSets {
   const s: TerrainSets = {
     mountainBase: [], mountainPeak: [], forestCanopy: [], forestTrunk: [],
     oreCrystal: [], plasmaCrystal: [],
@@ -111,9 +111,20 @@ function buildTerrain(map: MapData, visibility: TileVisibility[][] | undefined, 
           : '#8fb4ff';
         // Centred on the tile; a garrisoned unit gets a small visual offset
         // toward the camera instead (see VoxelArena).
-        s.cityBase.push({ pos: [cx, 0.05, cz], scale: [0.6, 0.1, 0.6] });
-        s.cityTower.push({ pos: [cx, 0.4, cz], scale: [0.34, 0.6, 0.34] });
-        s.cityWindow.push({ pos: [cx, 0.46, cz], scale: [0.36, 0.07, 0.36], color: teamColor });
+        if (breach) {
+          // Small back-of-tile skyline: readable as a city without obscuring
+          // the garrisoned unit standing in the foreground.
+          s.cityBase.push({ pos: [cx, 0.045, cz + 0.08], scale: [0.72, 0.09, 0.54] });
+          s.cityTower.push({ pos: [cx - 0.19, 0.26, cz + 0.12], scale: [0.22, 0.43, 0.22] });
+          s.cityTower.push({ pos: [cx + 0.10, 0.34, cz + 0.16], scale: [0.27, 0.60, 0.24] });
+          s.cityTower.push({ pos: [cx + 0.29, 0.20, cz - 0.01], scale: [0.14, 0.32, 0.16] });
+          s.cityWindow.push({ pos: [cx - 0.19, 0.29, cz + 0.12], scale: [0.23, 0.055, 0.23], color: teamColor });
+          s.cityWindow.push({ pos: [cx + 0.10, 0.40, cz + 0.16], scale: [0.28, 0.065, 0.25], color: teamColor });
+        } else {
+          s.cityBase.push({ pos: [cx, 0.05, cz], scale: [0.6, 0.1, 0.6] });
+          s.cityTower.push({ pos: [cx, 0.4, cz], scale: [0.34, 0.6, 0.34] });
+          s.cityWindow.push({ pos: [cx, 0.46, cz], scale: [0.36, 0.07, 0.36], color: teamColor });
+        }
       } else if (tile.terrain === 'mountain' && natureProps) {
         // A low cluster of rocks, not a tile-filling monolith — units (0.7
         // tall) should still dominate the silhouette.
@@ -168,9 +179,10 @@ export function TerrainBlocks({ map, visibility, theme = 'city', natureProps = t
   natureProps?: boolean;
 }) {
   const desert = theme === 'desert';
+  const breach = theme === 'breach';
   const sets = React.useMemo(
-    () => buildTerrain(map, visibility, desert, natureProps),
-    [map, visibility, desert, natureProps],
+    () => buildTerrain(map, visibility, desert, breach, natureProps),
+    [map, visibility, desert, breach, natureProps],
   );
   return (
     <>
@@ -184,9 +196,9 @@ export function TerrainBlocks({ map, visibility, theme = 'city', natureProps = t
       <Blocks instances={sets.plasmaCrystal} color="#123338" emissive="#2ab8c8" emissiveIntensity={0.55} />
       <Blocks instances={sets.orePatch} color="#000000" emissive="#c8842e" emissiveIntensity={0.4} opacity={0.3} castShadow={false} />
       <Blocks instances={sets.plasmaPatch} color="#000000" emissive="#2ab8c8" emissiveIntensity={0.4} opacity={0.3} castShadow={false} />
-      <Blocks instances={sets.ruinPillar} color="#565e75" />
-      <Blocks instances={sets.cityBase} color="#262c3d" />
-      <Blocks instances={sets.cityTower} color="#39415a" />
+      <Blocks instances={sets.ruinPillar} color={breach ? '#6d4b36' : '#565e75'} />
+      <Blocks instances={sets.cityBase} color={breach ? '#34342f' : '#262c3d'} />
+      <Blocks instances={sets.cityTower} color={breach ? '#55564e' : '#39415a'} />
       {/* Window bands glow in the owner's team colour — emissive can't vary
           per instance, and cities are few, so these are plain meshes. */}
       {sets.cityWindow.map((b, i) => (

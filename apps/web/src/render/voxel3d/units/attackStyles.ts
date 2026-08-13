@@ -31,8 +31,6 @@ const STYLES: Record<string, AttackStyle> = {
   // ── Artillery: lobbed shells ──
   tank:                 { kind: 'projectile', shape: 'shell', color: '#ffab52', arc: 0.45 },
   tank_assault:         { kind: 'projectile', shape: 'shell', color: '#ffab52', arc: 0.35, size: 1.2 },
-  catapult:             { kind: 'projectile', shape: 'shell', color: '#ff8a3c', arc: 0.8, size: 1.35 },
-  ironclad_siege_tower: { kind: 'projectile', shape: 'shell', color: '#ffab52', arc: 0.6 },
   // ── Energy / psychic: glowing bolts ──
   titan:     { kind: 'projectile', shape: 'bolt', color: '#65e0ff', size: 1.4 },
   seercaust: { kind: 'projectile', shape: 'bolt', color: '#b26bff' },
@@ -41,7 +39,6 @@ const STYLES: Record<string, AttackStyle> = {
   ravener: { kind: 'projectile', shape: 'glob', color: '#8aff4d', arc: 0.35 },
   // ── Bows ──
   archer:        { kind: 'projectile', shape: 'arrow', color: '#d9b380', arc: 0.25 },
-  sylvan_ranger: { kind: 'projectile', shape: 'arrow', color: '#a8d98a', arc: 0.25 },
   // Everything else (warrior's sword, hive claws/maws, shield bashes, the
   // reaper's diving strike…) stays MELEE by default.
 };

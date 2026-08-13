@@ -8,9 +8,10 @@ import type { CameraInteraction } from './CameraRig.js';
 import { defForKind, isHeavyKind } from './units/unitDefs.js';
 import { buildUnit, disposeUnit } from './units/buildUnit.js';
 import { StalkerModel } from './units/StalkerModel.js';
-import { GlbUnitModel, GlbGhostModel } from './units/GlbUnitModel.js';
+import { GlbUnitModel, GlbGhostModel, type UnitMotion } from './units/GlbUnitModel.js';
 import { unitModelForKind } from './models/modelAssets.js';
 import { useOutlineStore } from './outlineStore.js';
+import { AbilityVfx, UPGRADED_CAST_IDS } from './fx/AbilityVfx.js';
 
 /** Models are built facing +Z; rotate to the unit's grid facing. */
 const FACING_ROT_Y: Record<Facing, number> = {
@@ -63,11 +64,15 @@ function BoxUnit({ unit }: { unit: UnitView }) {
  *  the asset streams in); everyone else keeps the box-voxel build. In tileset
  *  mode (`useModels`) every kind with a GLB in models/modelAssets.ts renders
  *  its real model; unmodeled kinds keep the box-voxel build. */
-function UnitBody({ unit, useModels }: { unit: UnitView; useModels?: boolean }) {
+function UnitBody({ unit, useModels, motion }: {
+  unit: UnitView;
+  useModels?: boolean;
+  motion?: React.MutableRefObject<UnitMotion>;
+}) {
   if (useModels && unitModelForKind(unit.kind)) {
     return (
       <React.Suspense fallback={<BoxUnit unit={unit} />}>
-        <GlbUnitModel kind={unit.kind} teamColor={unit.teamColor} />
+        <GlbUnitModel kind={unit.kind} teamColor={unit.teamColor} motion={motion} />
       </React.Suspense>
     );
   }
@@ -111,8 +116,45 @@ function useSelectionOutline(
   }, [selected, body, kind]);
 }
 
-/** Seconds to slide one move (covers multi-tile moves in one glide). */
-const MOVE_DURATION = 0.3;
+/**
+ * Kinetic Shield bubble — wraps the unit while its `shielded` status is
+ * active and disappears the moment the shield absorbs a hit (the status is
+ * consumed engine-side, so persistence is automatic). Gentle pulse so it
+ * reads as an energy field, never outlined (it isn't the body).
+ */
+function ShieldBubble({ height }: { height: number }) {
+  const matRef = React.useRef<THREE.MeshBasicMaterial>(null);
+  const r = Math.max(0.34, height * 0.58);
+  useFrame(({ clock }) => {
+    if (matRef.current) {
+      matRef.current.opacity = 0.16 + Math.sin(clock.elapsedTime * 2.4) * 0.05;
+    }
+  });
+  return (
+    <mesh position={[0, height * 0.5, 0]} scale={[1, height / (r * 2) + 0.25, 1]} userData={{ noOutline: true }}>
+      <sphereGeometry args={[r, 24, 18]} />
+      <meshBasicMaterial
+        ref={matRef}
+        color="#6be4ff"
+        transparent
+        opacity={0.18}
+        blending={THREE.AdditiveBlending}
+        depthWrite={false}
+        side={THREE.DoubleSide}
+        toneMapped={false}
+      />
+    </mesh>
+  );
+}
+
+/** Seconds per TILE of a move path. Moves follow tile centres (stepping
+ *  diagonally while both axes differ, then straight — the natural 8-way
+ *  path), so multi-tile moves read as walking the grid, not sliding across
+ *  it. Rigged GLB units pace one walk-stride-pair per tile. */
+const SEG_DURATION = 0.2;
+const SEG_DURATION_RIGGED = 0.42;
+/** Paths longer than this snap in one glide (fog reveals / teleports). */
+const MAX_PATH_TILES = 7;
 const LUNGE_DURATION = 0.22;
 const FLASH_DURATION = 0.3;
 
@@ -162,11 +204,19 @@ function HealthBar({ hp, maxHp, y, hostile }: {
   );
 }
 
-function UnitMesh({ unit, onTileClick, interaction, combat, useModels, impactDelay = 0 }: {
+/** StarCraft-style burrow: how deep the body sinks into the tile (the GLB
+ *  wyrm is 0.95 tall — leave just a hint of it proud of the ground). */
+const BURROW_DEPTH = 0.8;
+const BURROW_SINK_DURATION = 0.55;
+const BURROW_RISE_DURATION = 0.4;
+
+function UnitMesh({ unit, onTileClick, onTileHover, interaction, combat, ability, useModels, impactDelay = 0 }: {
   unit: UnitView;
   onTileClick?: (x: number, y: number) => void;
+  onTileHover?: (x: number | null, y?: number) => void;
   interaction?: React.MutableRefObject<CameraInteraction>;
   combat?: CombatFx | null;
+  ability?: AbilityFx | null;
   useModels?: boolean;
   /** Seconds after the combat event until the hit lands (projectile flight /
    *  melee lunge apex) — delays the defender's hit flash to match. */
@@ -182,10 +232,13 @@ function UnitMesh({ unit, onTileClick, interaction, combat, useModels, impactDel
 
   useSelectionOutline(unit.selected, bodyRef, unit.kind);
 
-  // Move animation: when the grid position changes, glide from the previous
-  // world position to the new one with a slight hop. Units are otherwise
-  // static (no idle bob). Elevation (mountain rock tops in tileset mode)
-  // lerps along the same glide.
+  // Motion state consumed by rigged GLB bodies (walk/attack clip switching).
+  const motionRef = React.useRef<UnitMotion>({ moving: false, attackSeq: -1 });
+
+  // Move animation: when the grid position changes, WALK a tile-centre path
+  // to the new position (diagonal steps while both axes differ, then
+  // straight), facing each segment. Units are otherwise static (no idle bob).
+  // Elevation (mountain rock tops in tileset mode) lerps along the path.
   const off = unit.visualOffset ?? 0;
   const target = {
     x: unit.gridPos.x + 0.5 + off,
@@ -194,19 +247,37 @@ function UnitMesh({ unit, onTileClick, interaction, combat, useModels, impactDel
   };
   const animRef = React.useRef({
     x: target.x, z: target.z, e: target.e,   // current rendered position
-    fromX: target.x, fromZ: target.z, fromE: target.e,
-    toX: target.x, toZ: target.z, toE: target.e,
-    start: -1,                          // -1 = idle
+    toX: target.x, toZ: target.z,            // change detection
+    fromE: target.e, toE: target.e,
+    path: [] as { x: number; z: number }[],  // waypoints incl. start point
+    seg: 0,
+    segStart: -1,                            // -1 idle; -2 armed
+    moveYaw: FACING_ROT_Y[unit.facing],
   });
   const a = animRef.current;
   if (a.toX !== target.x || a.toZ !== target.z || a.toE !== target.e) {
-    a.fromX = a.x;
-    a.fromZ = a.z;
+    // Build the visual path from the CURRENT rendered tile (handles
+    // mid-glide redirects) to the destination tile.
+    let cx = Math.floor(a.x);
+    let cz = Math.floor(a.z);
+    const path = [{ x: a.x, z: a.z }];
+    let guard = 0;
+    while ((cx !== unit.gridPos.x || cz !== unit.gridPos.y) && guard++ < 48) {
+      cx += Math.sign(unit.gridPos.x - cx);
+      cz += Math.sign(unit.gridPos.y - cz);
+      const last = cx === unit.gridPos.x && cz === unit.gridPos.y;
+      path.push({ x: cx + 0.5 + (last ? off : 0), z: cz + 0.5 + (last ? off : 0) });
+    }
+    if (path.length === 1) path.push({ x: target.x, z: target.z }); // offset-only shift
+    a.path = path.length - 1 > MAX_PATH_TILES
+      ? [{ x: a.x, z: a.z }, { x: target.x, z: target.z }]
+      : path;
+    a.seg = 0;
     a.fromE = a.e;
+    a.toE = target.e;
     a.toX = target.x;
     a.toZ = target.z;
-    a.toE = target.e;
-    a.start = -2; // armed; stamped with clock time on the next frame
+    a.segStart = -2; // armed; stamped with clock time on the next frame
   }
 
   // Combat effects: the attacker turns to face its target, then lunges
@@ -218,6 +289,22 @@ function UnitMesh({ unit, onTileClick, interaction, combat, useModels, impactDel
     seq: -1, lungeStart: -1, flashStart: -1, flashDelay: 0,
     dirX: 0, dirZ: 0, targetYaw: 0, faceUntil: -1,
   });
+  // Burrow / erupt (StarCraft read): on burrow the body shakes and digs down
+  // INTO the tile — depth testing against the tile block buries it, same trick
+  // as the death-ghost sink — staying buried while the unit wears its burrowed
+  // form; on erupt it springs back out with a small overshoot. GLB tileset
+  // mode only: the legacy box build swaps to a bespoke mound instead.
+  const digRef = React.useRef<THREE.Group>(null);
+  const burrowRef = React.useRef({ seq: -1, mode: 'none' as 'none' | 'sink' | 'rise', start: -1 });
+  const b = burrowRef.current;
+  if (ability && ability.seq !== b.seq) {
+    b.seq = ability.seq; // consume every event so a stale one never re-arms
+    if (ability.unitId === unit.id && useModels) {
+      if (ability.abilityId === 'burrow') { b.mode = 'sink'; b.start = -2; }
+      else if (ability.abilityId === 'erupt') { b.mode = 'rise'; b.start = -2; }
+    }
+  }
+
   const fx = fxRef.current;
   if (combat && combat.seq !== fx.seq) {
     fx.seq = combat.seq;
@@ -238,34 +325,56 @@ function UnitMesh({ unit, onTileClick, interaction, combat, useModels, impactDel
   useFrame(({ clock }) => {
     const g = rootRef.current;
     if (!g) return;
-    if (a.start === -2) a.start = clock.elapsedTime;
+    if (a.segStart === -2) a.segStart = clock.elapsedTime;
     if (fx.lungeStart === -2) {
       fx.lungeStart = clock.elapsedTime;
       fx.faceUntil = clock.elapsedTime + Math.max(LUNGE_DURATION, impactDelay) + 0.25;
+      motionRef.current.attackSeq = fx.seq; // rigged bodies play their attack clip
     }
     if (fx.flashStart === -2) fx.flashStart = clock.elapsedTime + fx.flashDelay;
 
-    // Attack facing: snap toward the target for the strike, ease back after.
+    // Walk the path, one tile-centre segment at a time.
+    let y = a.e;
+    const rigged = modelDef?.rigged ?? false;
+    if (a.segStart >= 0) {
+      const segDur = rigged ? SEG_DURATION_RIGGED : SEG_DURATION;
+      let frac = (clock.elapsedTime - a.segStart) / segDur;
+      while (frac >= 1 && a.seg < a.path.length - 2) {
+        a.seg++;
+        a.segStart += segDur;
+        frac = (clock.elapsedTime - a.segStart) / segDur;
+      }
+      const p0 = a.path[a.seg];
+      const p1 = a.path[a.seg + 1];
+      const f = Math.min(1, frac);
+      // Rigged units stride linearly (their clip carries the gait); others
+      // keep the smoothstep hop per tile.
+      const e = rigged ? f : f * f * (3 - 2 * f);
+      a.x = p0.x + (p1.x - p0.x) * e;
+      a.z = p0.z + (p1.z - p0.z) * e;
+      const total = Math.max(1, a.path.length - 1);
+      a.e = a.fromE + (a.toE - a.fromE) * Math.min(1, (a.seg + f) / total);
+      y = a.e + (rigged ? 0 : Math.sin(f * Math.PI) * 0.08);
+      if (p1.x !== p0.x || p1.z !== p0.z) {
+        a.moveYaw = Math.atan2(p1.x - p0.x, p1.z - p0.z); // models face +Z
+      }
+      if (frac >= 1 && a.seg >= a.path.length - 2) a.segStart = -1;
+    }
+
+    // Facing priority: attack target > walk direction > resting camera facing
+    // (Polytopia read: units settle facing SE/SW; turns ease, strikes snap).
     const baseYaw = FACING_ROT_Y[unit.facing];
     if (clock.elapsedTime < fx.faceUntil) {
       g.rotation.y = fx.targetYaw;
     } else {
-      // Shortest-path ease back to the grid facing.
-      let d = baseYaw - g.rotation.y;
+      const moving = a.segStart >= 0;
+      const desired = moving ? a.moveYaw : baseYaw;
+      const rate = moving ? 0.35 : 0.18;
+      let d = desired - g.rotation.y;
       d = Math.atan2(Math.sin(d), Math.cos(d));
-      g.rotation.y = Math.abs(d) < 0.03 ? baseYaw : g.rotation.y + d * 0.18;
+      g.rotation.y = Math.abs(d) < 0.03 ? desired : g.rotation.y + d * rate;
     }
 
-    let y = a.e;
-    if (a.start >= 0) {
-      const t = Math.min(1, (clock.elapsedTime - a.start) / MOVE_DURATION);
-      const e = t * t * (3 - 2 * t); // smoothstep ease
-      a.x = a.fromX + (a.toX - a.fromX) * e;
-      a.z = a.fromZ + (a.toZ - a.fromZ) * e;
-      a.e = a.fromE + (a.toE - a.fromE) * e;
-      y = a.e + Math.sin(t * Math.PI) * 0.08;
-      if (t >= 1) a.start = -1;
-    }
     // Melee: quick out-and-back thrust toward the defender.
     // Ranged: a short recoil kick away from the shot instead.
     let lx = 0, lz = 0;
@@ -277,6 +386,33 @@ function UnitMesh({ unit, onTileClick, interaction, combat, useModels, impactDel
       if (t >= 1) fx.lungeStart = -1;
     }
     g.position.set(a.x + lx, y, a.z + lz);
+    motionRef.current.moving = a.segStart >= 0;
+
+    // Burrow sink / erupt rise on the body's dig group.
+    const dig = digRef.current;
+    if (dig) {
+      if (b.start === -2) b.start = clock.elapsedTime;
+      // Resting offset: buried forms sit sunk into the tile.
+      let yOff = useModels && unit.kind === 'wyrm_burrowed' ? -BURROW_DEPTH : 0;
+      let jx = 0, jz = 0;
+      if (b.mode === 'sink') {
+        const t = Math.min(1, (clock.elapsedTime - b.start) / BURROW_SINK_DURATION);
+        yOff = -BURROW_DEPTH * t * t;
+        // Dig shake: rapid little jitter that dies off as it goes under.
+        const shake = (1 - t) * 0.028;
+        jx = Math.sin(clock.elapsedTime * 46) * shake;
+        jz = Math.cos(clock.elapsedTime * 39) * shake;
+        if (t >= 1) b.mode = 'none';
+      } else if (b.mode === 'rise') {
+        const t = Math.min(1, (clock.elapsedTime - b.start) / BURROW_RISE_DURATION);
+        // Ease-out-back: pops a touch above ground level, then settles.
+        const c1 = 1.7, c3 = c1 + 1;
+        const e = 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2);
+        yOff = -BURROW_DEPTH * (1 - e);
+        if (t >= 1) b.mode = 'none';
+      }
+      dig.position.set(jx, yOff, jz);
+    }
 
     // Hit flash: additive red shell that pops when the hit LANDS (delayed by
     // projectile flight / melee wind-up) and decays.
@@ -307,6 +443,7 @@ function UnitMesh({ unit, onTileClick, interaction, combat, useModels, impactDel
       {unit.selected && unit.hp != null && unit.maxHp != null && (
         <HealthBar hp={unit.hp} maxHp={unit.maxHp} y={colliderH + 0.14} hostile={unit.hostile} />
       )}
+      {unit.shielded && <ShieldBubble height={colliderH - 0.1} />}
       <mesh ref={flashRef} visible={false} position={[0, 0.42, 0]}>
         <boxGeometry args={[0.62, 0.95, 0.62]} />
         <meshBasicMaterial
@@ -318,7 +455,11 @@ function UnitMesh({ unit, onTileClick, interaction, combat, useModels, impactDel
         />
       </mesh>
       <group position-y={0.015} ref={bodyRef}>
-        <UnitBody unit={unit} useModels={useModels} />
+        {/* Dig group: burrow/erupt animates this so the click collider and
+            health bar below stay at ground level. */}
+        <group ref={digRef}>
+          <UnitBody unit={unit} useModels={useModels} motion={motionRef} />
+        </group>
         {/* Invisible collider: clicking a unit's body must resolve to ITS tile,
             not the tile the ray would hit on the floor behind it. Sized to the
             unit's real model so small units don't shadow the tile behind them.
@@ -328,6 +469,7 @@ function UnitMesh({ unit, onTileClick, interaction, combat, useModels, impactDel
           <mesh
             visible={false}
             position={[0, colliderH / 2, 0]}
+            onPointerMove={() => onTileHover?.(unit.gridPos.x, unit.gridPos.y)}
             onClick={e => {
               if (interaction?.current.suppressClick) return; // grab-pan release
               e.stopPropagation();
@@ -641,32 +783,73 @@ function AbilityFxLayer({ ability, units }: { ability?: AbilityFx | null; units:
   );
 }
 
-const GHOST_DURATION = 0.6;
+/** Death beats after the killing blow LANDS (ghost.delay covers the flight):
+ *  a red hit pulse, the body tips over along the knockback direction, lies a
+ *  beat, then fades into the ground. */
+const DEATH_FALL = 0.5;
+const DEATH_LIE = 0.15;
+const DEATH_FADE = 0.4;
+const DEATH_TOTAL = DEATH_FALL + DEATH_LIE + DEATH_FADE;
 
-/** Sink-and-fade animation shared by both ghost bodies. Reads the current
- *  model from a ref so glTF bodies that stream in late still fade. */
-function useGhostFade(
-  ref: React.RefObject<THREE.Group | null>,
+/** Hold-then-fall animation shared by both ghost bodies. Reads the current
+ *  model from a ref so glTF bodies that stream in late still animate. */
+function useGhostDeath(
+  fallRef: React.RefObject<THREE.Group | null>,
+  rootRef: React.RefObject<THREE.Group | null>,
   modelRef: React.MutableRefObject<THREE.Group | null>,
+  delay: number,
+  baseY: number,
 ) {
   const startRef = React.useRef(-1);
   useFrame(({ clock }) => {
     if (startRef.current < 0) startRef.current = clock.elapsedTime;
-    const t = Math.min(1, (clock.elapsedTime - startRef.current) / GHOST_DURATION);
-    const g = ref.current;
-    if (!g) return;
-    g.visible = t < 1;
-    g.position.y = 0.015 - t * 0.12;
-    const fade = 0.9 * (1 - t);
+    const t = clock.elapsedTime - startRef.current - delay;
+    const fall = fallRef.current;
+    const root = rootRef.current;
+    if (!fall || !root) return;
+
+    if (t < 0) {
+      // The shot is still in the air — the victim stands as it was.
+      fall.rotation.x = 0;
+      modelRef.current?.traverse(o => {
+        if (o instanceof THREE.Mesh) (o.material as THREE.Material).opacity = 1;
+      });
+      return;
+    }
+    root.visible = t < DEATH_TOTAL;
+
+    // Tip over: accelerating fall to ~93°, small recoil bounce on landing.
+    const tf = Math.min(1, t / DEATH_FALL);
+    let ang = 1.62 * Math.pow(Math.min(1, tf / 0.75), 2);
+    if (tf > 0.75) ang -= 0.09 * Math.sin(((tf - 0.75) / 0.25) * Math.PI);
+    fall.rotation.x = ang;
+
+    // Fade + slight sink once it's down (relative to the tile's elevation).
+    const ft = (t - DEATH_FALL - DEATH_LIE) / DEATH_FADE;
+    const fade = ft <= 0 ? 1 : Math.max(0, 1 - ft);
+    root.position.y = baseY - (ft > 0 ? 0.06 * Math.min(1, ft) : 0);
+
+    // Red hit pulse the instant the blow lands (materials are ghost-local clones).
+    const pulse = Math.max(0, 1 - t / 0.2);
     modelRef.current?.traverse(o => {
-      if (o instanceof THREE.Mesh) (o.material as THREE.Material).opacity = fade;
+      if (o instanceof THREE.Mesh) {
+        const m = o.material as THREE.Material & { emissive?: THREE.Color };
+        m.opacity = fade;
+        if (m.emissive) m.emissive.setRGB(pulse * 0.9, pulse * 0.08, pulse * 0.04);
+      }
     });
   });
 }
 
-/** A killed unit's last body, fading out and sinking. No shadows, no clicks. */
-function GhostUnit({ view, useModels }: { view: UnitView; useModels?: boolean }) {
+/** A killed unit's corpse: stands until the killing blow lands, then falls.
+ *  No shadows, no clicks. */
+function GhostUnit({ ghost, useModels }: { ghost: UnitGhost; useModels?: boolean }) {
+  const view = ghost.view;
   const glb = useModels && unitModelForKind(view.kind) != null;
+  const dir = ghost.dir ?? { x: 0, z: 1 };
+  // Knockback frame: local +Z points along the hit direction, so the fall
+  // rotation (about local X) tips the body AWAY from the killer.
+  const fallYaw = Math.atan2(dir.x, dir.z);
 
   const boxModel = React.useMemo(() => {
     if (glb) return null;
@@ -681,38 +864,44 @@ function GhostUnit({ view, useModels }: { view: UnitView; useModels?: boolean })
   }, [view, glb]);
   React.useEffect(() => () => { if (boxModel) disposeUnit(boxModel); }, [boxModel]);
 
-  const ref = React.useRef<THREE.Group>(null);
-  // The faded model: the box build immediately, or the GLB once it streams in
-  // (GlbGhostModel clones its materials, so fading never dims living units).
+  const rootRef = React.useRef<THREE.Group>(null);
+  const fallRef = React.useRef<THREE.Group>(null);
+  // The animated model: the box build immediately, or the GLB once it streams
+  // in (GlbGhostModel clones its materials, so fading never dims living units).
   const modelRef = React.useRef<THREE.Group | null>(null);
   modelRef.current = boxModel ?? modelRef.current;
   const onGlbModel = React.useCallback((m: THREE.Group) => { modelRef.current = m; }, []);
-  useGhostFade(ref, modelRef);
+  useGhostDeath(fallRef, rootRef, modelRef, ghost.delay ?? 0, view.elevation ?? 0);
 
   return (
     <group
+      ref={rootRef}
       position={[view.gridPos.x + 0.5, view.elevation ?? 0, view.gridPos.y + 0.5]}
-      rotation-y={FACING_ROT_Y[view.facing]}
     >
-      <group ref={ref}>
-        {glb ? (
-          <React.Suspense fallback={null}>
-            <GlbGhostModel kind={view.kind} onModel={onGlbModel} />
-          </React.Suspense>
-        ) : (
-          boxModel && <primitive object={boxModel} />
-        )}
+      <group rotation-y={fallYaw}>
+        <group ref={fallRef}>
+          <group rotation-y={FACING_ROT_Y[view.facing] - fallYaw}>
+            {glb ? (
+              <React.Suspense fallback={null}>
+                <GlbGhostModel kind={view.kind} onModel={onGlbModel} />
+              </React.Suspense>
+            ) : (
+              boxModel && <primitive object={boxModel} />
+            )}
+          </group>
+        </group>
       </group>
     </group>
   );
 }
 
-export function Units({ units, ghosts, combat, ability, onTileClick, interaction, useModels }: {
+export function Units({ units, ghosts, combat, ability, onTileClick, onTileHover, interaction, useModels }: {
   units: UnitView[];
   ghosts?: UnitGhost[];
   combat?: CombatFx | null;
   ability?: AbilityFx | null;
   onTileClick?: (x: number, y: number) => void;
+  onTileHover?: (x: number | null, y?: number) => void;
   interaction?: React.MutableRefObject<CameraInteraction>;
   /** GEN 8 tileset mode: render real GLB unit models where available. */
   useModels?: boolean;
@@ -734,11 +923,18 @@ export function Units({ units, ghosts, combat, ability, onTileClick, interaction
   return (
     <>
       {units.map(u => (
-        <UnitMesh key={u.id} unit={u} onTileClick={onTileClick} interaction={interaction} combat={combat} useModels={useModels} impactDelay={impactDelay} />
+        <UnitMesh key={u.id} unit={u} onTileClick={onTileClick} onTileHover={onTileHover} interaction={interaction} combat={combat} ability={ability} useModels={useModels} impactDelay={impactDelay} />
       ))}
       <CombatFxLayer combat={combat} units={units} />
-      <AbilityFxLayer ability={ability} units={units} />
-      {ghosts?.map(g => <GhostUnit key={g.ghostKey} view={g.view} useModels={useModels} />)}
+      {/* Abilities with procedural shader VFX render in AbilityVfx; the rest
+          keep the simple ring/column primitives. Passing null (not omitting)
+          keeps the old layer from re-arming on an upgraded cast's seq. */}
+      <AbilityFxLayer
+        ability={ability && UPGRADED_CAST_IDS.has(ability.abilityId) ? null : ability}
+        units={units}
+      />
+      <AbilityVfx ability={ability} units={units} />
+      {ghosts?.map(g => <GhostUnit key={g.ghostKey} ghost={g} useModels={useModels} />)}
     </>
   );
 }

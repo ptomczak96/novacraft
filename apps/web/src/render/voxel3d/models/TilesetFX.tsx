@@ -238,15 +238,16 @@ function BileOverlay({ map, visibility }: {
   );
 }
 
-export function TilesetFX({ map, visibility, quality = 'high' }: {
+export function TilesetFX({ map, visibility, quality = 'high', variant = 'gen8' }: {
   map: MapData;
   visibility?: TileVisibility[][];
   quality?: 'high' | 'low';
+  variant?: 'gen8' | 'breach';
 }) {
   return (
     <>
       <DustMotes width={map.width} height={map.height} quality={quality} />
-      <WaterShimmer map={map} visibility={visibility} />
+      {variant === 'gen8' && <WaterShimmer map={map} visibility={visibility} />}
       <BileOverlay map={map} visibility={visibility} />
     </>
   );

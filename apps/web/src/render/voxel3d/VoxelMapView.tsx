@@ -1,23 +1,17 @@
 import React from 'react';
 import type { Action } from '@tactica/engine';
-import { getAbilityUnitTargets, isExpansionTileEligible } from '@tactica/engine';
+import { getAbilityUnitTargets, isExpansionTileEligible, previewAttack } from '@tactica/engine';
 import { coherentSubset, volleyPicker, strikePicker } from '../../game/pickers.js';
+import { previewPercussive, previewRam } from '../../game/attackPreview.js';
+import type { AttackPreviewData } from './AttackPreview.js';
 import { useGameStore } from '../../store/gameStore.js';
 import { VoxelArena } from './VoxelArena.js';
 import { VoxelErrorBoundary } from './VoxelErrorBoundary.js';
 import type { CombatFx, Facing, TileHighlight, UnitGhost, UnitView } from './types.js';
 import { TEAM_COLORS } from './palette.js';
-
-/** Fresh facing derivation for the voxel pipeline (render-side only). */
-function facingFromDelta(dx: number, dy: number): Facing | null {
-  if (dx > 0) return 'se';
-  if (dx < 0) return 'nw';
-  if (dy > 0) return 'sw';
-  if (dy < 0) return 'ne';
-  return null;
-}
-
-const DEFAULT_FACING: Facing = 'se';
+import { attackStyleFor, impactDelayFor } from './units/attackStyles.js';
+import { abilityImpactDelay } from './fx/AbilityVfx.js';
+import { FxShowcasePanel } from './fx/BattlefieldVfx.js';
 
 interface Targets {
   move: Map<string, Action>;
@@ -40,6 +34,7 @@ export function VoxelMapView() {
     visibleState, legalActions, selectedUnitId, abilityMode,
     selectUnit, executeAction, setSelectedCity, setInspectedTile,
     registry, lastCombatEvent, lastAbilityEvent, tileTheme, gameState,
+    hoveredTile, setHoveredTile,
     volleySelect, setVolleySelect, strikeSelect, setStrikeSelect,
     targetSelect, setTargetSelect, territorySelect, setTerritorySelect,
   } = useGameStore();
@@ -49,6 +44,7 @@ export function VoxelMapView() {
   // (dev harness, pairs with ?unitGallery=1 for reviewing the models).
   const tileset = tileTheme === 'gen8_tileset3d' ||
     new URLSearchParams(window.location.search).get('tileset') === '1';
+  const breach = tileTheme === 'breach_ashwater';
 
   // Dev harness: ?unitGallery=1 lays out one of every unit kind on the board
   // (alternating teams) for reviewing the voxel models.
@@ -62,31 +58,25 @@ export function VoxelMapView() {
     [],
   );
 
-  // Facing is remembered per unit and updated from move deltas.
-  const facingsRef = React.useRef(new Map<number, Facing>());
-  const prevPosRef = React.useRef(new Map<number, { x: number; y: number }>());
-
+  // Polytopia-style resting facing: units always settle facing the CAMERA —
+  // player 0's army rests SW, player 1's rests SE — and only turn away from
+  // that to walk a path segment or strike (UnitMesh handles those overrides
+  // and eases back afterwards).
   const unitViews = React.useMemo<UnitView[]>(() => {
     if (!visibleState) return [];
-    const facings = facingsRef.current;
-    const prev = prevPosRef.current;
     return visibleState.units.map(u => {
-      const last = prev.get(u.id);
-      if (last) {
-        const f = facingFromDelta(u.position.x - last.x, u.position.y - last.y);
-        if (f) facings.set(u.id, f);
-      }
-      prev.set(u.id, { x: u.position.x, y: u.position.y });
       return {
         id: u.id,
         gridPos: { x: u.position.x, y: u.position.y },
-        facing: facings.get(u.id) ?? DEFAULT_FACING,
+        facing: (u.owner === 0 ? 'sw' : 'se') as Facing,
         teamColor: TEAM_COLORS[u.owner % TEAM_COLORS.length],
         kind: u.typeId,
         hostile: u.owner !== visibleState.currentPlayer,
         selected: u.id === selectedUnitId,
         hp: u.hp,
         maxHp: registry.unitTypes[u.typeId]?.maxHP,
+        shielded: u.statuses?.includes('shielded') ?? false,
+        statuses: u.statuses ?? [],
       };
     });
   }, [visibleState, selectedUnitId, registry]);
@@ -258,24 +248,60 @@ export function VoxelMapView() {
   // frame's unit views provide the dead unit's last appearance.
   const prevViewsRef = React.useRef<UnitView[]>([]);
   const [ghosts, setGhosts] = React.useState<UnitGhost[]>([]);
+
+  // Kills → corpses. Each corpse HOLDS (stands as it was) until the killing
+  // blow's projectile/impact actually arrives — its `delay` mirrors the FX
+  // timing — then falls over along `dir` (away from the killer) and fades.
+  const spawnGhosts = React.useCallback((dead: UnitGhost[]) => {
+    if (dead.length === 0) return;
+    setGhosts(g => [...g, ...dead]);
+    const keys = new Set(dead.map(d => d.ghostKey));
+    const maxDelay = Math.max(...dead.map(d => d.delay ?? 0));
+    setTimeout(() => setGhosts(g => g.filter(x => !keys.has(x.ghostKey))), (maxDelay + 1.6) * 1000);
+  }, []);
+
   const combatSeq = lastCombatEvent?.seq;
   React.useEffect(() => {
     const ev = lastCombatEvent;
     if (!ev) return;
     const dead: UnitGhost[] = [];
-    const ghost = (id: number, pos: { x: number; y: number }) => {
+    const attacker = prevViewsRef.current.find(u => u.id === ev.attackerId);
+    const dist = Math.hypot(ev.defenderPos.x - ev.attackerPos.x, ev.defenderPos.y - ev.attackerPos.y);
+    const impact = impactDelayFor(attackStyleFor(attacker?.kind ?? ''), dist);
+    const len = dist || 1;
+    const dir = { x: (ev.defenderPos.x - ev.attackerPos.x) / len, z: (ev.defenderPos.y - ev.attackerPos.y) / len };
+    const ghost = (id: number, pos: { x: number; y: number }, delay: number, d: { x: number; z: number }) => {
       const v = prevViewsRef.current.find(u => u.id === id);
-      if (v) dead.push({ view: { ...v, gridPos: { ...pos } }, ghostKey: `${ev.seq}:${id}` });
+      if (v) dead.push({ view: { ...v, gridPos: { ...pos } }, ghostKey: `${ev.seq}:${id}`, delay, dir: d });
     };
-    if (ev.defenderKilled) ghost(ev.defenderId, ev.defenderPos);
-    if (ev.attackerKilled) ghost(ev.attackerId, ev.attackerPos);
-    if (dead.length === 0) return;
-    setGhosts(g => [...g, ...dead]);
-    const keys = new Set(dead.map(d => d.ghostKey));
-    const t = setTimeout(() => setGhosts(g => g.filter(x => !keys.has(x.ghostKey))), 900);
-    return () => clearTimeout(t);
+    if (ev.defenderKilled) ghost(ev.defenderId, ev.defenderPos, impact, dir);
+    // Retaliation lands a beat after the attack connects.
+    if (ev.attackerKilled) ghost(ev.attackerId, ev.attackerPos, impact + 0.2, { x: -dir.x, z: -dir.z });
+    spawnGhosts(dead);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [combatSeq]);
+
+  const abilityKillSeq = lastAbilityEvent?.seq;
+  React.useEffect(() => {
+    const ev = lastAbilityEvent;
+    if (!ev?.killed?.length) return;
+    const dead: UnitGhost[] = [];
+    for (const k of ev.killed) {
+      const v = prevViewsRef.current.find(u => u.id === k.id);
+      if (!v) continue;
+      let idx = ev.targets.findIndex(t => t.x === k.pos.x && t.y === k.pos.y);
+      if (idx < 0) idx = 0;
+      const delay = abilityImpactDelay(ev.abilityId, ev.casterPos, k.pos, idx);
+      const dx = k.pos.x - ev.casterPos.x, dz = k.pos.y - ev.casterPos.y;
+      const len = Math.hypot(dx, dz);
+      // Self-kills (self_destruct) have no direction — fall pseudo-randomly.
+      const a = (k.id * 2.399) % (Math.PI * 2);
+      const dir = len > 0.01 ? { x: dx / len, z: dz / len } : { x: Math.sin(a), z: Math.cos(a) };
+      dead.push({ view: { ...v, gridPos: { ...k.pos } }, ghostKey: `a${ev.seq}:${k.id}`, delay, dir });
+    }
+    spawnGhosts(dead);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [abilityKillSeq]);
   React.useEffect(() => {
     prevViewsRef.current = unitViews;
   }, [unitViews]);
@@ -289,6 +315,10 @@ export function VoxelMapView() {
       defenderId: ev.defenderId,
       attackerPos: ev.attackerPos,
       defenderPos: ev.defenderPos,
+      damage: ev.damage,
+      retaliation: ev.retaliation,
+      defenderKilled: ev.defenderKilled,
+      attackerKilled: ev.attackerKilled,
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [combatSeq]);
@@ -304,9 +334,76 @@ export function VoxelMapView() {
       unitId: ev.unitId,
       casterPos: ev.casterPos,
       targets: ev.targets,
+      killed: ev.killed,
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [abilitySeq]);
+
+  // Board hover (guarded — only writes the store when the TILE changes).
+  const onTileHover = React.useCallback((x: number | null, y?: number) => {
+    const cur = useGameStore.getState().hoveredTile;
+    if (x === null) {
+      if (cur) setHoveredTile(null);
+    } else if (!cur || cur.x !== x || cur.y !== y) {
+      setHoveredTile({ x, y: y! });
+    }
+  }, [setHoveredTile]);
+
+  // Into-the-Breach outcome telegraph for the hovered attack / push-ability
+  // target — numbers straight from the engine's preview helpers.
+  const preview = React.useMemo<AttackPreviewData | null>(() => {
+    if (!gameState || !hoveredTile) return null;
+    const key = `${hoveredTile.x},${hoveredTile.y}`;
+    const atk = targets.attack.get(key);
+    if (atk && atk.type === 'attack') {
+      const attacker = gameState.units.find(u => u.id === atk.unitId);
+      const res = previewAttack(gameState, atk.unitId, atk.targetId, registry);
+      if (attacker && res) {
+        const style = attackStyleFor(attacker.typeId);
+        const trajectory = style.kind === 'melee'
+          ? 'none'
+          : (style.shape === 'shell' || style.shape === 'glob' || style.shape === 'arrow' ? 'arc' : 'straight');
+        return {
+          kind: 'attack',
+          attacker: { ...attacker.position },
+          target: { ...hoveredTile },
+          trajectory,
+          damage: res.attackerDamage,
+          retaliation: res.defenderRetaliation,
+          lethal: res.defenderKilled,
+          attackerLethal: res.attackerKilled,
+        };
+      }
+    }
+    const cast = targets.ability.get(key);
+    if (cast && cast.type === 'useAbility') {
+      const caster = gameState.units.find(u => u.id === cast.unitId);
+      if (caster && cast.abilityId === 'percussive_shells') {
+        const p = previewPercussive(gameState, registry, caster, hoveredTile);
+        return {
+          kind: 'percussive',
+          attacker: { ...caster.position },
+          target: { ...hoveredTile },
+          trajectory: 'arc',
+          centerDamage: p.centerDamage,
+          pushes: p.pushes,
+        };
+      }
+      if (caster && cast.abilityId === 'ram') {
+        const p = previewRam(gameState, registry, caster, hoveredTile);
+        if (p) {
+          return {
+            kind: 'ram',
+            attacker: { ...caster.position },
+            target: { ...hoveredTile },
+            trajectory: 'none',
+            pushes: [p],
+          };
+        }
+      }
+    }
+    return null;
+  }, [gameState, hoveredTile, targets, registry]);
 
   if (!visibleState) return null;
 
@@ -331,11 +428,15 @@ export function VoxelMapView() {
           onTileClick={onTileClick}
           visibility={gallery ? undefined : visibleState.visibility}
           tileset={tileset}
+          breach={breach}
+          onTileHover={onTileHover}
+          preview={preview}
           combat={combat}
           ability={abilityFx}
           ghosts={ghosts}
         />
       </VoxelErrorBoundary>
+      {breach && <FxShowcasePanel map={visibleState.map} hovered={hoveredTile} />}
     </div>
   );
 }

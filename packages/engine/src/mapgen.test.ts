@@ -19,6 +19,22 @@ function centres(state: GameState): Coord[] {
 }
 
 describe('Mapgen — ruins & territories', () => {
+  it('Ashwater creates a deterministic salt-flat battlefield with water channels', () => {
+    const ashwater = {
+      ...config,
+      mapWidth: 16,
+      mapHeight: 16,
+      mapgen: { biome: 'ashwater' as const, impassableFraction: 0.14, mountainFraction: 0.12 },
+    };
+    const a = createGame(ashwater, registry, ['vanguard', 'hive'], 77);
+    const b = createGame(ashwater, registry, ['vanguard', 'hive'], 77);
+    const terrains = a.map.tiles.flat().map(t => t.terrain);
+
+    expect(terrains.filter(t => t === 'water').length).toBeGreaterThan(8);
+    expect(terrains.filter(t => t === 'sand').length).toBeGreaterThan(80);
+    expect(JSON.stringify(a.map)).toBe(JSON.stringify(b.map));
+  });
+
   it('no two city/ruin territories ever overlap (centres ≥ 3 apart) across many seeds', () => {
     for (let seed = 0; seed < 40; seed++) {
       const state = createGame(config, registry, ['vanguard', 'hive'], seed);

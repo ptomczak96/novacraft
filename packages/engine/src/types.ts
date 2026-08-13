@@ -137,13 +137,18 @@ export interface GameConfig {
   // "Nodes" mechanic toggle (buildable buff/debuff structures). Scaffolding — the flag is
   // carried through config but Nodes behaviour is not implemented yet.
   nodesEnabled?: boolean;
+  // Prototyping sandbox: actions never exhaust units (unlimited moves, attacks and
+  // ability casts per turn; no cooldowns; tech gates on abilities ignored). The
+  // engine stays deterministic — the flag only relaxes per-turn gating.
+  sandboxMode?: boolean;
 }
 
 // ── Map generation tuning ──
 // All fields optional so older configs/saves keep working. Generation currently
-// supports two biomes; water and lava generation is disabled (the classification
-// code remains in mapgen for when we re-enable them).
-export type Biome = 'grassland' | 'stone' | 'desert';
+// Biomes describe generation rather than rendering. Presentation themes are
+// selected independently by the web client, though Ashwater has a paired 3D
+// tileset in the setup screen.
+export type Biome = 'grassland' | 'stone' | 'desert' | 'ashwater';
 
 export interface MapGenOptions {
   biome?: Biome;            // overall map theme

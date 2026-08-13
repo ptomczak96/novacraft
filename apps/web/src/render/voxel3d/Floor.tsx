@@ -27,7 +27,7 @@ export function Floor({ width, height, quality, floorTextures, onTileClick, inte
   // Clean platform plates, one per tile, baked into albedo+roughness (1:1 UV
   // over the arena). Hand-authored maps via floorTextures take precedence.
   const plates = React.useMemo(
-    () => makeFloorPlateTextures(width, height, 99, theme, quality, holes),
+    () => makeFloorPlateTextures(width, height, 99, theme === 'breach' ? 'desert' : theme, quality, holes),
     [width, height, theme, quality, holes],
   );
   const albedoMap = floorTextures?.albedo ?? plates.albedo;

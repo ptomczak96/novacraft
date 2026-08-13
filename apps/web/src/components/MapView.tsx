@@ -26,7 +26,6 @@ export const UNIT_ICONS: Record<string, string> = {
   titan: '🗿',
   sentinel: '📡',
   tank: '🛞',
-  catapult: '💣',
   scuttling: '🐛',
   hive_scout: '👁️',
   reaper: '🦅',
@@ -34,10 +33,6 @@ export const UNIT_ICONS: Record<string, string> = {
   vindrace: '🦏',
   seercaust: '🔮',
   wyrm: '🪱',
-  ironclad_berserker: '🪓',
-  ironclad_siege_tower: '🏰',
-  sylvan_ranger: '🌿',
-  sylvan_treant: '🌳',
 };
 
 const RESOURCE_LABEL: Record<string, string> = { ore: 'Ore ◈', plasma: 'Plasma ✦' };
@@ -53,15 +48,17 @@ export function MapView() {
 
   // Renderer selection: `?renderer=voxel3d` or the on-screen toggle. The 2D iso
   // canvas remains the default and is untouched by the voxel3d option. The
-  // GEN 8 — 3D Tileset map-generation option is inherently 3D, so it starts on
-  // the voxel renderer (the toggle still allows dropping back to 2D).
+  // The dedicated GEN 8 and Into-the-Breach-inspired Ashwater themes are
+  // inherently 3D, so they start on the voxel renderer (the toggle still
+  // allows dropping back to 2D).
   const [renderer, setRenderer] = React.useState<RendererKind>(() =>
     new URLSearchParams(window.location.search).get('renderer') === 'voxel3d'
       || tileTheme === 'gen8_tileset3d'
+      || tileTheme === 'breach_ashwater'
       ? 'voxel3d'
       : 'iso');
   useEffect(() => {
-    if (tileTheme === 'gen8_tileset3d') setRenderer('voxel3d');
+    if (tileTheme === 'gen8_tileset3d' || tileTheme === 'breach_ashwater') setRenderer('voxel3d');
   }, [tileTheme]);
 
   // Map pan offset (drag-to-pan). Drives both the board's CSS translate and the

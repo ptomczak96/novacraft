@@ -4352,3 +4352,469 @@ from UnitSheet → eligible 2×2 band highlighted on the 3D board → tiles tick
 unticked by real board clicks → confirm → four staggered arcing shells with
 burst rings on impact. Added a dev-only console handle (`window.__game` →
 zustand store, vite dev builds only) for driving actions while debugging.
+
+### 2026-08-11 — Patrick Tomczak — Procedural shader VFX for select abilities (LinearAbiltyCastingThreeJS port)
+Upgraded a subset of ability cast FX in the 3D renderer from the pooled
+ring/column primitives to procedural, shader-driven effects, ported from the
+MIT-licensed reference sandbox github.com/achrefelouafi/LinearAbiltyCastingThreeJS
+(League-style skillshot VFX: everything generated in GLSL, no textures).
+
+**What was added** (`apps/web/src/render/voxel3d/fx/`):
+- `glsl.ts` — shared noise chunk (simplex/fbm/curl, linear value-noise hashes)
+  + a 4-stop gradient helper, injected into every FX material.
+- `ParticleSystem.ts` — pooled GPU particle system: CPU only writes spawn
+  attributes into a ring buffer; all motion (analytic drag, gravity, curl
+  turbulence), size/colour/alpha-over-lifetime and the procedural silhouettes
+  (soft/smoke/streak/chip/ring) are evaluated in the vertex/fragment shader.
+  Partial-buffer uploads via addUpdateRange. Plus a fractional RateEmitter.
+- `lightning.ts` — instanced camera-facing ribbon bolt: vertices arrive as
+  (t, side) and the vertex shader builds the whole path (axis + per-filament
+  fan + octaves of LINEAR value-noise kinks — linear so the corners stay
+  sharp), drawn in two passes (wide halo under hot core) so the glow stays
+  attached to every kink. Re-strikes/flickers on a quantised clock.
+- `AbilityVfx.tsx` — R3F layer consuming the same `AbilityFx` store event as
+  AbilityFxLayer. Archetypes: `stun` → lightning bolt caster→target with
+  sparks and a zap ring; `ballistic_volley`/`percussive_shells` → staggered
+  ember-trailed shells with shockwave ring + debris chips + smoke + flash per
+  tile; `self_destruct` → the same blast, big, at the caster;
+  `heal_*`/`repair_*`/`cure` → curl-noise motes rising from a soft ground
+  ring (green/amber/mint per family).
+
+**Why this shape**:
+- The reference's key idea — "the CPU stores only what the dice decided, the
+  shader resolves everything else per frame" — was kept; its settings-editor
+  machinery, depth-prepass soft particles and render layers were NOT ported
+  (Rigbound has no depth prepass; scope stays small).
+- Ability ids in `UPGRADED_CAST_IDS` are gated OUT of the old AbilityFxLayer
+  (passed null so it never arms) rather than removed — every other ability
+  keeps the existing look, and the old layer remains the fallback.
+- Colours ride the existing PostFX bloom (luminance > 1 blooms) — no new
+  passes; `toneMapped: false` + hot colour values, same trick as CombatFxLayer.
+- Dev harness: `?fxtest=1` exposes `window.__fxcast(id, targets?, caster?)`;
+  `?fxtest=auto` cycles all archetypes on a timer. Used to verify all three
+  archetypes live (headed browser screenshots; headless Chromium's SwiftShader
+  cannot create a WebGL context on this machine).
+
+Known limits (inherited from the one-latest-event model, unchanged): rapid
+successive casts coalesce to the newest event, and target lists truncate at 4.
+
+### 2026-08-12 — Patrick Tomczak — GEN 8: warrior rigged + animated via Blender MCP (pilot)
+First rigged unit, produced end-to-end through the Blender MCP bridge driving
+Patrick's live Blender session: 16-bone humanoid armature, automatic weights,
+then two AI-mesh-specific fixes discovered by iterating on screenshots —
+(1) Meshy models are ONE fused surface whose UV-seam duplicate vertices get
+DIFFERENT bone-heat weights and tear apart when posed; fixed by weld-averaging
+weights across co-located vertices (1mm epsilon) after a heavy smooth pass.
+(2) Region hard-binding (e.g. backpack→chest) creates tears at region borders
+— abandoned; the clean recipe (auto → smooth ×6 → seam-average) is invisible
+at game camera distance. Three clips authored procedurally (walk 24f loop,
+attack: two-handed slash — the sword is in the LEFT hand — 24f one-shot,
+idle 48f sway), exported via NLA tracks, baked through the standard asset
+pipeline (49.9 MB → 401 KB, clips intact). Renderer side: GlbUnitModel now
+clones via SkeletonUtils (plain clone breaks skinning), never frustum-culls
+skinned meshes, and runs an AnimationMixer state machine (idle ↔ walk during
+the move glide at 2× stride, attack one-shot on the combat event, fade-backs)
+fed by a per-unit motion ref from UnitMesh. Models without clips are
+untouched. Working file saved to assets/rigs/warrior-rig.blend (gitignored
+with the raw assets). Verified in-game: idle sway visible on the live board.
+
+### 2026-08-12 — Patrick Tomczak — Warrior idle re-authored + walk made readable
+Playtest feedback: the idle read as "shrugging" — the ±2° upper-arm rotation
+was the culprit. Re-authored as pure breathing (chest/spine expansion, hair of
+hip sink, head compensation; shoulders untouched). Walk was invisible because
+the 0.3 s tile glide swallowed the stride: rigged models (UnitModelDef.rigged)
+now glide 0.65 s LINEARLY with the procedural hop disabled — the clip carries
+the gait — while unrigged models keep the original 0.3 s hop-glide.
+
+### 2026-08-12 — Patrick Tomczak — Path-following moves + Polytopia resting facing (rules unchanged)
+Patrick raised whether diagonal movement should be REMOVED because straight-
+line glides look unnatural. Decision: keep the 8-way Chebyshev rules — every
+movement/range stat is balanced around them, and the ugliness was pure
+presentation. The renderer now walks moves TILE-CENTRE TO TILE-CENTRE
+(stepping diagonally while both axes differ, then straight — the natural
+8-way path) at a fixed pace per tile (0.42 s rigged = one walk-stride-pair
+per tile; 0.2 s hop-per-tile for unrigged), facing each segment as it goes,
+with mid-glide redirects handled and >7-tile paths snapping (fog reveals).
+Facing is now Polytopia-style: units SETTLE facing the camera (P0 rests SW,
+P1 rests SE) and only turn to walk a segment or strike — attack facing snaps,
+walk facing eases fast, rest facing eases slow. The per-unit remembered
+"last move direction" facing model is gone.
+
+### 2026-08-12 — Patrick Tomczak — Unique cast VFX for EVERY active ability (recipe system)
+Rewrote `apps/web/src/render/voxel3d/fx/AbilityVfx.tsx` from three hardcoded
+archetypes into a declarative RECIPE system: every active ability id maps to a
+choreography composed from shared elements — bolt (lightning ribbon), shells
+(lobbed projectiles + trails), dash (ground dust-wake), impact (sparks /
+debris / smoke / flash / ground ring, optionally directional or root-circle),
+sustain (timed after-emitters), and shield (bubble mesh). Adding an ability's
+look is now a ~10-line recipe entry, not new choreography code — the same
+"content is data" philosophy as the JSON balance numbers.
+
+Distinct looks per unit ability:
+- wraith stun → amber storm bolt; medic tracer_round → near-straight hot wire
+  + amber marker pulses; seercaust infect → drooping violet filament + a
+  lingering infection cloud (bolt uniform overrides per recipe).
+- titan volley/percussive → staggered artillery (unchanged); burstling
+  self_destruct → the big one at home.
+- seercaust spray_bile → fat dripping glob (heavier trail gravity), goo-chip
+  splash, bile mist, bubbling motes.
+- vindrace ram → NEW dash element: dust wake rushing caster→target, rubble
+  thrown FORWARD (directional impact) — the shove is the story.
+- wyrm burrow/erupt + wyrm_strike → sand geysers (dust smoke + debris),
+  scaled to the beat; entangle → NEW debrisRing element: root chips punch out
+  of a circle around the treant.
+- tank assault_mode → weld sparks + venting steam; berserker rage → fire
+  climbs out of it (per-recipe gravity overrides flip particles upward);
+  ranger camouflage → green veil settles, motes drift DOWN.
+- heals green / cure mint / repairs amber+weld-sparks; engineer build_node →
+  scaffolding: slow ring, climbing motes, intermittent welds; sentinel
+  kinetic_shield → NEW shield element: translucent bubble pops over the ally.
+- wraith plant_explosives → tossed charge, then a red arming beacon BLINKING
+  on the victim (sustained flash pulses) until it detonates.
+
+Per-cast state that systems share (gradients, gravity vectors, bolt uniforms,
+shell scale) is stamped at arm time and always fully restored from recipe +
+defaults — safe because the layer animates one cast at a time by design.
+Verified live on the **GEN 8 - 3D Tileset** board (the target renderer for
+this work) via `?fxtest=1` + `window.__fxcast`: stun, volley, ram, infect,
+kinetic_shield, entangle, rage, spray_bile all screenshot-confirmed on GLB
+tiles; remaining recipes exercise the same verified elements. Old
+AbilityFxLayer remains the fallback for ids without a recipe.
+
+### 2026-08-12 — Patrick Tomczak — Sandbox game mode (prototyping workbench)
+Added a Sandbox mode for prototyping: every unit kind spawned for both teams,
+unlimited moves / attacks / ability casts per turn, no cooldowns, no tech
+gates, unlimited wallet.
+
+Engine (`packages/engine`):
+- `GameConfig.sandboxMode?: boolean` (types.ts) — optional, so old saves and
+  the zod config schema are untouched.
+- ONE gating hook in `applyAction` (game.ts): after dispatch, when
+  `sandboxMode`, clear every unit's `hasMoved`/`hasAttacked`/`abilityCooldowns`.
+  Chosen over editing the ~10 read sites in `getLegalActions` because the UI
+  (UnitSheet disabled states, `isOwnActiveUnit`) reads the same fields — one
+  sweep keeps engine and UI consistent for free. `endTurn` keeps its own reset.
+- `getLegalActions`: ability `requiresTech` gate skipped in sandbox (so
+  heal_2 etc. are castable without research).
+- `applyEndTurn`: passive territory heal skipped in sandbox — with exhaustion
+  cleared after every action, EVERY unit would qualify as "rested" and
+  full-heal each turn, wiping the damage states a prototyper is looking at.
+- `createTestCombatGame` gained `opts { allUnitTypes, copies }` (defaults
+  preserve the existing 2-per-roster behaviour and its tests). `allUnitTypes`
+  spawns from the full unit registry — including kinds no faction recruits
+  (ironclad_*, sylvan_*, sentinel…) — skipping morph-only forms, detected as
+  "morphTo target not in any faction roster" (wyrm/tank are morph targets of
+  their own return-morphs but ARE rosterable, so a plain morph-target filter
+  would wrongly drop them).
+
+Web: `startSandbox` store action (test-combat start path + `sandboxMode` +
+`unlimitedResources`, copies 1) and a "Sandbox" button on the setup screen.
+Engine test `sandbox.test.ts` (4 tests): full spawn census, move-does-not-
+exhaust, cast-leaves-no-cooldown, and non-sandbox behaviour unchanged.
+
+Debugging note for future engine edits: workspace packages are served by Vite
+as live source but their module URLs carry the dep-optimizer's version hash
+and are browser-cached as immutable — after engine edits, if the app behaves
+stale despite a reload, delete `apps/web/node_modules/.vite` and restart the
+dev server (this changes the hash and busts the browser cache).
+
+### 2026-08-12 — Patrick Tomczak — StarCraft-style burrow/erupt animation for the wyrm
+In GEN 8 tileset mode `wyrm_burrowed` reuses the full wyrm GLB (modelAssets
+alias), so burrowing changed nothing visually. Now (Units.tsx): on `burrow`
+the body dig-shakes (rapid decaying jitter) and sinks 0.8 units INTO the tile
+over 0.55s — the tile block itself occludes the sunken body via depth testing,
+the same trick as the death-ghost sink — and while the unit wears its
+burrowed form it rests at that depth with just a tip proud of the ground. On
+`erupt` it springs back up in 0.4s with an ease-out-back overshoot. The dust
+geysers from the burrow/erupt VFX recipes fire at the same beats.
+
+Wiring: UnitMesh now receives the `ability` event (previously only the FX
+layers did) and animates a dedicated "dig group" wrapping only the unit body —
+the click collider and health bar stay at ground level so a buried wyrm
+remains selectable. Box-voxel mode is untouched (its burrowed form is already
+a bespoke mound build). Verified live in the sandbox on the GEN 8 board:
+burrow → buried sliver → erupt → full height, via real engine actions.
+
+### 2026-08-12 — Patrick Tomczak — Faction voice SFX layer (placeholder StarCraft rips)
+Ripped 185 named sounds (browser-session harvest; the CDN's signed URLs
+reject plain curl) into public/audio/starcraft/ — GITIGNORED: Blizzard IP,
+local prototyping only, must never ship or be committed to the public repo.
+New voice layer on top of GameSfx's UI blips (data/factionVoices.ts):
+faction-keyed pools so a faction only speaks its own lines — Vanguard uses
+the Terran radio chatter (select acks, move confirms, attack barks, death
+cries, per-kind recruit-ready lines — Goliath online→tank, Battlecruiser
+operational→titan, upgrade-complete→research, add-on-complete→build, and a
+bot-only throttled "your forces are under attack" warning). Shuffle-bag
+anti-repeat, 700 ms chatter throttle (death cries pre-empt it), acting
+faction derived from the pre-action state so bot actions voice correctly.
+The HIVE pool is intentionally EMPTY (no marine voices on bugs); the site
+rate-limited us (503) before a Zerg board could be ripped — fill
+HIVE/HIVE_READY_BY_KIND in factionVoices.ts when it cools down.
+
+### 2026-08-12 — Patrick Tomczak — Voice lines re-categorised per unit (supersedes flat faction pools)
+Playtest: a sentinel click could speak four different StarCraft characters —
+the rip has no per-unit metadata, so the first pass pooled all lines
+faction-wide. Lines are now HAND-CATEGORISED back to their source units and
+each RIGBOUND kind speaks ONE consistent character (warrior→Marine,
+lancer→trooper #2, defender→Firebat, tank→Goliath, titan→Battlecruiser,
+wraith→Ghost, sentinel→Wraith pilot, scout→Explorer, stalker→machine comms),
+with per-kind select/move/attack/death/ready pools. Kinds without a matched
+character use a small anonymous-radio fallback (single-word acks only);
+comedy/announcer lines from the rip are deliberately unused. GameSfx now
+passes the acting unit's kind for orders and the dying unit's kind for death
+cries.
+
+### 2026-08-12 — Patrick Tomczak — StarCraft voice layer REMOVED from triggering (parked)
+Despite per-unit re-categorisation, the voice layer felt buggy in real play
+(mixed lines + a phantom "notification" ping; part of it was stale-HMR double
+subscription, but the polish wasn't there). Per Patrick: ALL StarCraft sound
+triggering removed for now — GameSfx.tsx restored to the original UI-blip
+version. The ripped audio (public/audio/starcraft/, gitignored) and the
+categorised pools (data/factionVoices.ts, now unimported) stay on disk so a
+future pass can re-wire deliberately.
+
+### 2026-08-12 — Patrick Tomczak — Rigged all 17 Meshy unit models with idle/walk/attack clips
+Every GEN 8 unit GLB is now rigged (previously only the hand-rigged warrior).
+Pipeline: procedural rigging in Blender driven over the MCP bridge —
+per unit: import raw /assets GLB, build a small parametric armature matched to
+the body plan (classified from viewport screenshots), rigid nearest-bone bind
+(mech-correct; smoothed a little for organics), author idle(48f)/walk(24f)/
+attack(24f) actions at 24fps from sine/pulse curves, push as NLA tracks
+(the warrior's export contract), export, optimize with the standard
+gltf-transform flags. Public GLBs stay ~0.3–0.6 MB (tank 1 MB — untextured
+dense mesh, decimated in Blender since gltf-transform won't simplify skins).
+
+Each unit's animations fit its fantasy: scout quad-walker trots and pounces;
+lancer marches and shoulders its rifle with recoil; Bulwark stomps behind its
+tower shield and shield-bashes; wraith snap-aims a sniper shot; stalker stilts
+along and stabs down; tank surges with pod-sway and kicks on firing; titan
+ponderous-stomps and shudders through a missile volley; sentinel drifts
+nose-down and pulses its emitter (radar-sweep idle); scuttling skitters and
+claw-snaps; hive_scout canters and lunges a bite; reaper flaps blade-wings and
+scissors them on the dive; scab waddles under its bio-mortar and recoils as it
+lobs; burstling waddles, breathes, and SWELLS for self-destruct (sac scale
+bones); vindrace tripod-skitters and gore-charges; seercaust glides with a
+coiling tail that whip-strikes; wyrm sways on its coil and cobra-strikes;
+behemoth lumbers and rears into a tusk slam.
+
+modelAssets.ts: rigged:true on all 18. Verified in-game on the GEN 8 sandbox:
+all models load clean, walk clips play during glides (screenshot mid-stride),
+attack pipeline fires; no console errors. Rig library + per-body-plan notes
+preserved in assets/rigs/procedural/ (incl. the gotchas: Blender can't import
+meshopt GLBs — rig from /assets; driver_namespace dies on file load — use a
+real module; keep bones vertical so pose rx = fore/aft swing everywhere).
+
+### 2026-08-12 — Patrick Tomczak — Deaths synced to hit arrival + fall-over animation
+Problem: the engine kills instantly, so a unit's death visual started while
+the killing projectile/shell was still in the air (and ability kills produced
+NO death visual at all — units just vanished).
+
+- `AbilityEvent.killed` (gameStore): units diffed around applyAction, so the
+  renderer knows exactly which units a cast killed and where.
+- `UnitGhost` gained `delay` + `dir`: VoxelMapView computes delay from the FX
+  timing that actually plays — combat kills use impactDelayFor(attacker style,
+  distance) (retaliation deaths +0.2s), ability kills use the new
+  `abilityImpactDelay()` exported from AbilityVfx (mirrors each recipe's
+  shell-flight / bolt-travel / dash / stagger maths). Ghost cleanup timeout
+  scales with the longest delay.
+- GhostUnit rewritten: the corpse HOLDS exactly as it stood (opacity 1) until
+  the blow lands, then a red emissive hit-pulse, tips over ~93° along the
+  knockback direction (nested yaw frames keep the body's facing while the fall
+  axis aligns with the hit; pivot at the feet, accelerating fall with a small
+  landing recoil), lies a beat, and fades into the ground. Replaces the old
+  instant sink-fade. Elevation-aware (mountain corpses stay on the rock top).
+
+Verified: typecheck+build clean; sandbox kills produce held corpses and no
+console errors (screenshot timing kept hiding the fall behind the combat-log
+panel, so the fall arc itself is maths-checked — knockback frame yaw =
+atan2(dir.x, dir.z), rotation.x tips local +Y toward local +Z = away from the
+killer). Known gap: the death SFX still plays at event time, not impact time.
+
+### 2026-08-12 — Patrick Tomczak — GEN 5 and GEN 6 desert themes deleted
+Per Patrick ("useless"): removed both Map Generation options end to end —
+SetupScreen entries, the TileTheme union members, both ThemeDef blocks in
+tileSprites.ts (incl. GEN 5's mesa-nudge geometry notes), and the sprite
+folders public/tiles/gen5_desert (1.6 MB) + gen6_desert (3.9 MB). ITB - Desert
+keeps the shared MTP resource props; GEN 3 / GEN 7 / ITB remain the desert
+options.
+
+### 2026-08-12 — Patrick Tomczak — GEN 7 deleted, setup screen polish, orphan units removed, Vanguard tweaks
+- **GEN 7 - Industrial deleted end to end** (same call as GEN 5/6: unused):
+  theme option, TileTheme member, ThemeDef, the gen7 Vanguard sprite-skin set
+  in unitSprites.ts, and assets (tiles/gen7_industrial 2.1 MB +
+  units/vanguard_gen7 1.3 MB).
+- **Setup screen**: card widened 500→640 px so the six action buttons fit
+  unclipped; the COMBATANTS section is now a chevron collapsible, closed by
+  default with a dim "Vanguard vs Hive" inline summary (defaults are almost
+  always right).
+- **Roster-orphan units removed from the game** (Patrick: "no idea what they
+  are"): catapult, ironclad_berserker, ironclad_siege_tower, sylvan_ranger,
+  and sylvan_treant (ranger's family pair) — deleted from units.json +
+  economy popCosts and purged from every UI map (icons, notation codes,
+  marker shapes, iso drawers, voxel box defs, attack styles). They were
+  leftovers no faction could recruit that only surfaced through the sandbox's
+  spawn-everything roster. seercaust.test's berserker stand-in attacker
+  swapped to the archer (relative assertions; behemoth's ATK 3 tied at
+  rounding). NOTE: `archer` is the one remaining roster orphan — kept
+  deliberately pending Patrick's call. 267/267 tests green, data validates.
+- **Vanguard sizing**: scout −40% (0.6→0.36), stalker +30% (0.85→1.1; the
+  0.85-tile footprint clamp keeps it comfortably on its tile).
+- **Kinetic Shield now visible**: a pulsing translucent bubble wraps the
+  shielded unit for as long as the engine's `shielded` status lives — it
+  disappears exactly when the shield absorbs a hit, because the visual just
+  mirrors the status. Verified live in the sandbox.
+
+### 2026-08-12 — Patrick Tomczak — Custom per-unit attack sounds (Patrick's recordings)
+First custom-made SFX: /sound masters (24-bit/96 kHz WAVs) converted to
+16-bit/44.1 kHz into public/audio/attacks/ (COMMITTED — original recordings,
+not ripped placeholders) and wired as per-unit basic-attack sounds: lancer,
+wraith ("Sniper - A1"), stalker, titan. GameSfx plays the attacker's own
+sound for attack/slash actions when one exists (kind from the pre-action
+state, so bot attacks play correctly too); everyone else keeps the generic
+attack blip. The raw /sound masters stay untracked.
+
+### 2026-08-12 — Patrick Tomczak — GEN 8 "rain-soaked station" atmosphere + fortress platform deck
+Tile change: the Meshy fortress platform is now the ONE ground tile
+(baked 125 MB → ~520 KB, force-simplified to ~13.7k tris for 196-instance
+boards); water keeps its tile; mountain/forest tile models retired — terrain
+reads through the voxel props on the uniform deck (their GLBs stay on disk).
+Atmosphere: new modular env system (render/voxel3d/env/):
+- envConfig.ts — ALL tuning centralized (palette, lighting hierarchy, effect
+  counts) with low/medium/high presets gating expensive layers.
+- EnvironmentFX.tsx — StationLights (cyan pools on friendly cities, red on
+  hostile, ≤6 amber maintenance lamps on resources, one magenta accent, plus
+  faint additive reflection pools = wet-metal colour bounce), Steam (shader
+  puff columns from machinery tiles, deterministic placement), Sparks (rare
+  bursts at ruins), Mist (low quads), scene FogExp2 (#05070d, 0.026).
+  A full instanced rain system (wind-sheared line streaks lit by the zone
+  pools + pooled splash ripples) was built and then DISABLED per Patrick
+  (rainCount/splashCount 0 in every preset — flip the numbers to re-enable).
+Deck material: shared fortress material set to roughness 0.42 / metalness 0.5
+with a cool tint — wet-metal speculars from the pools without mirroring.
+Lighting: tileset rig swapped from golden-hour sun to night station (dim cool
+hemisphere + one cold shadow-casting flood; pools carry the colour). PostFX
+tileset grade: deeper contrast, heavier vignette, bloom 1.55 with threshold
+kept at 1.0 so only true emissives glow. Dust motes recoloured to cool
+condensation. Perf: 81 FPS at gameplay camera (earlier 38 = rain overdraw +
+38.9k-tri tile + window-occlusion throttling in the measurement). 267/267
+tests green, production build passes.
+
+### 2026-08-13 — Patrick Tomczak — Station atmosphere REVERTED (supersedes yesterday's entry)
+Patrick's verdict on the rain-soaked station look: "doesn't look very good."
+All of it removed: env/ system deleted (envConfig + EnvironmentFX — station
+lights, steam, sparks, mist, fog, and the already-disabled rain), fortress
+platform tile replaced by the restored Flat1 bake, forest/mountain tile
+mapping + Y-offsets restored, wet-metal material override removed, golden-hour
+sun rig restored, PostFX grade back to the shared values, dust motes warm
+again. Verified live: the sunlit "1"-set board renders as before. The
+fortress GLB stays in /assets if a future look wants it.
+
+### 2026-08-13 — Patrick Tomczak — Ravener GLB implemented
+"Hive - Ravener.glb" was dropped into /assets after the original batch bake
+and never went through the pipeline (same story as the Reaper). Baked
+33 MB → 200 KB, registered as an air-class flyer (height 0.5, hover 0.25 —
+matches its `flying` trait), added to optimize-3d-assets.sh. Verified in the
+sandbox: winged model hovers with idle bob, selects/outlines correctly.
+
+### 2026-08-13 — Patrick Tomczak — Into-the-Breach outcome telegraphing (GEN 8)
+Hover-driven attack forecasts, ITB-style. New pieces:
+- game/attackPreview.ts — pure, read-only prediction that mirrors the
+  engine's resolvePush EXACTLY (slide / collide -2 with light-obstacle
+  splash / void death / heavy immunity), plus Percussive Shells (centre
+  combat damage + all-8-neighbour shove) and Ram previews. Engine now
+  exports pushDir + COLLIDE_DAMAGE for it.
+- render/voxel3d/AttackPreview.tsx — the telegraph layer: crawling yellow
+  trajectory dots (arcing for shells/globs/arrows, straight for bullets and
+  bolts, none for melee), pulsing impact reticle, damage tag over the
+  defender + retaliation over the attacker (lethal marked ×), and ITB push
+  arrows: white chevron = clean slide, amber + "-2" tags = collide (both
+  parties when the obstacle is light), red × = shoved into void. Numbers all
+  come from engine preview helpers, so the telegraph cannot lie.
+- Hover plumbing: the 3D board now feeds store.hoveredTile (click-plane
+  pointermove, guarded to tile changes; unit colliders report their tile).
+  VoxelMapView builds the preview for hovered attack targets and armed
+  percussive/ram casts. A hidden warm-up <Text> pays troika's one-time font
+  compile at scene load (it blanked a frame on first hover otherwise).
+Verified live: titan Percussive Shells hover shows the arc, reticle, six
+push arrows with three collide "-2" forecasts. 267/267 tests, build green.
+
+### 2026-08-13 — Patrick Tomczak — Ashwater Basin map + battlefield VFX lab
+Added an original Breach-inspired battlefield preset without copying source
+art: `ashwater` map generation produces cracked ochre flats, coherent mineral
+water channels, sparse scrub, and raised rust mesas; choosing it in setup also
+selects the dedicated `breach_ashwater` 3D presentation and sensible 14% water /
+12% mountain tuning. The renderer is procedural and instanced: chunky dark-edged
+slabs, quantised surface cracks, polygonal props, and animated emissive water
+with adjacency-aware shore foam. City blocks use a compact rear-tile skyline so
+units and tactical markings remain readable.
+
+The generic battlefield feedback layer now sits above the ability-specific VFX.
+It uses plain data recipes and the existing pooled GPU particle core, with shared
+systems for glow, sparks, streaks, droplets, bubbles, smoke, motes, debris, and a
+16-ring shockwave pool. Thirteen live presets cover melee/ranged hits, plasma
+projectiles, criticals, explosions, shockwaves, status shocks, deaths, water
+entry/explosions/lances, dust, and healing aura. Recipes support layered delays,
+camera impulse, terrain-aware water impacts, movement material kicks, status
+changes, real combat timing, ability kills, and automatic pool limits. A compact
+VFX LAB overlay on Ashwater exposes every preset for immediate designer review;
+hovering a tile aims it. Gravity is reset per layer so a previous recipe cannot
+leak simulation state into the next one.
+
+Validation: web TypeScript passes, Vite production build passes, data validation
+passes, and all 34 engine test files pass (268 tests), including deterministic
+Ashwater coverage and base-terrain assertions. Visual browser automation was not
+run because its helper requested unrelated home-directory update/telemetry writes
+and the sandbox rejected that initialization; the local Vite server and root HTML
+were smoke-tested instead.
+
+### 2026-08-13 — Patrick Tomczak — Ashwater tile art V2 (supersedes the procedural tile look)
+The first Ashwater renderer was rejected as visibly crude: shader cracks, flat
+boxes, cones, and box-stack cities could not carry the hand-authored quality of
+the Into the Breach references. Replaced that presentation layer with original
+AI-assisted pixel art authored from the supplied screenshots as quality/style
+references only. Runtime art now includes 21 unprojected 128px terrain surfaces,
+four full-height mesa silhouettes, a stratified cliff texture, and eight matched
+industrial/Hive structure silhouettes. Large generation sheets and keyed working
+files live under ignored `assets/ashwater_source`; `public/tiles/ashwater_v2`
+contains only the ~2.9 MB runtime sprites. `scripts/process-ashwater-atlas.py`
+reproducibly splits, aligns, unprojects, and optimizes the source sheets.
+
+The Three.js board remains mechanically 3D (depth, grid interaction, GLB units,
+particles, lighting, camera), but the authored pixel surfaces tessellate on its
+horizontal planes and tall mesas/cities use alpha-tested camera-facing silhouettes.
+Water combines painted ripple art with restrained pixel-quantized animated glints
+and adjacency foam. Cities now read as fortified settlements (Vanguard) or an
+organic mineral-water Hive structure; ruins use dedicated industrial sprites.
+The generic 2D renderer toggle is hidden for Ashwater so the theme cannot silently
+fall back to unrelated default tiles. TypeScript and production build pass.
+
+### 2026-08-13 — Patrick Tomczak — Ashwater V2 pixel atlas REVERTED
+The generated pixel-atlas experiment harmed the game's first priority: unit and
+tactical-state legibility. Its high-frequency terrain detail competed with the GLB
+units, while camera-facing mesa/city sprites visibly clipped through neighbouring
+cells and exposed their source-tile bases. Restored the clean procedural Ashwater
+board and removed all V2 runtime/source assets plus its processing script.
+
+The restored version is deliberately quieter than the original procedural pass:
+land shader squiggles/crack lines are gone, replaced by broad two-tone material
+variation and rare single-pixel mineral flecks. Mountains are no longer flat cones
+or billboards; each is a compact, tile-contained faceted range with a broad rocky
+foot, one tall six-sided peak, a light cap, and two asymmetrical subsidiary peaks.
+They disappear under an occupying unit, preserving silhouette clarity. Small
+back-of-tile city skylines and low ruin props are restored, and the 2D/3D renderer
+toggle is available again. Water retains only its restrained animated bands and
+shore foam. This entry supersedes the V2 pixel-atlas entry above.
+
+### 2026-08-13 — Patrick Tomczak — Titan pixel-3D conversion prototype
+Added a reversible Titan-only rendering experiment rather than destructively
+rebaking the rigged GLB. `?pixelTitan=1` keeps the Titan mesh, skeleton, and
+idle/walk/attack clips intact, but clones its material/texture per instance and
+applies a deliberately game-scale treatment: nearest-neighbour source sampling,
+flat/faceted normals, a four-colour charcoal/teal/cream palette, three hard light
+bands, and a stable two-screen-pixel Bayer pattern. This targets Into-the-Breach-
+like low-resolution clarity while remaining a real 3D animated asset. The shared
+source GLB and materials are never mutated, and the effect is opt-in through the
+unit's `pixelStyle` registry flag plus query parameter. `?pixelTitan=1&sandbox=1`
+opens the existing all-units workbench directly for comparison. TypeScript and
+production build pass; automatic browser render capture could not run because no
+in-app or extension browser instance was available in this session.

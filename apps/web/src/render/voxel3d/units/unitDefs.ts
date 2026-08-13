@@ -115,19 +115,6 @@ const ARCHER: UnitDef = {
   ],
 };
 
-/** Catapult — atk 10 rng 3, can't move-and-attack: tracked artillery sled. */
-const CATAPULT: UnitDef = {
-  parts: [
-    { size: [3.2, 4, 11], pos: [-5.5, 2.5, 0], color: JOINT },
-    { size: [3.2, 4, 11], pos: [5.5, 2.5, 0], color: JOINT },
-    { size: [11, 3, 9], pos: [0, 5, 0], teamColor: true },
-    { size: [5, 4, 4], pos: [0, 7.5, -3.5], color: GUNMETAL }, // counterweight
-    // Throwing arm, leaned back, basket at the top.
-    { size: [2, 13, 2], pos: [0, 11.5, 1.5], rot: [-0.55, 0, 0], color: WOOD },
-    { size: [4, 2.2, 4], pos: [0, 16.5, 5.5], color: JOINT },
-    { size: [2.4, 2.4, 2.4], pos: [0, 18, 5.5], color: '#000000', emissive: '#ffb163', emissiveIntensity: 3 },
-  ],
-};
 
 // ─────────────────────────── Vanguard ───────────────────────────
 
@@ -277,46 +264,7 @@ const SENTINEL: UnitDef = {
   ],
 };
 
-/** Berserker — rage melee (atk 8, mov 3): horned helm, huge axe. */
-const BERSERKER: UnitDef = {
-  parts: [
-    { size: [3.5, 6.5, 3.5], pos: [-2.4, 3.2, 0], color: DARK },
-    { size: [3.5, 6.5, 3.5], pos: [2.4, 3.2, 0], color: DARK },
-    { size: [9, 8, 5.5], pos: [0, 10.5, 0], teamColor: true },
-    { size: [3.6, 3, 5], pos: [-6, 14.8, 0], color: STEEL },
-    { size: [3.6, 3, 5], pos: [6, 14.8, 0], color: STEEL },
-    { size: [2.8, 6, 2.8], pos: [-6, 10.5, 0], color: GUNMETAL },
-    { size: [2.8, 6, 2.8], pos: [6, 10.5, 0], color: GUNMETAL },
-    { size: [5, 4.5, 5], pos: [0, 17, 0], color: GUNMETAL },
-    { size: [1.2, 3, 1.2], pos: [-3, 20.5, 0], rot: [0, 0, 0.4], color: BONE },
-    { size: [1.2, 3, 1.2], pos: [3, 20.5, 0], rot: [0, 0, -0.4], color: BONE },
-    { size: [4.2, 1.3, 0.8], pos: [0, 17.5, 2.6], color: '#000000', teamGlow: true, emissiveIntensity: 5 },
-    // Great axe.
-    { size: [1.3, 13, 1.3], pos: [6, 10, 2.5], color: WOOD },
-    { size: [1, 5.5, 6], pos: [6, 15.5, 4.5], color: STEEL },
-  ],
-};
 
-/** Siege Tower — def 5, rng 2, static shooter: rolling armored tower. */
-const SIEGE_TOWER: UnitDef = {
-  parts: [
-    { size: [12, 4, 12], pos: [0, 2.5, 0], color: JOINT },
-    { size: [3, 3, 3], pos: [-5.5, 1.5, -5.5], color: DARK },
-    { size: [3, 3, 3], pos: [5.5, 1.5, -5.5], color: DARK },
-    { size: [3, 3, 3], pos: [-5.5, 1.5, 5.5], color: DARK },
-    { size: [3, 3, 3], pos: [5.5, 1.5, 5.5], color: DARK },
-    { size: [9, 18, 9], pos: [0, 13.5, 0], color: GUNMETAL },
-    { size: [9.4, 3, 9.4], pos: [0, 18, 0], teamColor: true },
-    { size: [11, 2, 11], pos: [0, 23.5, 0], color: DARK },
-    { size: [2, 2.5, 2], pos: [-4, 25.7, -4], color: JOINT },
-    { size: [2, 2.5, 2], pos: [4, 25.7, -4], color: JOINT },
-    { size: [2, 2.5, 2], pos: [-4, 25.7, 4], color: JOINT },
-    { size: [2, 2.5, 2], pos: [4, 25.7, 4], color: JOINT },
-    // Firing port + ram beam.
-    { size: [4, 1.4, 0.8], pos: [0, 15, 4.8], color: '#000000', teamGlow: true, emissiveIntensity: 4 },
-    { size: [2, 2, 9], pos: [0, 7.5, 6], color: WOOD },
-  ],
-};
 
 // ─────────────────────────── Hive ───────────────────────────
 
@@ -459,46 +407,7 @@ const WYRM_BURROWED: UnitDef = {
   ],
 };
 
-/** Sylvan Ranger — camouflage skirmisher: leaf cloak and a longbow. */
-const SYLVAN_RANGER: UnitDef = {
-  parts: [
-    { size: [2.6, 7, 2.6], pos: [-1.9, 3.5, 0], color: BARK },
-    { size: [2.6, 7, 2.6], pos: [1.9, 3.5, 0], color: BARK },
-    { size: [6, 7, 4], pos: [0, 10.5, 0], teamColor: true },
-    // Leaf cloak layers.
-    { size: [7, 8.5, 1.6], pos: [0, 10, -3], color: LEAF },
-    { size: [5.5, 5, 1.4], pos: [0, 6.5, -4], color: '#1f4d3a' },
-    { size: [2.2, 6, 2.2], pos: [-4.2, 11, 0], color: BARK },
-    { size: [2.2, 6, 2.2], pos: [4.2, 11, 0], color: BARK },
-    { size: [4.2, 4.2, 4.2], pos: [0, 16.4, 0], color: BARK },
-    { size: [4.8, 1.6, 4.8], pos: [0, 19, -0.5], color: LEAF }, // leaf hood
-    { size: [3.4, 1.2, 0.8], pos: [0, 16.9, 2.2], color: '#000000', teamGlow: true, emissiveIntensity: 5 },
-    // Longbow held at the side.
-    { size: [1, 11, 1], pos: [4.4, 11, 2.5], color: WOOD },
-    { size: [1.3, 1.3, 1.3], pos: [4.4, 11, 2.9], color: JOINT },
-  ],
-};
 
-/** Treant — entangling tree golem: bark trunk, branch arms, canopy shoulders. */
-const TREANT: UnitDef = {
-  parts: [
-    { size: [4, 6, 4.5], pos: [-3, 3, 0], color: BARK },
-    { size: [4, 6, 4.5], pos: [3, 3, 0], color: BARK },
-    { size: [9, 12, 7], pos: [0, 12, 0], color: BARK },
-    { size: [4, 3, 1], pos: [0, 14, 3.8], teamColor: true }, // moss sigil
-    // Branch arms, reaching out (Entangle).
-    { size: [2.5, 10, 2.5], pos: [-6.5, 11, 1], rot: [0.2, 0, 0.55], color: WOOD },
-    { size: [2.5, 10, 2.5], pos: [6.5, 11, 1], rot: [0.2, 0, -0.55], color: WOOD },
-    { size: [1.2, 4.5, 1.2], pos: [-9.5, 6.5, 3], rot: [0, 0, 0.3], color: WOOD },
-    { size: [1.2, 4.5, 1.2], pos: [9.5, 6.5, 3], rot: [0, 0, -0.3], color: WOOD },
-    // Canopy.
-    { size: [8, 4.5, 8], pos: [0, 21, 0], color: LEAF },
-    { size: [5.5, 3.5, 5.5], pos: [-4, 19, -1], color: '#1f4d3a' },
-    { size: [5.5, 3.5, 5.5], pos: [4, 19, -1], color: '#1f4d3a' },
-    { size: [1.6, 1.2, 0.8], pos: [-1.8, 15.5, 3.6], color: '#000000', teamGlow: true, emissiveIntensity: 4 },
-    { size: [1.6, 1.2, 0.8], pos: [1.8, 15.5, 3.6], color: '#000000', teamGlow: true, emissiveIntensity: 4 },
-  ],
-};
 
 // ─────────────────────────── Registry ───────────────────────────
 
@@ -506,7 +415,6 @@ const DEFS: Record<string, UnitDef> = {
   scout: SCOUT,
   warrior: WARRIOR,
   archer: ARCHER,
-  catapult: CATAPULT,
   lancer: LANCER,
   defender: DEFENDER,
   stalker: STALKER,
@@ -515,8 +423,6 @@ const DEFS: Record<string, UnitDef> = {
   tank_assault: TANK_ASSAULT,
   titan: TITAN,
   sentinel: SENTINEL,
-  ironclad_berserker: BERSERKER,
-  ironclad_siege_tower: SIEGE_TOWER,
   scuttling: SCUTTLING,
   hive_scout: HIVE_SCOUT,
   reaper: REAPER,
@@ -525,8 +431,6 @@ const DEFS: Record<string, UnitDef> = {
   seercaust: SEERCAUST,
   wyrm: WYRM,
   wyrm_burrowed: WYRM_BURROWED,
-  sylvan_ranger: SYLVAN_RANGER,
-  sylvan_treant: TREANT,
 };
 
 /** unitClass "heavy" ids (from units.json) — drives the hostile scan cones. */

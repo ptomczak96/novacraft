@@ -40,6 +40,13 @@ export interface UnitModelDef {
   /** Flying unit: body hovers this far above the tile (with a gentle bob);
    *  the team ring stays on the ground like a landing marker. */
   hover?: number;
+  /** Model ships walk/attack/idle clips (rigged in Blender — see
+   *  assets/rigs/): moves glide slower so the stride reads, and the
+   *  procedural move-hop is disabled in favour of the clip's own gait. */
+  rigged?: boolean;
+  /** Experimental opt-in pixel-3D shading treatment. Kept per-kind so the
+   *  visual conversion can be reviewed unit-by-unit before wider rollout. */
+  pixelStyle?: boolean;
 }
 
 /** Widest a unit may be after scaling — keeps every model inside one tile. */
@@ -52,26 +59,28 @@ export const MOUNTAIN_UNIT_ELEVATION = 0.34;
 const U = '/voxel3d/models/units';
 
 export const UNIT_MODELS: Record<string, UnitModelDef> = {
-  // ── Vanguard / shared ──
-  scout:      { url: `${U}/scout.glb`,      height: 0.6 },
-  warrior:    { url: `${U}/warrior.glb`,    height: 0.7 },
-  lancer:     { url: `${U}/lancer.glb`,     height: 0.74 },
-  defender:   { url: `${U}/defender.glb`,   height: 0.78 }, // Bulwark
-  wraith:     { url: `${U}/wraith.glb`,     height: 0.66 },
-  stalker:    { url: `${U}/stalker.glb`,    height: 0.85 },
-  sentinel:   { url: `${U}/sentinel.glb`,   height: 0.72, hover: 0.3 }, // flyer
-  tank:       { url: `${U}/tank.glb`,       height: 0.55 }, // vehicle: low & wide
-  titan:      { url: `${U}/titan.glb`,      height: 1.1 },
+  // ── Vanguard / shared ── (all rigged: idle/walk/attack clips, see assets/rigs/
+  // for the warrior blend; the rest were rigged procedurally via Blender MCP)
+  scout:      { url: `${U}/scout.glb`,      height: 0.36, rigged: true },
+  warrior:    { url: `${U}/warrior.glb`,    height: 0.7, rigged: true },
+  lancer:     { url: `${U}/lancer.glb`,     height: 0.74, rigged: true },
+  defender:   { url: `${U}/defender.glb`,   height: 0.78, rigged: true }, // Bulwark
+  wraith:     { url: `${U}/wraith.glb`,     height: 0.66, rigged: true },
+  stalker:    { url: `${U}/stalker.glb`,    height: 1.1, rigged: true }, // footprint clamp keeps it on-tile
+  sentinel:   { url: `${U}/sentinel.glb`,   height: 0.72, hover: 0.3, rigged: true }, // flyer
+  tank:       { url: `${U}/tank.glb`,       height: 0.55, rigged: true }, // vehicle: low & wide
+  titan:      { url: `${U}/titan.glb`,      height: 1.1, rigged: true, pixelStyle: true },
   // ── Hive ──
-  scuttling:  { url: `${U}/scuttling.glb`,  height: 0.27 },
-  hive_scout: { url: `${U}/hive_scout.glb`, height: 0.55 },
-  reaper:     { url: `${U}/reaper.glb`,     height: 0.55, hover: 0.25 }, // flyer
-  scab:       { url: `${U}/scab.glb`,       height: 0.6 },
-  burstling:  { url: `${U}/burstling.glb`,  height: 0.5 },
-  vindrace:   { url: `${U}/vindrace.glb`,   height: 0.8 },
-  seercaust:  { url: `${U}/seercaust.glb`,  height: 0.85 },
-  wyrm:       { url: `${U}/wyrm.glb`,       height: 0.95 },
-  behemoth:   { url: `${U}/behemoth.glb`,   height: 1.15 },
+  scuttling:  { url: `${U}/scuttling.glb`,  height: 0.27, rigged: true },
+  hive_scout: { url: `${U}/hive_scout.glb`, height: 0.55, rigged: true },
+  reaper:     { url: `${U}/reaper.glb`,     height: 0.55, hover: 0.25, rigged: true }, // flyer
+  ravener:    { url: `${U}/ravener.glb`,    height: 0.5,  hover: 0.25 }, // flyer (air class)
+  scab:       { url: `${U}/scab.glb`,       height: 0.6, rigged: true },
+  burstling:  { url: `${U}/burstling.glb`,  height: 0.5, rigged: true },
+  vindrace:   { url: `${U}/vindrace.glb`,   height: 0.8, rigged: true },
+  seercaust:  { url: `${U}/seercaust.glb`,  height: 0.85, rigged: true },
+  wyrm:       { url: `${U}/wyrm.glb`,       height: 0.95, rigged: true },
+  behemoth:   { url: `${U}/behemoth.glb`,   height: 1.15, rigged: true },
 };
 
 /** Mode-variant unit ids that reuse another kind's model. */

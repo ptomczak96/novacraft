@@ -86,10 +86,10 @@ describe('Seercaust: Spray Bile', () => {
       s.units.push(
         mk(1, 'seercaust', 1, 3, 3),
         mk(2, 'defender', ownerOfUnit, 8, 8),                       // DEF 3, on the bile tile
-        mk(3, 'ironclad_berserker', ownerOfUnit === 1 ? 0 : 1, 8, 7), // ATK 8 enemy attacker adjacent
+        mk(3, 'archer', ownerOfUnit === 1 ? 0 : 1, 8, 7),             // ATK 5 enemy attacker adjacent
       );
       if (place) s.map.tiles[8][8].bile = { owner: 1, expiresTurn: s.turn + 5 };
-      return previewCombat(unit(s, 3)!, registry.unitTypes['ironclad_berserker'], unit(s, 2)!, registry.unitTypes['defender'], s.map, registry, s.config.combatConfig).attackerDamage;
+      return previewCombat(unit(s, 3)!, registry.unitTypes['archer'], unit(s, 2)!, registry.unitTypes['defender'], s.map, registry, s.config.combatConfig).attackerDamage;
     };
     // Friendly to the bile (owner 1): tougher → takes LESS damage on bile.
     expect(dmgToUnitOnBile(1, true)).toBeLessThan(dmgToUnitOnBile(1, false));

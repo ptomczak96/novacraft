@@ -170,8 +170,20 @@ export function createGame(
  * middle (cols a–l, rows 6–10 — no ruins/resources), and 2 of EVERY unit each faction can
  * build, spawned on/next to its territory. Obeys the same config (fog, tech tree, rich
  * start, mapgen biome…) as a normal game.
+ *
+ * `opts.allUnitTypes` (the prototyping Sandbox mode) spawns from the FULL unit
+ * registry instead of the faction roster — both teams get one of every kind,
+ * including kinds no faction can recruit — skipping morph-only forms
+ * (wyrm_burrowed, tank_assault…), which are reached by casting the morph.
+ * `opts.copies` overrides how many of each kind (default 2).
  */
-export function createTestCombatGame(config: GameConfig, registry: DataRegistry, factionIds: string[], seed: number): GameState {
+export function createTestCombatGame(
+  config: GameConfig,
+  registry: DataRegistry,
+  factionIds: string[],
+  seed: number,
+  opts?: { allUnitTypes?: boolean; copies?: number },
+): GameState {
   const W = 14, H = 14;
   const cfg: GameConfig = { ...config, mapWidth: W, mapHeight: H };
   const prng = createPRNG(seed);
@@ -242,9 +254,19 @@ export function createTestCombatGame(config: GameConfig, registry: DataRegistry,
   let nextUnitId = 1;
   const occupied = new Set<string>();
   const cheb = (a: Coord, b: Coord) => Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
+  // Morph-only forms (targets of a morphTo ability that no faction recruits
+  // directly) are skipped in allUnitTypes mode — you reach them by casting.
+  const morphTargets = new Set<string>();
+  for (const ut of Object.values(registry.unitTypes)) {
+    for (const ab of ut.abilities ?? []) if (ab.morphTo) morphTargets.add(ab.morphTo);
+  }
+  const rosterUnion = new Set(Object.values(registry.factions).flatMap(f => f.unitTypes));
+  const copies = opts?.copies ?? 2;
   for (let team = 0; team < 2; team++) {
-    const roster = registry.factions[factionIds[team]]?.unitTypes ?? [];
-    const toSpawn = roster.flatMap(uid => [uid, uid]); // 2 of each
+    const roster = opts?.allUnitTypes
+      ? Object.keys(registry.unitTypes).filter(id => rosterUnion.has(id) || !morphTargets.has(id))
+      : registry.factions[factionIds[team]]?.unitTypes ?? [];
+    const toSpawn = roster.flatMap(uid => Array.from({ length: copies }, () => uid));
     // Candidate tiles (row-major, deterministic) around this team's cities.
     const seen = new Set<string>();
     const candidates: Coord[] = [];
@@ -487,8 +509,10 @@ export function getLegalActions(state: GameState, registry: DataRegistry, player
     if (!unit.hasAttacked && unitType.abilities.length > 0) {
       for (const ability of unitType.abilities) {
         if (ability.disabled) continue; // greyed-out placeholder — never offered
-        // Tech-gated ability (e.g. Medic's Slow needs Advanced Biomed).
-        if (ability.requiresTech && !player.researchedTechs.includes(ability.requiresTech)) continue;
+        // Tech-gated ability (e.g. Medic's Slow needs Advanced Biomed). The
+        // prototyping sandbox ignores tech gates so every ability is castable.
+        if (ability.requiresTech && !player.researchedTechs.includes(ability.requiresTech)
+          && !state.config.sandboxMode) continue;
         // Superseded ability (e.g. Cure I once Advanced Biomed replaces it with Cure II).
         if (ability.supersededByTech && player.researchedTechs.includes(ability.supersededByTech)) continue;
         if ((unit.abilityCooldowns[ability.id] ?? 0) > 0) continue;
@@ -659,6 +683,18 @@ export function applyAction(state: GameState, action: Action, registry: DataRegi
   newState.actionLog.push(action);
 
   const result = dispatchAction(newState, action, registry);
+
+  // Sandbox mode: actions never exhaust units. Undo whatever exhaustion the
+  // action just applied (flags, cooldowns) so every unit can move, attack and
+  // cast again immediately. One hook here covers all gating — getLegalActions
+  // and the UI both read these fields. endTurn keeps its own reset.
+  if (result.config.sandboxMode && action.type !== 'endTurn') {
+    for (const unit of result.units) {
+      unit.hasMoved = false;
+      unit.hasAttacked = false;
+      unit.abilityCooldowns = {};
+    }
+  }
 
   // Refresh fog memory after the action: the acting player (their units may have
   // moved and revealed new tiles) and, after an endTurn, the player now on turn.
@@ -1851,7 +1887,10 @@ function applyEndTurn(state: GameState, registry: DataRegistry): GameState {
   // Reset all current player's units (conditions like "corrosive_1" persist).
   for (const unit of state.units) {
     if (unit.owner === state.currentPlayer) {
-      if (!unit.hasMoved && !unit.hasAttacked) {
+      // Sandbox mode clears exhaustion after every action, so "didn't move or
+      // attack" would be true for everyone — skip the passive heal entirely
+      // there (prototypers usually WANT damage states to persist).
+      if (!unit.hasMoved && !unit.hasAttacked && !state.config.sandboxMode) {
         const ut = registry.unitTypes[unit.typeId];
         if (ut && unit.hp < ut.maxHP) {
           const owner = state.map.tiles[unit.position.y]?.[unit.position.x]?.owner ?? null;
