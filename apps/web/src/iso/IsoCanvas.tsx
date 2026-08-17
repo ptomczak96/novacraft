@@ -1117,18 +1117,22 @@ export function IsoCanvas({ mode, onPaint, pan, onPanChange }: IsoCanvasProps) {
     const promptable = buildable || upgradeable;
 
     const stack = unitsByPos.get(key) ?? [];
-    if (stack.length) {
-      // Click-cycling through everything on the tile, looping: unit[0] → unit[1] → … →
-      // TILE (terrain/build box, units deselected) → back to unit[0]. The stack is ordered
-      // [burrowed, surface], so a burrowed Wyrm co-occupying an enemy selects the WYRM
-      // first, then the co-tile unit, then the tile. See docs/DEVELOPMENT_RATIONALE.md.
-      const selIdx = stack.findIndex(su => su.id === selectedUnitId);
+    // Click-cycle order: SURFACE unit(s) first, a co-occupying BURROWED unit (e.g. your
+    // Wyrm under an enemy) LAST — so the first click selects the surface unit and a
+    // second click reaches the burrowed one (to erupt / move it), then the tile, then
+    // loops. Draw order stays burrowed-underneath (unitsByPos, unchanged). (This
+    // supersedes the earlier "burrowed selected first" behaviour — see RATIONALE.)
+    const cycle = [...stack].sort((a, b) =>
+      (registry.unitTypes[a.typeId]?.conditions?.includes('burrowed') ? 1 : 0)
+      - (registry.unitTypes[b.typeId]?.conditions?.includes('burrowed') ? 1 : 0));
+    if (cycle.length) {
+      const selIdx = cycle.findIndex(su => su.id === selectedUnitId);
       const onTileStep = selIdx === -1 && !!inspectedTile && inspectedTile.x === tile.x && inspectedTile.y === tile.y;
-      if (onTileStep) { selectUnit(stack[0].id); setBuildPromptTile(null); return; } // loop back to first unit
-      if (selIdx === -1) { selectUnit(stack[0].id); setBuildPromptTile(null); return; }
-      if (selIdx < stack.length - 1) { selectUnit(stack[selIdx + 1].id); setBuildPromptTile(null); return; }
+      if (onTileStep) { selectUnit(cycle[0].id); setBuildPromptTile(null); return; } // loop back to first unit
+      if (selIdx === -1) { selectUnit(cycle[0].id); setBuildPromptTile(null); return; }
+      if (selIdx < cycle.length - 1) { selectUnit(cycle[selIdx + 1].id); setBuildPromptTile(null); return; }
       // Last unit was selected → advance to the TILE step: deselect and inspect the tile
-      // (so the next click loops back to unit[0]).
+      // (so the next click loops back to the first unit).
       selectUnit(null);
       setInspectedTile({ x: tile.x, y: tile.y });
       setBuildPromptTile(promptable ? tile : null);

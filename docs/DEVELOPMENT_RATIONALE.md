@@ -4936,3 +4936,51 @@ client still simulates full state, but presentation code cannot disclose
 cloaked or fog-hidden units. Unit turning now uses a delta-time exponential
 response, and overlapping camera-shake impulses keep a bounded decay envelope,
 so both effects remain stable across frame rates and effect overlap.
+
+### 2026-08-14 — David — Fix: can't build REBs on the GEN-8 (voxel3d) map
+Patrick's GEN-8 3D-tileset map uses the voxel3d renderer (VoxelMapView), whose click handler
+wired move/attack/slash/ability + unit/city select but NOT the tile-based economy actions —
+so on GEN-8 maps you couldn't build/upgrade REBs, found, or capture cities. The 2D iso canvas
+surfaces these as clickable action boxes; the voxel renderer never had an equivalent. Fix
+(apps/web/src/render/voxel3d): collect build/upgradeBuilding/foundCity/captureCity from the
+engine's legalActions into a per-tile map (first-wins keeps the iso kind priority
+mine>extractor>refinery>purifier), highlight those tiles (new `build` highlight kind, amber),
+and execute the action on tile-click (after unit-targeted actions, skipped while arming an
+ability). No engine change — same legalActions/executeAction path the 2D renderer uses.
+
+### 2026-08-14 — David — Online 1v1 fixes (fog/turn ownership, your-turn banner, MP undo, capture rule)
+Batch of 1v1 (PeerJS) fixes:
+- **Hide opponent resources:** the top bar now shows the LOCAL viewer's (mySeat) ore/plasma and
+  economy, never the current player's — so you never see the opponent's totals on their turn.
+- **"Your Turn" banner:** a transient centred banner (GameScreen `.your-turn-banner`) pops when the
+  turn passes to you online.
+- **Turn ownership:** executeAction now ignores local (non-remote) actions when it isn't your turn
+  (`mySeat !== null && currentPlayer !== mySeat`) — a player can no longer End Turn (or act) on the
+  opponent's turn. End Turn button also hidden unless it's your turn.
+- **Tech tree:** shows the VIEWER's faction/researched set, so opening it on the opponent's turn shows
+  YOUR tree, not theirs.
+- **MP undo enabled:** removed the hard block; undo now broadcasts to the peer (`{type:'undo'}` →
+  receiveRemoteUndo) so both clients revert one step in lockstep. Trusted honor-system; edge cases
+  (undo after the peer already acted) can still desync — acceptable "for now".
+- **Capture rule (engine):** captureCity and canFoundCity now also require `!hasAttacked` — a unit
+  that reaches an enemy city/ruin this turn (normal move sets hasMoved; an attack-then-dash/advance
+  like a Reaper sets hasAttacked) can only capture/found the FOLLOWING turn. Test added.
+298 tests pass; web typecheck clean.
+
+### 2026-08-14 — David — Impotent Founder also blocks capture; Wyrm gains it
+Bug: `impotent_founder` only blocked founding (`canFoundCity`), so a Wraith (and any impotent
+founder) could still CAPTURE enemy cities — visible in sandbox. Fixed: the captureCity guard in
+getLegalActions now also skips units with `impotent_founder` (alongside the existing `burrowed`
+skip). Added `impotent_founder` to the base **Wyrm** unit (the surfaced form; wyrm_burrowed already
+had it) so neither Wyrm form can found or capture. conditions.md updated. Test added (Wraith & Wyrm
+settled on an enemy city → no captureCity). 299 tests pass.
+
+### 2026-08-14 — David — Co-tile unit selection: surface first, burrowed on 2nd click (both renderers)
+Bug: on the GEN-8 (voxel3d) map, a tile shared by a surface unit and YOUR burrowed Wyrm only ever
+selected the surface unit — VoxelMapView's click handler used a single `.find()` with no cycling, so
+the Wyrm was unreachable (couldn't erupt/move it). Fix: VoxelMapView now gathers ALL units on the
+clicked tile, orders burrowed LAST, and cycles selection on repeat clicks (surface → burrowed → …).
+Also aligned IsoCanvas to the same order (it previously selected the BURROWED unit first — this
+supersedes that earlier decision) so both renderers behave identically: first click = surface unit,
+second click = the burrowed unit, then the tile. Draw order (burrowed drawn underneath) is unchanged.
+Web typecheck clean; no engine change.

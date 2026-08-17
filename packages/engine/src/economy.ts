@@ -522,10 +522,11 @@ export function canFoundCity(state: GameState, registry: DataRegistry, playerId:
   if (cityAt(state, pos)) return false;
   const { cost, requiresUnitOnTile } = registry.economy.foundCity;
   if (requiresUnitOnTile) {
-    // The unit must be on the ruin AND not have moved this turn — so founding
-    // (like capturing) is only available the turn AFTER moving onto the ruin.
+    // The unit must be on the ruin AND not have moved or attacked this turn — so
+    // founding (like capturing) is only available the turn AFTER reaching the ruin
+    // (a dash/advance onto it requires an attack, so hasAttacked covers that case).
     const unit = state.units.find(u => u.owner === playerId && u.position.x === pos.x && u.position.y === pos.y);
-    if (!unit || unit.hasMoved) return false;
+    if (!unit || unit.hasMoved || unit.hasAttacked) return false;
     // Conditions that can't found: "Impotent founder", or a burrowed Wyrm (it can't even
     // stop on a ruin, but guard anyway). See docs/conditions.md.
     const founderConds = registry.unitTypes[unit.typeId]?.conditions ?? [];

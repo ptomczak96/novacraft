@@ -38,7 +38,7 @@ opts in by listing the condition id in its `conditions` array in
 | `mountain_restricted` | Mountain restricted | Cannot move onto mountain tiles. |
 | `low_horizons` | Low Horizons | Mountains block this unit's line of sight (it sees the mountain, not past it). |
 | `sacrificial_founder` | Sacrificial Founder | The unit dies when it founds a city. |
-| `impotent_founder` | Impotent Founder | The unit cannot found cities at all. |
+| `impotent_founder` | Impotent Founder | The unit can neither **found** nor **capture** cities. |
 | `blind` | Blind | Visibility 0 (sees only its own tile); may still move into cloud/fog tiles. |
 | `squinting_eyes_1` | Squinting eyes (L1) | Sees its 3×3 as **fog** only (terrain, not units). |
 | `squinting_eyes_2` | Squinting eyes (L2) | 3×3 fully visible; the surrounding 5×5 ring as **fog** (≈ visibility 1.5). |
@@ -186,11 +186,12 @@ of re-homing to the new city. Used by Hive **Scuttlings**.
 link cleared; the city is still founded with 0 units homed.
 
 ## `impotent_founder` — Impotent Founder
-**Rule:** this unit **cannot found cities** — the "Found City" action is never offered
-while it stands on a ruin (other eligible units still can).
+**Rule:** this unit **cannot found OR capture cities** — neither the "Found City" action
+(while it stands on a ruin) nor the "Capture City" action (while it stands on an enemy/
+neutral city) is ever offered (other eligible units still can).
 
-**Enforced in:** `economy.ts` (`canFoundCity`) — returns false if the unit on the ruin
-has this condition.
+**Enforced in:** `economy.ts` (`canFoundCity`) and `game.ts` (the captureCity guard in
+`getLegalActions`) — both skip a unit with this condition.
 
 ## `blind` — Blind
 **Rule:** the unit has **visibility 0** (reveals only the tile it stands on), so it

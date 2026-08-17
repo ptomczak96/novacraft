@@ -14,6 +14,7 @@ let mySeat: number | null = null;
 
 const store = () => useGameStore.getState();
 const sendAction = (a: Action) => conn?.send({ type: 'action', action: a });
+const sendUndo = () => conn?.send({ type: 'undo' });
 
 function patch(p: Partial<NonNullable<ReturnType<typeof store>['mpStatus']>>, room: string) {
   const cur = store().mpStatus ?? { room, seat: null, peers: 0, error: null };
@@ -37,6 +38,7 @@ function wire(c: DataConnection, room: string, onStart: (p: { seed: number; fact
   c.on('data', (raw: unknown) => {
     const msg = raw as { type?: string; action?: Action; seed?: number; factions?: [string, string]; config?: GameConfig };
     if (msg.type === 'action' && msg.action) store().receiveRemoteAction(msg.action);
+    else if (msg.type === 'undo') store().receiveRemoteUndo();
     else if (msg.type === 'start' && msg.config) onStart({ seed: msg.seed!, factions: msg.factions!, config: msg.config });
   });
   c.on('close', () => patch({ error: 'Opponent disconnected.' }, room));
@@ -63,7 +65,7 @@ export function joinRoom(room: string) {
   peer.on('open', () => {
     const c = peer!.connect(PREFIX + room, { reliable: true }); // reliable+ordered = lockstep-safe
     wire(c, room, ({ seed, factions, config }) =>
-      store().startNetworkGame({ seat: 1, factions, seed, config, send: sendAction }));
+      store().startNetworkGame({ seat: 1, factions, seed, config, send: sendAction, sendUndo }));
   });
   peer.on('error', (e) => patch({ error: friendly(e) }, room));
 }
@@ -71,7 +73,7 @@ export function joinRoom(room: string) {
 /** Host only: broadcast the agreed {seed, factions, config} and start locally. */
 export function startMatch(factions: [string, string], seed: number, config: GameConfig) {
   conn?.send({ type: 'start', seed, factions, config });
-  store().startNetworkGame({ seat: mySeat ?? 0, factions, seed, config, send: sendAction });
+  store().startNetworkGame({ seat: mySeat ?? 0, factions, seed, config, send: sendAction, sendUndo });
 }
 
 export function leaveRoom() {

@@ -709,6 +709,28 @@ describe('City capture', () => {
     expect(getLegalActions(settled, r, 0).some(a => a.type === 'captureCity' && a.unitId === 700)).toBe(true);
   });
 
+  it('capture is NOT offered if the unit attacked this turn (Reaper dash/advance onto a city)', () => {
+    const r = getRegistry();
+    const s = createGame(getConfig(), r, ['vanguard', 'hive'], 7);
+    const enemyCap = s.cities.find(c => c.owner === 1)!;
+    s.units = s.units.filter(u => !(u.position.x === enemyCap.position.x && u.position.y === enemyCap.position.y));
+    // On the enemy city, didn't MOVE this turn but DID attack — the only way a unit
+    // reaches an occupied city tile the same turn (kill the defender, then dash/advance).
+    s.units.push({ id: 701, typeId: 'reaper', owner: 0, position: { ...enemyCap.position }, hp: 10, hasMoved: false, hasAttacked: true, abilityCooldowns: {} });
+    expect(getLegalActions(s, r, 0).some(a => a.type === 'captureCity' && a.unitId === 701)).toBe(false);
+  });
+
+  it('impotent founders (Wraith / Wyrm) cannot capture, even settled on an enemy city', () => {
+    const r = getRegistry();
+    for (const typeId of ['wraith', 'wyrm']) {
+      const s = createGame(getConfig(), r, ['vanguard', 'hive'], 7);
+      const enemyCap = s.cities.find(c => c.owner === 1)!;
+      s.units = s.units.filter(u => !(u.position.x === enemyCap.position.x && u.position.y === enemyCap.position.y));
+      s.units.push({ id: 702, typeId, owner: 0, position: { ...enemyCap.position }, hp: 10, hasMoved: false, hasAttacked: false, abilityCooldowns: {} });
+      expect(getLegalActions(s, r, 0).some(a => a.type === 'captureCity' && a.unitId === 702)).toBe(false);
+    }
+  });
+
   it('capturing transfers the city and its 3x3 territory to the captor', () => {
     const r = getRegistry();
     let state = createGame(getConfig(), r, ['vanguard', 'hive'], 7);

@@ -76,7 +76,7 @@ export interface AbilityFx {
   killed?: { id: number; pos: { x: number; y: number } }[];
 }
 
-export type HighlightKind = 'move' | 'threat' | 'select' | 'path';
+export type HighlightKind = 'move' | 'threat' | 'select' | 'path' | 'build';
 
 export interface TileHighlight {
   x: number;

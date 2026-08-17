@@ -18,6 +18,7 @@ export const HIGHLIGHT_COLORS = {
   threat: '#ff3b30',
   select: '#33f0ff',
   path: '#ffd166',
+  build: '#ff9f2e',
 } as const;
 
 /** Team colours by player index — vivid, made to read against the dark floor. */

@@ -225,7 +225,8 @@
     "attackRange": 1,
     "visibility": 1,
     "conditions": [
-      "twin_strike"
+      "twin_strike",
+      "impotent_founder"
     ],
     "abilities": [
       {

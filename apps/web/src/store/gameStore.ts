@@ -127,13 +127,17 @@ interface GameStore {
   mySeat: number | null;
   // Broadcast callback bound to the socket (set when a network game starts); null locally.
   netSend: ((action: Action) => void) | null;
+  // Broadcast an undo to the peer so both clients revert in lockstep; null locally.
+  netSendUndo: (() => void) | null;
   // Lobby status for the multiplayer UI.
   mpStatus: { room: string; seat: number | null; peers: number; error: string | null } | null;
   setMpStatus: (v: GameStore['mpStatus']) => void;
   // Start a network game with an agreed handshake (both clients replay identically).
-  startNetworkGame: (opts: { seat: number; factions: [string, string]; seed: number; config: GameConfig; send: (a: Action) => void }) => void;
+  startNetworkGame: (opts: { seat: number; factions: [string, string]; seed: number; config: GameConfig; send: (a: Action) => void; sendUndo?: () => void }) => void;
   // Apply an action received from the peer (no re-broadcast).
   receiveRemoteAction: (action: Action) => void;
+  // Revert one step in response to the peer's undo (no re-broadcast).
+  receiveRemoteUndo: () => void;
   // Tear down network state (back to local play).
   leaveMultiplayer: () => void;
 
@@ -189,7 +193,7 @@ interface GameStore {
   setSelectedCity: (c: Coord | null) => void;
   setHoveredTile: (c: Coord | null) => void;
   executeAction: (action: Action, coachMeta?: CoachMeta, opts?: { remote?: boolean }) => void;
-  undo: () => void;
+  undo: (opts?: { remote?: boolean }) => void;
   saveGame: () => string;
   loadGame: (json: string) => void;
 
@@ -256,6 +260,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   markRemoval: null,
   mySeat: null,
   netSend: null,
+  netSendUndo: null,
   mpStatus: null,
   hoveredTile: null,
   legalActions: [],
@@ -415,18 +420,25 @@ export const useGameStore = create<GameStore>((set, get) => ({
   setMarkRemoval: (v) => set({ markRemoval: v }),
 
   setMpStatus: (v) => set({ mpStatus: v }),
-  startNetworkGame: ({ seat, factions, seed, config, send }) => {
+  startNetworkGame: ({ seat, factions, seed, config, send, sendUndo }) => {
     // Adopt the agreed config + our seat, then start deterministically. Both clients run the
     // same createGame(config, factions, seed) and stay in sync by relaying actions.
-    set({ config, mySeat: seat, netSend: send, botSettings: ['human', 'human'], coachEnabled: false });
+    set({ config, mySeat: seat, netSend: send, netSendUndo: sendUndo ?? null, botSettings: ['human', 'human'], coachEnabled: false });
     get().startGame(factions, seed);
   },
   receiveRemoteAction: (action) => get().executeAction(action, undefined, { remote: true }),
-  leaveMultiplayer: () => set({ mySeat: null, netSend: null, mpStatus: null }),
+  receiveRemoteUndo: () => get().undo({ remote: true }),
+  leaveMultiplayer: () => set({ mySeat: null, netSend: null, netSendUndo: null, mpStatus: null }),
 
   executeAction: (action, coachMeta, opts) => {
     const { gameState, registry, config } = get();
     if (!gameState) return;
+
+    // In a network game the opponent's turn is view-only: a local click must never
+    // apply (or broadcast) an action while it isn't our turn — that includes End
+    // Turn, so a player can't end their opponent's turn. Remote actions (the peer's
+    // own legal moves) always apply.
+    if (!opts?.remote && get().mySeat !== null && gameState.currentPlayer !== get().mySeat) return;
 
     // Presentation events must never be derived from information the local
     // viewer could not see before the action. The deterministic client keeps
@@ -589,13 +601,14 @@ export const useGameStore = create<GameStore>((set, get) => ({
     if (!opts?.remote) get().netSend?.(action);
   },
 
-  undo: () => {
+  undo: (opts) => {
     const { stateHistory, registry } = get();
-    if (get().mySeat !== null) return; // undo would desync an online game — disabled in MP
     if (stateHistory.length === 0) return;
     const prev = stateHistory[stateHistory.length - 1];
-    const visible = getVisibleState(prev, prev.currentPlayer, registry);
-    const legal = getLegalActions(prev, registry, prev.currentPlayer);
+    // View as our own seat online; the current player locally.
+    const seat = get().mySeat ?? prev.currentPlayer;
+    const visible = getVisibleState(prev, seat, registry);
+    const legal = getLegalActions(prev, registry, seat);
     set({
       gameState: prev,
       visibleState: visible,
@@ -604,6 +617,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
       selectedUnitId: null,
       inspectedTile: null,
     });
+    // Online: broadcast the undo so the peer reverts the same step (lockstep). A
+    // remote-originated undo (opts.remote) must NOT echo back.
+    if (!opts?.remote && get().mySeat !== null) get().netSendUndo?.();
   },
 
   saveGame: () => {

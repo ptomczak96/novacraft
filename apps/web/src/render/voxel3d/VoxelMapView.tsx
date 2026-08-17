@@ -108,6 +108,26 @@ export function VoxelMapView() {
     return t;
   }, [visibleState, legalActions, selectedUnitId, abilityMode]);
 
+  // Tile-based economy actions (build a REB, upgrade one, found/capture a city) —
+  // straight from the engine's legal-action list, keyed by the tile they act on.
+  // The 2D iso canvas surfaces these as clickable boxes; the voxel renderer wires
+  // them into tile clicks here. First-wins keeps the iso canvas's kind priority
+  // (mine > extractor > refinery > purifier) when a tile allows more than one.
+  const tileActions = React.useMemo(() => {
+    const m = new Map<string, Action>();
+    if (!visibleState) return m;
+    for (const a of legalActions) {
+      if (a.type === 'build' || a.type === 'upgradeBuilding' || a.type === 'foundCity') {
+        const key = `${a.position.x},${a.position.y}`;
+        if (!m.has(key)) m.set(key, a);
+      } else if (a.type === 'captureCity') {
+        const u = visibleState.units.find(uu => uu.id === a.unitId);
+        if (u) m.set(`${u.position.x},${u.position.y}`, a);
+      }
+    }
+    return m;
+  }, [visibleState, legalActions]);
+
   // Multi-tile pickers (Ballistic Volley 2×2 / Wyrm strike pair / Cure-Repair
   // unit targets / city territory expansion): eligible tiles + current picks,
   // from the same shared helpers the 2D renderer uses.
@@ -153,10 +173,12 @@ export function VoxelMapView() {
     for (const key of targets.attack.keys()) push(key, 'threat');
     for (const key of targets.slash.keys()) push(key, 'threat');
     for (const key of targets.ability.keys()) push(key, 'path');
+    // Buildable / upgradeable / found / capture tiles (unless arming an ability).
+    if (!abilityMode) for (const key of tileActions.keys()) push(key, 'build');
     const selected = visibleState?.units.find(u => u.id === selectedUnitId);
     if (selected) list.push({ x: selected.position.x, y: selected.position.y, kind: 'select' });
     return list;
-  }, [targets, visibleState, selectedUnitId, picker]);
+  }, [targets, tileActions, abilityMode, visibleState, selectedUnitId, picker]);
 
   // Same interaction contract as the 2D renderer's click priority:
   // picker tick/untick → ability target → move → attack/slash → unit select
@@ -212,10 +234,30 @@ export function VoxelMapView() {
       executeAction(act);
       return;
     }
-    const unit = visibleState?.units.find(u => u.position.x === x && u.position.y === y);
-    if (unit && unit.id !== selectedUnitId) {
-      selectUnit(unit.id);
-      return;
+    // Economy action on this tile (build a REB / upgrade / found / capture). Skipped
+    // while arming an ability so the ability's own click flow isn't hijacked.
+    if (!abilityMode) {
+      const econ = tileActions.get(key);
+      if (econ) {
+        executeAction(econ);
+        return;
+      }
+    }
+    // Select a unit on the tile. When more than one co-occupies it (e.g. YOUR
+    // burrowed Wyrm under an enemy), sort burrowed units LAST so the first click
+    // picks the surface unit and each further click cycles to the next — so a second
+    // click reaches the burrowed unit (to erupt / move it).
+    const here = (visibleState?.units ?? []).filter(u => u.position.x === x && u.position.y === y);
+    if (here.length > 0) {
+      const isBurrowed = (u: typeof here[number]) =>
+        registry.unitTypes[u.typeId]?.conditions?.includes('burrowed') ? 1 : 0;
+      const ordered = [...here].sort((a, b) => isBurrowed(a) - isBurrowed(b));
+      const idx = ordered.findIndex(u => u.id === selectedUnitId);
+      const next = ordered[(idx + 1) % ordered.length];
+      if (next && next.id !== selectedUnitId) {
+        selectUnit(next.id);
+        return;
+      }
     }
     const tile = visibleState?.map.tiles[y]?.[x];
     if (tile?.isCity) {
@@ -225,7 +267,7 @@ export function VoxelMapView() {
     selectUnit(null);
     setInspectedTile({ x, y });
   }, [
-    targets, visibleState, selectedUnitId, executeAction, selectUnit, setSelectedCity, setInspectedTile,
+    targets, tileActions, abilityMode, visibleState, selectedUnitId, executeAction, selectUnit, setSelectedCity, setInspectedTile,
     gameState, registry, volleySelect, setVolleySelect, strikeSelect, setStrikeSelect,
     targetSelect, setTargetSelect, territorySelect, setTerritorySelect,
   ]);

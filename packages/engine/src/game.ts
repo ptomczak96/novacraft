@@ -415,9 +415,15 @@ export function getLegalActions(state: GameState, registry: DataRegistry, player
       }
     }
 
-    // Capture: standing on an enemy/neutral city, but only when the unit didn't
-    // move onto it this turn (so capture becomes available the FOLLOWING turn).
-    if (!unit.hasMoved && !unitType.conditions?.includes('burrowed')) {
+    // Capture: standing on an enemy/neutral city, but only when the unit neither
+    // moved NOR attacked onto/from it this turn — so a unit that reaches the city
+    // this turn (a normal move, or an attack-then-dash/advance like a Reaper) can
+    // only capture on the FOLLOWING turn. Reaching an enemy city tile this turn
+    // always requires moving (hasMoved) or clearing its defender (hasAttacked).
+    // "Impotent founder" units (Wraith, Wyrm) can neither found NOR capture cities.
+    const canTakeCities = !unitType.conditions?.includes('impotent_founder')
+      && !unitType.conditions?.includes('burrowed');
+    if (canTakeCities && !unit.hasMoved && !unit.hasAttacked) {
       const onCity = cityAt(state, unit.position);
       if (onCity && onCity.owner !== playerId) {
         actions.push({ type: 'captureCity', unitId: unit.id });

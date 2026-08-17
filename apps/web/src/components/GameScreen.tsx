@@ -38,6 +38,17 @@ export function GameScreen() {
   const [techOpen, setTechOpen] = useState(false);
   const [showIncome, setShowIncome] = useState(false);
   const [showPlasma, setShowPlasma] = useState(false);
+
+  // Online 1v1: a clear "Your Turn" banner the moment the turn passes to us.
+  const [showYourTurn, setShowYourTurn] = useState(false);
+  useEffect(() => {
+    if (mySeat !== null && gameState?.currentPlayer === mySeat && gameState?.phase === 'playing') {
+      setShowYourTurn(true);
+      const t = setTimeout(() => setShowYourTurn(false), 2200);
+      return () => clearTimeout(t);
+    }
+    setShowYourTurn(false);
+  }, [gameState?.currentPlayer, mySeat, gameState?.phase]);
   const handleResearch = useCallback((id: string) => {
     executeAction({ type: 'research', techId: id });
   }, [executeAction]);
@@ -95,6 +106,13 @@ export function GameScreen() {
   const player = gameState.players[currentPlayer];
   const faction = registry.factions[player.factionId];
 
+  // The LOCAL viewer's seat: online we always view/act as our own seat, never the
+  // opponent's — so we show OUR resources & tech and can only act on OUR turn.
+  const viewer = mySeat ?? currentPlayer;
+  const isMyTurn = mySeat === null || currentPlayer === mySeat;
+  const viewerPlayer = gameState.players[viewer];
+  const viewerFaction = registry.factions[viewerPlayer.factionId];
+
   const handleSave = () => {
     const json = saveGame();
     const blob = new Blob([json], { type: 'application/json' });
@@ -122,7 +140,7 @@ export function GameScreen() {
   // Per-city income breakdown (shown on hover over the ore / plasma totals). A single
   // structured pass from the engine feeds both the ore and plasma tooltips; blocked
   // REBs (enemy sitting on them) are reported but excluded from the totals.
-  const economy = playerEconomy(gameState, currentPlayer, registry);
+  const economy = playerEconomy(gameState, viewer, registry);
   const hasPlasma = economy.some(c => c.plasma.sources.length > 0);
 
   // A selected HOSTILE unit swaps the standard sheet for the GEN 8 red intel
@@ -156,7 +174,7 @@ export function GameScreen() {
               onMouseEnter={() => setShowIncome(true)}
               onMouseLeave={() => setShowIncome(false)}
             >
-              {player.ore}◈
+              {viewerPlayer.ore}◈
               {showIncome && (
                 <div className="eco-tooltip">
                   <ResourceBreakdown resource="ore" cities={economy} />
@@ -168,7 +186,7 @@ export function GameScreen() {
               onMouseEnter={() => setShowPlasma(true)}
               onMouseLeave={() => setShowPlasma(false)}
             >
-              {player.plasma}<PlasmaIcon />
+              {viewerPlayer.plasma}<PlasmaIcon />
               {showPlasma && hasPlasma && (
                 <div className="eco-tooltip">
                   <ResourceBreakdown resource="plasma" cities={economy} />
@@ -185,10 +203,10 @@ export function GameScreen() {
                 </button>
               </>
             )}
-            {botSettings[currentPlayer] === 'human' && (
+            {botSettings[currentPlayer] === 'human' && isMyTurn && (
               <button className="primary" onClick={handleEndTurn}>End Turn</button>
             )}
-            <button className="ghost" onClick={undo}>Undo</button>
+            <button className="ghost" onClick={() => undo()}>Undo</button>
             <button className="ghost" onClick={handleSave}>Save</button>
             <button className="ghost" onClick={handleCopyReplay}>Copy Replay</button>
             <button className="ghost tech-btn" onClick={() => setTechOpen(true)} title="Research">
@@ -236,6 +254,13 @@ export function GameScreen() {
           </div>
         )}
 
+        {/* Online 1v1: transient "Your Turn" banner */}
+        {showYourTurn && (
+          <div className="your-turn-banner" onClick={() => setShowYourTurn(false)}>
+            Your Turn
+          </div>
+        )}
+
         {/* Interstitial */}
         {showInterstitial && (
           <div className="interstitial" onClick={dismissInterstitial}>
@@ -258,9 +283,9 @@ export function GameScreen() {
       {/* Tech tree overlay — shows the current player's research (from game state) */}
       {techOpen && (
         <TechTreeView
-          factionName={faction?.name || `Player ${currentPlayer + 1}`}
-          factionId={player.factionId}
-          researched={new Set(player.researchedTechs)}
+          factionName={viewerFaction?.name || `Player ${viewer + 1}`}
+          factionId={viewerPlayer.factionId}
+          researched={new Set(viewerPlayer.researchedTechs)}
           onResearch={handleResearch}
           onClose={() => setTechOpen(false)}
         />

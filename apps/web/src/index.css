@@ -794,6 +794,32 @@ button.evo-collapse {
   font-size: 16px;
 }
 
+/* Online 1v1: transient "Your Turn" banner (auto-dismisses; click to dismiss). */
+.your-turn-banner {
+  position: absolute;
+  top: 22%;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 90;
+  padding: 14px 46px;
+  background: linear-gradient(180deg, rgba(20, 22, 26, 0.96), rgba(12, 13, 16, 0.96));
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  color: var(--accent);
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  box-shadow: 0 0 30px rgba(255, 159, 46, 0.35);
+  pointer-events: auto;
+  cursor: default;
+  animation: your-turn-in 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes your-turn-in {
+  from { opacity: 0; transform: translate(-50%, -10px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+
 /* Sidebar panels */
 .side-panel {
   width: 320px;
