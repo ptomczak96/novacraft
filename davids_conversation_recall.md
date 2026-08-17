@@ -234,3 +234,22 @@
   3D renderer: `apps/web/src/render/voxel3d/` (`VoxelMapView.tsx`, `VoxelArena.tsx`, `palette.ts`).
 - Docs: `docs/DEVELOPMENT_RATIONALE.md` (authoritative decision log), `docs/ECONOMY.md`,
   `docs/conditions.md`, `docs/MODULES.md`, `docs/overlap.md`, `docs/AI_OPPONENT.md`.
+
+---
+
+## 5. Session log (running — append newest at the bottom)
+
+> **Standing rule (see CLAUDE.md "Session recall log"):** update this file automatically as
+> work happens and when wrapping up — without being asked. Each session gets a dated entry:
+> what David asked, what changed, decisions, open threads. Keep §3 (open threads) current too.
+
+### 2026-08-17 — Recall workflow made a standing default
+- Committed & pushed all outstanding work (commit `11d0d8d`): GEN-8 build-REB fix, 1v1 batch,
+  same-turn capture rule, impotent-founder capture block + Wyrm, co-tile selection, this file.
+  origin/main and origin/economy both at `11d0d8d`. 299 tests pass.
+- David asked me to (a) auto-write conversation recall to this file going forward and (b)
+  auto-read it + get up to speed at the start of every new session — both WITHOUT being asked.
+  Encoded as a REQUIRED rule in `CLAUDE.md` ("Session recall log"), reinforced by the
+  `conversation-recall-file` memory. Honest limitation stated to David: this is a comprehensive
+  running recall, not a literal verbatim transcript (no per-message hook exists to stream every
+  message live), maintained the same proven way as DEVELOPMENT_RATIONALE.md.

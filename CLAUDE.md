@@ -48,6 +48,24 @@
 - `docs/overlap.md` — cross-module hand-off log (see "commit to overlap" rule below)
 - `docs/AI_OPPONENT.md` — AI-bot design notes, options ladder & next steps (parked 2026-07-17)
 
+## Session recall log (REQUIRED, automatic — David's workflow)
+
+`davids_conversation_recall.md` (repo root) is a **living recall log** of what has been
+discussed and done across sessions, so any fresh session can get up to speed fast.
+
+- **At the START of every session, READ `davids_conversation_recall.md` first** (then skim
+  `docs/DEVELOPMENT_RATIONALE.md` and run `git log --oneline -15`) to get up to speed —
+  do this by default, without being asked.
+- **Keep it updated automatically, without being asked.** Append/refresh a dated session
+  entry as work happens and when wrapping up: what was requested, what changed, decisions
+  made, open threads, and anything flagged "for confirmation". Treat it like a running
+  log — update the relevant sections rather than only appending at the very end.
+- It is a comprehensive running recall, **not** a verbatim transcript. Capture the substance
+  (requests, decisions, reasoning, state, open questions), not every literal message.
+- It complements `docs/DEVELOPMENT_RATIONALE.md` (which stays the authoritative *decision*
+  log): the recall file also carries working-style preferences, conversation context, and
+  the current list of open/pending threads.
+
 ## Cross-module overlap log (REQUIRED)
 
 When a change in your module needs work, correction, or wiring in **another**
